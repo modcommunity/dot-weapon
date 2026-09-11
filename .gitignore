@@ -1,5 +1,24 @@
+# Godot 4
 .godot/
 .import/
+/android/
+
+# dot-core and dot-combat are separate repositories. For local development, symlink them:
+#   ln -s ../../dot-core/addons/dot_core addons/dot_core
+#   ln -s ../../dot-combat/addons/dot_combat addons/dot_combat
+# Consumers copy all three addons into their own project.
+/addons/dot_core
+/addons/dot_combat
+
+# Exports
+build/
 export.cfg
 export_presets.cfg
 *.translation
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/

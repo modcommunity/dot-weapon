@@ -15,6 +15,8 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
+const CHECKS := 178
+
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
@@ -42,6 +44,7 @@ func _run() -> void:
 	_test_inventory_bridge()
 	_test_net_sync()
 	_test_extension_point()
+	_test_player_bridge()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -50,6 +53,18 @@ func _run() -> void:
 
 	for line in _failures:
 		print("  FAIL  %s" % line)
+
+	# The total the section counter cannot be. A runtime error inside a section aborts
+	# that function, and the section counter catches it only when the error is before
+	# the last line — an error in the final statement leaves both counters satisfied
+	# with checks missing. dot-settings reported "8 sections, 63 passed, 0 failed" and
+	# exited 0 with eight checks gone; see docs/testing.md.
+	if _passed + _failed != CHECKS:
+		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
+			_passed + _failed, CHECKS
+		])
+		get_tree().quit(1)
+		return
 
 	get_tree().quit(1 if _failed > 0 or _sections_entered != _sections_finished else 0)
 
@@ -1293,4 +1308,109 @@ func _test_extension_point() -> void:
 	)
 
 	_drop(a)
+	_done()
+
+
+# --- The dot-player bridge --------------------------------------------------
+
+## A stand-in for a dot-player node. This project does not depend on dot-player, so the
+## bridge is duck-typed and so is the thing it is tested against — which is the honest
+## test: if this passes, a real DotPlayer with the same methods passes.
+class StubPlayer extends Node3D:
+	var player_key: String = "ada"
+	var stub_controller: Node = null
+
+	func component(type_name: StringName) -> Object:
+		if stub_controller == null:
+			return null
+
+		if String(type_name) == "DotPlayerController":
+			return stub_controller
+
+		return null
+
+	func body() -> Node:
+		return self
+
+
+class StubController extends Node:
+	var eye: Transform3D = Transform3D.IDENTITY
+	var motion_data: Dictionary = {}
+
+	func eye_transform() -> Transform3D:
+		return eye
+
+	func motion() -> Dictionary:
+		return motion_data
+
+
+func _test_player_bridge() -> void:
+	_section("the dot-player bridge")
+
+	var a := DotWeaponPlayerBridge.entity_of("ada")
+	var b := DotWeaponPlayerBridge.entity_of("bob")
+	_check(a >= 0 and b >= 0, "an entity number is never negative")
+	_check(a != b, "and two keys give two numbers")
+	_check(
+		a == DotWeaponPlayerBridge.entity_of("ada"),
+		"and one key always gives the same number — stable across machines and across "
+		+ "a reconnect, which a counter would not be"
+	)
+	_check(DotWeaponPlayerBridge.entity_of("") >= 0, "an empty key still gives one")
+
+	var empty := DotWeaponPlayerBridge.context_for(null, 7)
+	_check(empty.tick == 7, "a context with no player still carries the tick")
+	_check(empty.entity == 0, "and no entity")
+
+	var player := StubPlayer.new()
+	add_child(player)
+
+	var bare := DotWeaponPlayerBridge.context_for(player, 3, 1, 0.5)
+	_check(bare.entity == a, "a context takes the entity from the key")
+	_check(bare.index == 1, "and the index")
+	_check(_close(bare.charge, 0.5, "and the charge"), "")
+
+	var controller := StubController.new()
+	controller.eye = Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(0, 1.65, 0))
+	controller.motion_data = {"speed": 5.0, "on_floor": false, "crouched": true}
+	player.stub_controller = controller
+	player.add_child(controller)
+
+	var ctx := DotWeaponPlayerBridge.context_for(player, 4)
+	_check(
+		_close(ctx.origin.y, 1.65, "the shot comes from the eye"),
+		"a shot fired from a capsule's origin comes out of the player's knees"
+	)
+	_check(
+		ctx.direction.x < -0.9,
+		"and along the view, not the body's facing — a shot aimed along the body comes "
+		+ "out sideways whenever the player is looking anywhere but straight ahead"
+	)
+	_check(_close(ctx.speed, 5.0, "the speed comes through"), "")
+	_check(ctx.airborne, "and being airborne")
+	_check(ctx.crouched, "and crouching")
+
+	# The view model, with nowhere to hang it.
+	var view_model := Node3D.new()
+	_check(
+		not DotWeaponPlayerBridge.attach_view_model(player, view_model),
+		"attaching a view model to a player with no character answers false rather "
+		+ "than failing — a server has no model and a 2D game has no bones"
+	)
+	_check(not DotWeaponPlayerBridge.attach_view_model(null, view_model), "and to nothing")
+	view_model.free()
+
+	# The class loadout, duck-typed against dot-player-class.
+	var arsenal := _arsenal()
+	var classless := RefCounted.new()
+	_check(
+		not DotWeaponPlayerBridge.give_class_loadout(arsenal, classless).ok,
+		"a class that names no loadout is refused, as a state rather than a mistake"
+	)
+	_check(
+		not DotWeaponPlayerBridge.give_class_loadout(null, classless).ok,
+		"and so is no arsenal at all"
+	)
+
+	player.queue_free()
 	_done()

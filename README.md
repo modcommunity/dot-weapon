@@ -37,6 +37,19 @@ The definition says the fire mode is `CHARGE` and the arsenal accumulates the dr
 
 Five fire modes cover the state machine, and they are about *when* a use happens rather than what it does: `SEMI` fires on the press, `AUTO` repeats while held, `BURST` fires a count per press, `CHARGE` builds while held and fires on release, and `HOLD` runs every tick the button is down. A beam and a physics gun are both `HOLD`; that they do entirely different things is the behaviour's half.
 
+## It bridges to dot-player without depending on it
+
+`DotWeaponPlayerBridge` is the fourth duck-typed bridge in this addon, beside the ones to dot-loadout and dot-inventory, and it removes the twenty lines every game wrote by hand:
+
+```gdscript
+var ctx := DotWeaponPlayerBridge.context_for(player, tick, index)
+var outcome := arsenal.use(ctx)
+```
+
+The origin is the **eye**, not the body — a shot fired from a capsule's origin comes out of the player's knees. The direction is where the **view** is pointing, not where the body faces — a shot aimed along the body comes out sideways whenever the player is looking anywhere but straight ahead. Both are bugs that present as bad hit registration, which is where they get debugged.
+
+It also converts a player key into the stable `entity` number dot-weapon puts on the wire, attaches a view model to a character's weapon mount when there is one, and fills an arsenal from a dot-player-class definition. None of dot-player, dot-player-char or dot-player-class is named anywhere in it.
+
 ## The script is a path, never a `class_name`
 
 A game delivered as a dot-cloud content pack is mounted at runtime, and **a mounted pack's `class_name` globals are not registered in the host**. A weapon named by class could therefore only ever ship inside the build. Naming it by path is what lets downloaded content bring its own weapons, and it is the same rule dot-props names a prop's script by.

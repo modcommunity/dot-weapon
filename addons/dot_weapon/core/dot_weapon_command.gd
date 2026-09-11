@@ -3,7 +3,7 @@ extends RefCounted
 
 ## What a player asked their weapon to do on one tick.
 ##
-## The weapon half of dot-fps-controller's [code]DotFpsCommand[/code], and separate
+## The weapon half of dot-player-controller's [code]DotFpsCommand[/code], and separate
 ## from it for the same reason movement is separate from input sampling: the
 ## simulation must be a pure function of these, so that a client predicting a shot and
 ## a server re-running it reach the same answer. Nothing below reads a device, a
