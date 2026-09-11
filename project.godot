@@ -1,0 +1,31 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="dot-weapon"
+config/description="What a player holds and uses, as a catalogue of documents: a weapon names a behaviour script by path, so a gun, a bow, a melee swing, a thrown charge and a beam are entries in one table rather than classes in a fork. Decides that a use happened; never applies damage."
+run/main_scene="res://examples/weapon_selftest.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/dot_weapon/plugin.cfg")
