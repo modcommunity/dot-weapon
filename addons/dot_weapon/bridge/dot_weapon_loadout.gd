@@ -19,7 +19,7 @@ extends RefCounted
 ## var resolved := loadouts.resolve(loadout)
 ## var res := DotWeaponLoadoutBridge.fill(arsenal, resolved)
 ## if not res.ok:
-##     push_warning(res.error.message)
+##     DotLog.warn(CHANNEL, "the loadout did not fill", {"why": res.error.message})
 ## [/codeblock]
 
 ## Clears an arsenal and gives it everything in a resolved loadout.
