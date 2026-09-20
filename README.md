@@ -107,6 +107,6 @@ Copy `addons/dot_weapon/`, [`dot-core`](https://github.com/modcommunity/dot-core
 
 [dot-core](https://github.com/modcommunity/dot-core) and [dot-combat](https://github.com/modcommunity/dot-combat). Nothing else. dot-loadout and dot-inventory are both optional and both reached without being named.
 
-## License
+## Licence
 
-MIT.
+MIT. See [LICENSE](LICENSE).
