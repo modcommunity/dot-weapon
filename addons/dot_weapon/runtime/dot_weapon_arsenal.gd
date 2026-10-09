@@ -258,8 +258,18 @@ func is_switching() -> bool:
 ## A switch is a holster followed by a deploy, and the weapon in hand stays usable
 ## until the holster finishes, which is what makes quick-switching a real technique
 ## rather than an instant teleport between weapons.
+##
+## [b]Asking again for the slot already being switched to is not a new switch.[/b] A command
+## carries the slot it wants on every tick — that is how it survives a lost packet, and four
+## games in the family were written that way — and a switch restarted on each of them never
+## finishes: the holster's deadline moved a tick further every tick, the old weapon stayed in
+## hand for good, and nothing could be fired. A rendered view model holding the spade it had
+## been given first, under a chat line saying "You were handed a marksman", was the tell.
 func select(slot: int, tick: int) -> bool:
 	if disabled or slot == _current or not _slots.has(slot):
+		return false
+
+	if is_switching() and _switch_to == slot:
 		return false
 
 	var from := current()

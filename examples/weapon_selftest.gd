@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 178
+const CHECKS := 179
 
 
 func _ready() -> void:
@@ -495,6 +495,20 @@ func _test_carrying_and_switching() -> void:
 	)
 	var after := _drive(c, 30, 10, true)
 	_check(not after.is_empty(), "and can be used once it has arrived")
+
+	# [b]A slot asked for on every tick still arrives.[/b] A networked command carries the
+	# slot it wants each tick; a switch restarted by every one of them never finished.
+	var held := _arsenal(slow)
+	held.give(&"rifle")
+	held.give(&"pistol")
+	for i in range(40):
+		var asking := _cmd(false)
+		asking.slot = 2
+		var _outcome := held.simulate_tick(asking, _ctx(200 + i, 1), null)
+	_check(held.current_slot() == 2 and not held.is_switching(),
+		"a slot asked for on every tick arrives, and is not restarted by each request",
+		"slot %d, switching %s" % [held.current_slot(), str(held.is_switching())])
+	_drop(held)
 
 	_check(a.take(1).ok, "a weapon can be taken away")
 	_check(not a.carries(&"rifle"), "and is gone")

@@ -58,6 +58,10 @@ dot-combat lost `weapons/` entirely. `DotWeapon`, `DotArsenal`, `DotWeaponState`
 
 `DotCombatNetSync` lost the slot, the magazine and the reserve to `DotWeaponNetSync`. A game using both concatenates the two spec lists; a game with health and no weapons replicates three properties instead of six.
 
+## A slot asked for every tick is one switch (2026-10-08)
+
+`DotWeaponCommand.slot` says "zero means no change", and a networked game naturally carries the slot it wants on every tick anyway, because that is what survives a lost packet: mg-deathrun, mg-wipeout and mg-smash-copter all did, on both the server and the client's view rig. `select()` used to refuse only a slot already CURRENT, and during a switch the old slot still is, so every repeat restarted the holster with a deadline one tick later and the switch never finished. The old weapon stayed in hand for good and nothing could be fired. It surfaced as a render of a runner holding the spade they were given first, under "You were handed a marksman". `select()` now also refuses the slot a switch is already heading to; `weapon_selftest`'s "carrying and switching" asks for slot 2 forty ticks running and expects it to arrive (armed: without the line it ends on slot 1, still switching).
+
 ## Consumers
 
 game-arena and game-g2gfast both run on this. game-playground deliberately does not: its weapons are `DotPropTool` subclasses that grab, shove and remove props, they contain no damage or health reference at all, and they are not weapons in this addon's sense.
