@@ -13,7 +13,7 @@ extends Node
 ## [b]It is a pure function of the commands it is given.[/b] No device, no wall clock,
 ## no node lookups, no randomness. That is what lets a client predict a use, a server
 ## re-run it authoritatively, and a reconciliation replay re-run it again, all reaching
-## the same answer. See [DotWeaponSpread] for the one place that is easy to get wrong.
+## the same answer. See dot-combat's [DotSpread] (reached through [method DotShot.scatter]) for the one place that is easy to get wrong.
 ##
 ## [b]Every weapon-specific decision belongs to a [DotWeaponBehaviour].[/b] This file
 ## knows about slots, cadence, ammunition, reloading and switching, and deliberately

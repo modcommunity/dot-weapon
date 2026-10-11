@@ -13,7 +13,7 @@ extends RefCounted
 ## [b]Every field is an input to a pure function.[/b] Two machines handed the same
 ## context must produce the same outcome, because one of them is predicting what the
 ## other will do. Nothing here is a wall clock and nothing here is drawn from a random
-## stream; see [DotWeaponSpread] for why that matters more than it looks.
+## stream; see dot-combat's [DotSpread] for why that matters more than it looks.
 
 ## The carrier, in the game's own id space. Matched against [member DotDamage.attacker].
 var entity: int = 0

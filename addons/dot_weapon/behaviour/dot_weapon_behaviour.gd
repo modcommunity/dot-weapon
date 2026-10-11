@@ -30,7 +30,7 @@ extends RefCounted
 ## reconciliation replay after a correction. A behaviour that reads a wall clock, a
 ## node, an input device or a random stream produces a different answer on each of those
 ## runs, nothing errors, and the symptom is "hit registration feels bad". Use
-## [DotWeaponSpread] for anything that needs to scatter.
+## [member DotShot.spread], which dot-combat's [method DotShot.scatter] turns into directions, for anything that needs to scatter.
 ##
 ## [b]2. Apply nothing.[/b] Return a [DotWeaponOutcome]; let dot-combat resolve the
 ## shots and let the game spawn the spawns. A behaviour that reached into a [DotHealth]
