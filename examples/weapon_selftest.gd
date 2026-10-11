@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 199
+const CHECKS := 203
 
 
 func _ready() -> void:
@@ -29,6 +29,7 @@ func _run() -> void:
 
 	_test_definition()
 	_test_catalogue()
+	_test_id_order()
 	_test_behaviour_resolution()
 	_test_carrying_and_switching()
 	_test_cadence()
@@ -412,6 +413,97 @@ func _test_catalogue() -> void:
 		"by name, with the path in the message",
 		behaviours.error.message
 	)
+
+	_done()
+
+
+## Twenty fresh names whose StringName order is not their text order, and the same
+## names sorted as text.
+##
+## Which pointer a fresh name gets is the allocator's call, so interning in a shuffled
+## (or reversed) order can still come out in text order by luck. So each attempt draws
+## new names -- one already interned keeps its place -- until the StringName order is
+## not text order; the caller's first check states that it is not.
+func _names_out_of_text_order(rng: RandomNumberGenerator, prefix: String) -> Dictionary:
+	var ids: Array[String] = []
+	var by_text: Array[String] = []
+	var interned: Array[StringName] = []
+	var name_order: Array[String] = []
+	for attempt in range(8):
+		ids.clear()
+		interned.clear()
+		while ids.size() < 20:
+			var id := "%s%d_" % [prefix, attempt]
+			for _i in range(6):
+				id += char(97 + rng.randi() % 26)
+			if not ids.has(id):
+				ids.append(id)
+		by_text = ids.duplicate()
+		by_text.sort()
+		var shuffled := ids.duplicate()
+		for i in range(shuffled.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var held: String = shuffled[i]
+			shuffled[i] = shuffled[j]
+			shuffled[j] = held
+		for id: String in shuffled:
+			interned.append(StringName(id))
+		var as_names := interned.duplicate()
+		as_names.sort_custom(func(a: StringName, b: StringName) -> bool: return a < b)
+		name_order.clear()
+		for id: StringName in as_names:
+			name_order.append(String(id))
+		if name_order != by_text:
+			break
+	return {"interned": interned, "by_text": by_text, "name_order": name_order}
+
+
+## ids() and pools() are lists other programs read: a console's completion offers ids()
+## (game-arena's `give`), and zee-dot-weapons compares ids() with its own id list. They
+## sorted with sort(), which orders StringNames by where each was interned, not by text,
+## so the order differed per process.
+##
+## [b]Armed on purpose.[/b] The seven fixture ids can fall in text order by luck, so this
+## uses names drawn by [method _names_out_of_text_order], and the first check says their
+## StringName order really is not text order -- without it, a pass here would not prove
+## the sort compares text. On the old sort() the last three fail.
+func _test_id_order() -> void:
+	_section("ids and pools are in text order")
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261011
+	var drawn := _names_out_of_text_order(rng, "zz_weapon_order")
+	var interned: Array[StringName] = drawn.interned
+	var by_text: Array[String] = drawn.by_text
+	var name_order: Array[String] = drawn.name_order
+	_check(name_order != by_text,
+		"armed: these names compared as StringNames are not in text order",
+		", ".join(name_order.slice(0, 4)))
+
+	# Added in intern order, so a sort that did nothing would also fail.
+	var c := DotWeaponCatalogue.new()
+	var pool := DotWeaponAmmo.new()
+	for id: StringName in interned:
+		var def := _rifle()
+		def.id = id
+		c.add(def)
+		pool.add(id, 1)
+
+	var listed: Array[String] = []
+	for id: StringName in c.ids():
+		listed.append(String(id))
+	_check(listed == by_text, "catalogue ids() lists every weapon by id as text",
+		", ".join(listed.slice(0, 4)))
+
+	var pools: Array[String] = []
+	for id: StringName in pool.pools():
+		pools.append(String(id))
+	_check(pools == by_text, "ammo pools() lists every pool by name as text",
+		", ".join(pools.slice(0, 4)))
+
+	# describe() maps ids(), so it follows.
+	var described: Array = c.describe().get("ids", [])
+	_check(described == (by_text as Array), "and describe() shows them in that order")
 
 	_done()
 

@@ -71,11 +71,13 @@ func set_count(pool: StringName, value: int) -> void:
 	_pools[pool] = maxi(0, value)
 
 
+## Every pool, in text order.
 func pools() -> Array[StringName]:
 	var out: Array[StringName] = []
 	for key: StringName in _pools.keys():
 		out.append(key)
-	out.sort()
+	# By the pool's text, not sort(): StringNames sort by interning, which differs per process.
+	out.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
 	return out
 
 

@@ -48,6 +48,7 @@ The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything
 - `select()` refuses the slot a switch is already heading to; a game may send its slot every tick. [design](docs/design.md#select-refuses-the-slot-a-switch-is-already-heading-to)
 - `DotSpread` stays in dot-combat; behaviours set `DotShot.spread`. [design](docs/design.md#spread-lives-in-dot-combat-not-here)
 - Never name a class from dot-net, dot-loadout, dot-inventory or dot-player: duck-type it (a writer is `Variant`), or the script fails to parse where that addon is absent. [design](docs/design.md#optional-neighbours-are-duck-typed)
+- `DotWeaponCatalogue.ids()` and `DotWeaponAmmo.pools()` are in text order: sort StringNames with `String(a) < String(b)`, never `sort()` (interning order, differs per process). The suite's id-order section is armed against it. [gdscript-hazards](../../docs/gdscript-hazards.md)
 - The suite's extension-point section (`fixtures/lightning_rod.gd`) must keep passing. [design](docs/design.md#the-extension-point-is-tested)
 
 ## Consumers

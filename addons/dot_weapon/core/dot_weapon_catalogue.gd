@@ -71,12 +71,16 @@ func get_def(id: StringName) -> DotWeaponDef:
 	return _by_id.get(id, null)
 
 
+## Every id, in text order.
 func ids() -> Array[StringName]:
 	_ensure_indexed()
 	var out: Array[StringName] = []
 	for key: StringName in _by_id.keys():
 		out.append(key)
-	out.sort()
+	# By the id's text. sort() on StringNames orders them by where each was interned, which
+	# differs per process, so a list another program shows (a console's completion) or
+	# compares (a pack's own id list) was in no stable order.
+	out.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
 	return out
 
 
