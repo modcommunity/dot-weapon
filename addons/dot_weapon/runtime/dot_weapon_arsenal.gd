@@ -39,10 +39,13 @@ signal carried_changed()
 
 @export_group("Simulation")
 
-## Ticks per second the simulation runs at.
+## Ticks per second the simulation runs at, as the caller declares it.
 ##
-## Only used to convert for a caller that thinks in seconds; nothing here measures time
-## any other way. Every duration on a [DotWeaponDef] is already in ticks.
+## Nothing in the addon reads this: every duration on a [DotWeaponDef] is already in
+## ticks and is used as written, so a definition authored at 64 Hz fires twice as fast
+## in real time on a 128 Hz server. Games set it so the value is there for the day a
+## definition is scaled by tick rate (queue item `playground-zee-tickrate-1`); until
+## then, setting it changes nothing.
 @export_range(1, 240, 1) var tick_rate: int = 64
 
 @export_range(1, 16, 1) var max_slots: int = 8
