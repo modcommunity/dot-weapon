@@ -28,6 +28,10 @@ var radius: float = 0.1
 
 ## Ticks before it expires on its own, whatever it thinks it is doing.
 ##
+## Counted at the RUNNING tick rate: the stock behaviours scale a definition's authored
+## count before they hand it over (see [member DotWeaponDef.authored_tick_rate]), so a
+## game flies it as given and never converts.
+##
 ## [b]A hard ceiling, not a hint.[/b] A projectile that forgets to free itself is a leak
 ## that looks like a slow memory problem in the game rather than a bug in one weapon.
 var life_ticks: int = 384
@@ -45,7 +49,8 @@ var splash_radius: float = 0.0
 
 var splash_damage: float = 0.0
 
-## Ticks it waits before it goes off by itself. Zero means it needs contact.
+## Ticks it waits before it goes off by itself. Zero means it needs contact. At the
+## running tick rate, like [member life_ticks].
 ##
 ## A cooked grenade is a spawn with a fuse; an arrow is a spawn without one.
 var fuse_ticks: int = 0

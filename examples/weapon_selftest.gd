@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 179
+const CHECKS := 199
 
 
 func _ready() -> void:
@@ -39,6 +39,7 @@ func _run() -> void:
 	_test_beam()
 	_test_thrown()
 	_test_determinism()
+	_test_tick_rate()
 	_test_snapshot()
 	_test_loadout_bridge()
 	_test_inventory_bridge()
@@ -951,6 +952,151 @@ func _test_thrown() -> void:
 	_drop(a)
 	_drop(b)
 	_drop(c3)
+	_done()
+
+
+## Ticks for one weapon to finish a reload started on [param from], driving no buttons.
+func _reload_span(arsenal: DotWeaponArsenal, from: int) -> int:
+	arsenal.begin_reload(from)
+	var t := from
+	while arsenal.is_reloading() and t < from + 10000:
+		t += 1
+		arsenal.simulate_tick(_cmd(false), _ctx(t), _cmd(false))
+	return t - from
+
+
+## Ticks from asking for [param slot] to being able to use it.
+func _switch_span(arsenal: DotWeaponArsenal, slot: int, from: int) -> int:
+	var previous := _cmd(false)
+	arsenal.simulate_tick(_cmd(false, slot), _ctx(from), previous)
+	var t := from
+	while arsenal.is_switching() and t < from + 10000:
+		t += 1
+		arsenal.simulate_tick(_cmd(false), _ctx(t), previous)
+	return t - from
+
+
+## A catalogue whose every row says it was written at 64 Hz, as zee-dot-weapons' does.
+func _authored_catalogue(rate: int) -> DotWeaponCatalogue:
+	var c := DotWeaponCatalogue.new()
+	for d: DotWeaponDef in [_rifle(), _pistol(), _bow(), _flamer(), _grenade()]:
+		d.authored_tick_rate = rate
+		c.add(d)
+	return c
+
+
+func _arsenal_at(catalogue: DotWeaponCatalogue, rate: int) -> DotWeaponArsenal:
+	var a := _arsenal(catalogue)
+	a.tick_rate = rate
+	return a
+
+
+func _test_tick_rate() -> void:
+	_section("a weapon written at 64 Hz keeps its wall-clock timing at 128")
+
+	# The arithmetic, on the definition.
+	var d := _rifle()
+	_check(d.ticks_at(6, 128) == 6, "a row naming no rate is used as written at any rate")
+	d.authored_tick_rate = 64
+	_check(d.ticks_at(6, 64) == 6, "a row at its own rate is unchanged")
+	_check(d.ticks_at(6, 128) == 12, "and doubles at twice the rate", str(d.ticks_at(6, 128)))
+	_check(d.ticks_at(1, 20) == 1, "a count above zero never rounds to zero")
+	_check(d.ticks_at(0, 128) == 0, "and zero stays zero")
+	_close(d.per_tick_at(0.15, 128), 0.075, "a per-tick amount halves at twice the rate", 0.00001)
+	_check(d.validate().ok, "a row naming a rate validates")
+
+	# [b]The property itself: the same second of a held trigger fires the same number of
+	# shots.[/b] Before the arsenal honoured authored_tick_rate, a 64 Hz row fired 22 times
+	# in a 128 Hz second against 11 at 64, which is every zee weapon in the 128 Hz sandbox.
+	var cat := _authored_catalogue(64)
+	var at64 := _arsenal_at(cat, 64)
+	var at128 := _arsenal_at(cat, 128)
+	at64.give(&"rifle")
+	at128.give(&"rifle")
+	var shots64 := _drive(at64, 0, 64, true).size()
+	var shots128 := _drive(at128, 0, 128, true).size()
+	_check(shots64 == 11, "a 64 Hz rifle fires 11 times in a second at 64 Hz", str(shots64))
+	_check(shots128 == shots64, "and as many in a second at 128 Hz", "%d vs %d" % [shots128, shots64])
+
+	# The default is what it always was: an unscaled row at 128 fires on its raw count.
+	var raw := _arsenal_at(_catalogue(), 128)
+	raw.give(&"rifle")
+	var raw_shots := _drive(raw, 0, 128, true).size()
+	_check(raw_shots == 22, "a row naming no rate still fires on its raw count", str(raw_shots))
+
+	# Reload, in seconds rather than ticks.
+	var r64 := _arsenal_at(cat, 64)
+	var r128 := _arsenal_at(cat, 128)
+	r64.give(&"rifle", false)
+	r128.give(&"rifle", false)
+	r64.add_ammo(&"rifle_rounds", 90)
+	r128.add_ammo(&"rifle_rounds", 90)
+	var reload64 := _reload_span(r64, 0)
+	var reload128 := _reload_span(r128, 0)
+	_check(reload64 == 120, "a reload takes its 120 ticks at 64 Hz", str(reload64))
+	_check(reload128 == 240, "and the same 1.875 s (240 ticks) at 128 Hz", str(reload128))
+
+	# Holster plus deploy.
+	var sw_cat := _authored_catalogue(64)
+	for id: StringName in [&"rifle", &"pistol"]:
+		sw_cat.get_def(id).holster_ticks = 8
+		sw_cat.get_def(id).deploy_ticks = 16
+	var s64 := _arsenal_at(sw_cat, 64)
+	var s128 := _arsenal_at(sw_cat, 128)
+	for a: DotWeaponArsenal in [s64, s128]:
+		a.give(&"pistol")
+		a.give(&"rifle")
+	var switch64 := _switch_span(s64, 1, 0)
+	var switch128 := _switch_span(s128, 1, 0)
+	_check(switch64 == 24 and switch128 == 48, "a switch takes the same wall-clock time", "%d vs %d" % [switch128, switch64])
+
+	# A charge fills in the same time, and so does what a behaviour reads per tick.
+	var bow: DotWeaponDef = cat.get_def(&"bow")
+	_close(at128.charge_for(bow, 64), 0.5, "half a second of draw is half a charge at 128 Hz")
+	_close(at64.charge_for(bow, 64), 1.0, "and a full one at 64")
+	var behaviour := at128.slot_at(1).behaviour
+	_close(behaviour.scaled_per_tick(0.15), 0.075, "bloom recovers half as much per tick at 128 Hz", 0.00001)
+
+	# A thrown spawn's fuse leaves in RUNNING ticks, so a game flies it as given. Pin out
+	# on one tick, released on the next: one tick of cook at either rate.
+	var g64 := _arsenal_at(cat, 64)
+	var g128 := _arsenal_at(cat, 128)
+	var fuses: Array[int] = []
+	for a: DotWeaponArsenal in [g64, g128]:
+		a.give(&"grenade")
+		a.simulate_tick(_cmd(true), _ctx(0), _cmd(false))
+		var out := a.simulate_tick(_cmd(false), _ctx(1), _cmd(true))
+		fuses.append(out.spawns[0].fuse_ticks if out.used and not out.spawns.is_empty() else -1)
+	_check(fuses[0] == 191, "a three-second fuse cooked one tick leaves 191 at 64 Hz", str(fuses[0]))
+	_check(fuses[1] == 383, "and 383 at 128 Hz, the same three seconds", str(fuses[1]))
+
+	# Prediction: a client restored from the server's snapshot mid-reload, at the same
+	# rate, finishes on the same tick as the server.
+	var server := _arsenal_at(cat, 128)
+	var client := _arsenal_at(cat, 128)
+	server.give(&"rifle", false)
+	client.give(&"rifle", false)
+	server.add_ammo(&"rifle_rounds", 90)
+	client.add_ammo(&"rifle_rounds", 90)
+	server.begin_reload(1000)
+	for t in range(1001, 1100):
+		server.simulate_tick(_cmd(false), _ctx(t), _cmd(false))
+	var restored := client.restore(server.snapshot())
+	_check(restored.ok, "a client takes the server's snapshot mid-reload")
+	var server_done := -1
+	var client_done := -1
+	for t in range(1100, 1400):
+		server.simulate_tick(_cmd(false), _ctx(t), _cmd(false))
+		client.simulate_tick(_cmd(false), _ctx(t), _cmd(false))
+		if server_done < 0 and not server.is_reloading():
+			server_done = t
+		if client_done < 0 and not client.is_reloading():
+			client_done = t
+	_check(server_done == 1240 and client_done == server_done, "and both finish on tick 1240", "%d / %d" % [server_done, client_done])
+
+	for a: Node in [at64, at128, raw, r64, r128, s64, s128, g64, g128, server, client]:
+		_drop(a)
+
 	_done()
 
 

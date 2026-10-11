@@ -58,6 +58,10 @@ var ammo_used: int = -1
 ##
 ## A behaviour overrides it for a weapon whose cadence depends on what it just did,
 ## which is most melee weapons and every charged one.
+##
+## [b]Counted in the definition's ticks[/b] ([member DotWeaponDef.authored_tick_rate]),
+## like the [member DotWeaponDef.use_interval_ticks] it stands in for: the arsenal scales
+## it to the running rate, so a behaviour sets it from its own tuning and never converts.
 var cooldown_ticks: int = -1
 
 ## Pitch and yaw kick in degrees, for the game to apply to its own camera.

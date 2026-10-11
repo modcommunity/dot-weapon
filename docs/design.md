@@ -38,7 +38,16 @@ Typed tuning is still available without a fat resource: `DotWeaponTuning` is a r
 
 Every duration on a definition is in ticks. A weapon measured in seconds fires at two different rates on a 64 Hz server and a 128 Hz one, which is two different games. A game that tunes in rounds per minute converts once, in its own content file.
 
-`DotWeaponArsenal.tick_rate` (default 64) is documented as being for callers that think in seconds, but nothing in the addon reads it, and nothing scales a definition by the server's tick rate. A pack authored at 64 Hz (zee-dot-weapons) therefore fires at a different real-time rate on a 128 Hz server. That is open, not settled: see the open item in [CLAUDE.md](../CLAUDE.md#open-items).
+Ticks, but ticks at which rate? A pack is written once and runs on servers at 64, 128 or 60 Hz. `DotWeaponDef.authored_tick_rate` says which rate a row's counts were written at, and `DotWeaponArsenal.tick_rate` says which rate the simulation runs at; the arsenal scales every duration it reads (deploy, holster, use and burst interval, charge, reload, reload start, and an outcome's `cooldown_ticks`) through `ticks_for`, and a charge through `charge_for`. zee-dot-weapons and zed-dot-weapons set 64, so their weapons fire, reload and deploy in the same wall-clock time at 128 Hz as at 64.
+
+Decisions, each with the alternative that was wrong:
+
+- **Zero means unscaled, and it is the default.** Every row written before the field existed (game-g2gfast's own, written at 128 for a 128 Hz game) behaves exactly as before. A default of 64 would have halved g2gfast's cadence.
+- **The rate is per definition, not per arsenal.** One arsenal can carry a game's own rows next to a pack's, written at different rates.
+- **Scaled at read time, not by copying the definition on equip.** The catalogue's rows are shared, read-only objects (arena hands one catalogue to every player); a scaled copy per arsenal would be one more object per weapon per player and a second source of truth. Reading through `ticks_for` keeps the numbers integers, so a client and a server at one rate reach the same deadline.
+- **Rounded, never to zero.** 4 ticks at 64 Hz is 3.75 at 60 and becomes 4; 1 tick at 64 Hz at 20 Hz is still 1, because 0 means "every tick" on an interval.
+- **What leaves a behaviour is in running ticks.** A spawn's fuse and life go to the game, which counts in its own ticks, so the stock behaviours scale them (`scaled_ticks`); bloom recovery, applied once a tick, is scaled per tick (`scaled_per_tick`); a beam's ramp is compared with the arsenal's held count and is scaled too. An outcome's `cooldown_ticks` is the exception: it stands in for the definition's interval and goes back to the arsenal, which scales it, so a behaviour never converts it.
+- **Both ends must agree on `tick_rate`.** Deadlines are absolute ticks and travel in the snapshot as ticks; a client predicting at another rate than its server predicts a different reload end. A game sets it from the rate its world runs at, which both ends already share.
 
 ## The order in `_try_use` is load-bearing
 

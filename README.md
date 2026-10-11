@@ -37,6 +37,8 @@ The definition says the fire mode is `CHARGE` and the arsenal accumulates the dr
 
 Five fire modes cover the state machine, and they are about *when* a use happens rather than what it does: `SEMI` fires on the press, `AUTO` repeats while held, `BURST` fires a count per press, `CHARGE` builds while held and fires on release, and `HOLD` runs every tick the button is down. A beam and a physics gun are both `HOLD`; that they do entirely different things is the behaviour's half.
 
+Every duration is a count of ticks. A definition that names the rate it was written at (`authored_tick_rate`) is scaled to the rate the arsenal runs at, so a weapon written for 64 Hz fires, reloads and deploys in the same time on a 128 Hz server; one that names none is used as written.
+
 ## It bridges to dot-player without depending on it
 
 `DotWeaponPlayerBridge` is the fourth duck-typed bridge in this addon, beside the ones to dot-loadout and dot-inventory, and it removes the twenty lines every game wrote by hand:

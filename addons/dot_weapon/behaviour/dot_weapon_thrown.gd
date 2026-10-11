@@ -25,8 +25,11 @@ func _ballistics() -> DotWeaponBallistics:
 func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 	var b := _ballistics()
 
-	var fuse := tune_int(&"fuse_ticks", 256)
-	var cooked := int(round(ctx.charge * float(def.charge_ticks)))
+	# Both in running ticks: the charge is a fraction of the SCALED charge time, and the
+	# game flies the spawn's fuse at its own rate. A fuse left in authored ticks went off
+	# in half its time on a 128 Hz server, still in the air.
+	var fuse := scaled_ticks(tune_int(&"fuse_ticks", 256))
+	var cooked := int(round(ctx.charge * float(scaled_ticks(def.charge_ticks))))
 	var left := maxi(0, fuse - cooked)
 
 	var out := DotWeaponOutcome.of(DotWeaponOutcome.KIND_THROW)
@@ -52,7 +55,7 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 		spawn.damage_type = b.damage_type
 		spawn.gravity_scale = maxf(b.gravity_scale, 1.0)
 		spawn.radius = b.radius
-		spawn.life_ticks = maxi(b.life_ticks, left + 1)
+		spawn.life_ticks = maxi(scaled_ticks(b.life_ticks), left + 1)
 		spawn.splash_radius = b.splash_radius
 		spawn.splash_damage = b.splash_damage
 

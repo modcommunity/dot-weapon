@@ -13,3 +13,7 @@ The order "cancel the reload, then ask whether the weapon can pay" was shipped a
 ## A slot asked for every tick never arrived
 
 Fixed 2026-10-08. mg-deathrun, mg-wipeout and mg-smash-copter all sent the wanted slot on every tick, on both the server and the client's view rig. `select()` refused only a slot already current, and during a switch the old slot still is, so every repeat restarted the holster with a deadline one tick later and the switch never finished: the old weapon stayed in hand for good and nothing could be fired. It surfaced as a render of a runner holding the spade they were given first, under "You were handed a marksman". `weapon_selftest`'s "carrying and switching" now asks for slot 2 forty ticks running and expects it to arrive.
+
+## A pack written at 64 Hz ran at double speed at 128
+
+Fixed 2026-10-11. `DotWeaponArsenal.tick_rate` existed and nothing read it, so every duration on a definition was used as written whatever the server's rate. zee-dot-weapons is written in 64 Hz ticks, and in game-playground (128 Hz) every weapon fired, reloaded and deployed in half the time; the game had patched only grenade fuses by hand, in its projectile code. `DotWeaponDef.authored_tick_rate` and the arsenal's `ticks_for` fix it for every pack, and `weapon_selftest`'s "written at 64 Hz" section drives one row at 64 and at 128 and compares shots per second, reload, switch, charge and fuse.

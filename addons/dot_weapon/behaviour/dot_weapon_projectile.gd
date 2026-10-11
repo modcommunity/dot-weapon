@@ -42,7 +42,7 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 		spawn.damage_type = b.damage_type
 		spawn.gravity_scale = b.gravity_scale
 		spawn.radius = b.radius
-		spawn.life_ticks = b.life_ticks
+		spawn.life_ticks = scaled_ticks(b.life_ticks)
 		spawn.splash_radius = b.splash_radius
 		spawn.splash_damage = b.splash_damage
 		out.recoil = Vector2(b.recoil_pitch, b.recoil_yaw)

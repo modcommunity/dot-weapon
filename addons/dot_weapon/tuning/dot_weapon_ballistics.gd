@@ -61,7 +61,8 @@ extends DotWeaponTuning
 ## The most bloom may add.
 @export_range(0.0, 45.0, 0.1) var bloom_max: float = 5.0
 
-## Degrees of bloom shed per tick.
+## Degrees of bloom shed per tick, at [member DotWeaponDef.authored_tick_rate] when the
+## definition names one (the hitscan behaviour scales it to the running rate).
 @export_range(0.0, 10.0, 0.001) var bloom_recovery: float = 0.15
 
 @export_group("Recoil")
@@ -95,7 +96,7 @@ extends DotWeaponTuning
 
 @export_range(0.0, 5.0, 0.01) var radius: float = 0.1
 
-## Ticks before it expires on its own.
+## Ticks before it expires on its own, at the definition's authored rate.
 @export_range(1, 100000, 1) var life_ticks: int = 384
 
 

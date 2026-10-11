@@ -41,11 +41,16 @@ signal carried_changed()
 
 ## Ticks per second the simulation runs at, as the caller declares it.
 ##
-## Nothing in the addon reads this: every duration on a [DotWeaponDef] is already in
-## ticks and is used as written, so a definition authored at 64 Hz fires twice as fast
-## in real time on a 128 Hz server. Games set it so the value is there for the day a
-## definition is scaled by tick rate (queue item `playground-zee-tickrate-1`); until
-## then, setting it changes nothing.
+## [b]A definition that names its [member DotWeaponDef.authored_tick_rate] is scaled to
+## this[/b], through [method ticks_for]: a pack written at 64 Hz deploys, fires, reloads
+## and charges in the same wall-clock time at 128. A definition that names none (zero) is
+## used exactly as written, whatever this says, which is every definition written before
+## the field existed.
+##
+## [b]Set it to the same number on the client and the server.[/b] Every deadline below is
+## an absolute tick computed from this, and it travels in [method snapshot] as a tick, not
+## as a duration; two ends at two rates predict two different reload ends. A game sets it
+## from the rate its world runs at, which both ends already agree on.
 @export_range(1, 240, 1) var tick_rate: int = 64
 
 @export_range(1, 16, 1) var max_slots: int = 8
@@ -105,6 +110,26 @@ var _use_index: int = 0
 var _replaying: bool = false
 
 var _ready_for_use: bool = false
+
+
+# --- Tick rate --------------------------------------------------------------
+
+## [param authored_ticks], a count off [param def], as a count at [member tick_rate].
+##
+## The one place a definition's durations meet the running rate. Public so a layer over
+## the arsenal (a rig's presentation, an alt-fire it runs itself) times its own half by
+## the same numbers instead of reading the raw field and drifting at another rate.
+func ticks_for(def: DotWeaponDef, authored_ticks: int) -> int:
+	if def == null:
+		return authored_ticks
+	return def.ticks_at(authored_ticks, tick_rate)
+
+
+## [param def]'s charge after [param ticks_held] ticks at [member tick_rate].
+func charge_for(def: DotWeaponDef, ticks_held: int) -> float:
+	if def == null:
+		return 1.0
+	return def.charge_at(ticks_held, tick_rate)
 
 
 # --- Lifecycle --------------------------------------------------------------
@@ -279,7 +304,7 @@ func select(slot: int, tick: int) -> bool:
 
 	_switch_to = slot
 	_holstering = true
-	_switch_done_tick = tick + (from.def.holster_ticks if from != null else 0)
+	_switch_done_tick = tick + (ticks_for(from.def, from.def.holster_ticks) if from != null else 0)
 
 	# A switch cancels everything the old weapon was in the middle of. A reload that
 	# survived a switch would finish into a magazine nobody is holding.
@@ -358,7 +383,8 @@ func begin_reload(tick: int) -> bool:
 		return false
 
 	_reloading = true
-	_reload_done_tick = tick + (
+	_reload_done_tick = tick + ticks_for(
+		slot.def,
 		slot.def.reload_start_ticks if slot.def.reload_per_round
 		else slot.def.reload_ticks
 	)
@@ -408,7 +434,7 @@ func _finish_reload(tick: int) -> void:
 		and slot.magazine_space() > 0
 		and (def.infinite_reserve or _ammo.has(def.ammo_type, 1) or def.ammo_type == &"")
 	):
-		_reload_done_tick = tick + def.reload_ticks
+		_reload_done_tick = tick + ticks_for(def, def.reload_ticks)
 	else:
 		_reloading = false
 		_reload_done_tick = -1
@@ -491,7 +517,7 @@ func _advance_switch(ctx: DotWeaponContext) -> void:
 		_holstering = false
 
 		var to := current()
-		_switch_done_tick = ctx.tick + (to.def.deploy_ticks if to != null else 0)
+		_switch_done_tick = ctx.tick + (ticks_for(to.def, to.def.deploy_ticks) if to != null else 0)
 		switched.emit(previous_slot, _current)
 		return
 
@@ -528,7 +554,7 @@ func _run_behaviour_tick(slot: DotWeaponSlot, ctx: DotWeaponContext) -> void:
 func _charge_value(slot: DotWeaponSlot, tick: int) -> float:
 	if _charge_started < 0 or not slot.def.is_charged():
 		return 1.0
-	return slot.def.charge_at(tick - _charge_started)
+	return charge_for(slot.def, tick - _charge_started)
 
 
 # --- Using ------------------------------------------------------------------
@@ -589,7 +615,7 @@ func _advance_charge(
 		if (
 			not _charge_announced
 			and _charge_started >= 0
-			and ctx.tick - _charge_started >= def.charge_ticks
+			and ctx.tick - _charge_started >= ticks_for(def, def.charge_ticks)
 		):
 			_charge_announced = true
 			charge_full.emit(_current)
@@ -599,7 +625,7 @@ func _advance_charge(
 		return DotWeaponOutcome.nothing("")
 
 	# Released.
-	var charge := def.charge_at(ctx.tick - _charge_started)
+	var charge := charge_for(def, ctx.tick - _charge_started)
 	_charge_started = -1
 	_charge_announced = false
 
@@ -626,7 +652,7 @@ func _advance_burst(
 		# between bursts. Using one interval for both is the bug that makes a
 		# three-round burst indistinguishable from automatic fire.
 		if _burst_left > 0:
-			_next_use_tick = ctx.tick + maxi(1, slot.def.burst_interval_ticks)
+			_next_use_tick = ctx.tick + maxi(1, ticks_for(slot.def, slot.def.burst_interval_ticks))
 	elif out.refusal != "":
 		_burst_left = 0
 
@@ -687,8 +713,10 @@ func _try_use(slot: DotWeaponSlot, ctx: DotWeaponContext) -> DotWeaponOutcome:
 
 	_spend(slot, out)
 
+	# An outcome's own cooldown is counted in the definition's ticks, like the interval it
+	# stands in for, so the behaviour that set it never needs to know the running rate.
 	var cadence := out.cooldown_ticks if out.cooldown_ticks >= 0 else def.use_interval_ticks
-	_next_use_tick = ctx.tick + maxi(1, cadence)
+	_next_use_tick = ctx.tick + maxi(1, ticks_for(def, cadence))
 
 	used.emit(out)
 	return out
@@ -803,6 +831,7 @@ func describe() -> Dictionary:
 	var slot := current()
 	return {
 		"ready": _ready_for_use,
+		"tick_rate": tick_rate,
 		"current": _current,
 		"weapon": String(slot.id()) if slot != null else "",
 		"magazine": slot.magazine if slot != null else 0,

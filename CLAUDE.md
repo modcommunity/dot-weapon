@@ -17,7 +17,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first.
 
 | Path | What |
 | --- | --- |
-| `core/dot_weapon_def.gd` | `DotWeaponDef`: slot, deploy/holster ticks, `Fire` mode, cost, reload, `behaviour_path`, `params`, `tuning` |
+| `core/dot_weapon_def.gd` | `DotWeaponDef`: `authored_tick_rate`, slot, deploy/holster ticks, `Fire` mode, cost, reload, `behaviour_path`, `params`, `tuning` |
+| `dot_weapon_api.gd` | the API level ([DotAddonApi](../dot-core/addons/dot_core/core/dot_addon_api.gd)); 2 = `authored_tick_rate` and the scaling helpers |
 | `core/` (rest) | `DotWeaponCatalogue`, `DotWeaponCommand` (the per-tick input), `DotWeaponContext`, `DotWeaponOutcome`, `DotWeaponSpawn`, `DotWeaponSlot`, `DotWeaponAmmo` |
 | `behaviour/` | `DotWeaponBehaviour` (the extension point) and the stock `DotWeaponHitscan`, `DotWeaponProjectile`, `DotWeaponMelee`, `DotWeaponBeam`, `DotWeaponThrown` |
 | `tuning/` | `DotWeaponTuning` (subclass for typed fields) and `DotWeaponBallistics` (what the gun-like behaviours read) |
@@ -40,7 +41,9 @@ The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything
 - A behaviour applies nothing; it returns a `DotWeaponOutcome`. [design](docs/design.md#four-rules-for-a-behaviour-and-they-all-break-quietly)
 - Behaviour state lives in `state`, never a member, or a correction loses it. [design](docs/design.md#four-rules-for-a-behaviour-and-they-all-break-quietly)
 - Check `ctx.replayed` before any sound, effect or statistic. [design](docs/design.md#four-rules-for-a-behaviour-and-they-all-break-quietly)
-- Every duration on a definition is in ticks. [design](docs/design.md#ticks-never-seconds)
+- Every duration on a definition is in ticks, at `authored_tick_rate` when set (0 = the running rate, unscaled); the arsenal reads them only through `ticks_for`/`charge_for`, a behaviour through `scaled_ticks`/`scaled_per_tick`. [design](docs/design.md#ticks-never-seconds)
+- `DotWeaponOutcome.cooldown_ticks` is in the definition's ticks (the arsenal scales it); a `DotWeaponSpawn`'s fuse and life are in running ticks (the behaviour scales them). [design](docs/design.md#ticks-never-seconds)
+- Client and server arsenals must share `tick_rate`; deadlines are absolute ticks in the snapshot. [design](docs/design.md#ticks-never-seconds)
 - In `_try_use`, ask whether the weapon can pay before cancelling a reload. [design](docs/design.md#the-order-in-_try_use-is-load-bearing)
 - `select()` refuses the slot a switch is already heading to; a game may send its slot every tick. [design](docs/design.md#select-refuses-the-slot-a-switch-is-already-heading-to)
 - `DotSpread` stays in dot-combat; behaviours set `DotShot.spread`. [design](docs/design.md#spread-lives-in-dot-combat-not-here)
@@ -50,7 +53,3 @@ The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything
 ## Consumers
 
 game-arena and game-g2gfast use it directly. game-playground, game-zombie-zone, mg-deathrun, mg-prop-hunt, mg-smash-copter and mg-wipeout use it through zee-dot-weapons (zed-dot-weapons sits on top of zee). game-playground's prop tools (`DotPropTool` subclasses) are not weapons in this sense.
-
-## Open items
-
-- `DotWeaponArsenal.tick_rate` is declared but read by nothing, and nothing scales a definition by tick rate: zee-dot-weapons is authored at 64 Hz and fires at a different real-time rate on a 128 Hz server. Queue item `playground-zee-tickrate-1`. [design](docs/design.md#ticks-never-seconds)

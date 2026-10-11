@@ -29,7 +29,7 @@ func _tick(_ctx: DotWeaponContext) -> void:
 
 	var now := float(state.get(_BLOOM, 0.0))
 	if now > 0.0:
-		state[_BLOOM] = maxf(0.0, now - b.bloom_recovery)
+		state[_BLOOM] = maxf(0.0, now - scaled_per_tick(b.bloom_recovery))
 
 
 func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:

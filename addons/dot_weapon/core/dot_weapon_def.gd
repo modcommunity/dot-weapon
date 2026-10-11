@@ -95,6 +95,31 @@ enum Fire {
 ## own fields; [member params] stays available for a pack that cannot register a class.
 @export var tuning: DotWeaponTuning = null
 
+@export_group("Timing")
+
+## The tick rate every tick count on this definition was written for. Zero means "the
+## rate it runs at", which is how a definition behaved before this field existed.
+##
+## [b]Set it and the arsenal scales the definition to the rate it is running at[/b]:
+## [member deploy_ticks], [member holster_ticks], [member use_interval_ticks],
+## [member burst_interval_ticks], [member charge_ticks], [member reload_ticks],
+## [member reload_start_ticks] and an outcome's [member DotWeaponOutcome.cooldown_ticks],
+## and the stock behaviours scale what they read from the tuning the same way
+## ([method DotWeaponBehaviour.scaled_ticks], [method DotWeaponBehaviour.scaled_per_tick]).
+## A pack authored at 64 Hz then fires, reloads and deploys in the same wall-clock time on
+## a 128 Hz server as on a 64 Hz one.
+##
+## [b]Why on the definition and not as one number on the arsenal.[/b] An arsenal holds
+## weapons from more than one source: a game's own rows written at its own rate, next to
+## a pack's written at 64. A per-arsenal "authored rate" would rescale one of the two
+## wrongly. Each row says what it was written against, and zero leaves a row that was
+## written for the running rate exactly as it was.
+##
+## [b]Rescaling a count of ticks rounds.[/b] 4 ticks at 64 Hz is 7.5 at 120 Hz and becomes
+## 8; a count above zero never rounds down to zero, because zero means "every tick" on
+## [member use_interval_ticks] and "instantly" elsewhere, and neither is what was written.
+@export_range(0, 1000, 1) var authored_tick_rate: int = 0
+
 @export_group("Handling")
 
 ## Which slot this occupies. Two weapons in one slot cannot be carried together.
@@ -102,9 +127,9 @@ enum Fire {
 
 ## Ticks to bring it up before it may be used.
 ##
-## Ticks, like everything else in this family. A weapon whose deploy is measured in
-## seconds is a weapon that deploys at two different speeds on a 64 Hz server and a
-## 128 Hz one, which is two different games.
+## Ticks, like everything else in this family, so a client and a server reach the same
+## deadline from integers. Counted at [member authored_tick_rate] when that is set, and
+## at the running rate when it is not.
 @export_range(0, 10000, 1) var deploy_ticks: int = 22
 
 ## Ticks to put it away before another may be brought up.
@@ -209,10 +234,42 @@ func is_continuous() -> bool:
 
 
 ## Charge from 0 to 1 after [param ticks_held] ticks on the button.
-func charge_at(ticks_held: int) -> float:
-	if charge_ticks <= 0:
+##
+## [param running_rate] is the tick rate [param ticks_held] was counted at; zero takes it
+## to be [member authored_tick_rate], which is the unscaled answer.
+func charge_at(ticks_held: int, running_rate: int = 0) -> float:
+	var full := ticks_at(charge_ticks, running_rate)
+	if full <= 0:
 		return 1.0
-	return clampf(float(ticks_held) / float(charge_ticks), 0.0, 1.0)
+	return clampf(float(ticks_held) / float(full), 0.0, 1.0)
+
+
+## Whether this definition's tick counts change at [param running_rate].
+func scales_at(running_rate: int) -> bool:
+	return authored_tick_rate > 0 and running_rate > 0 and running_rate != authored_tick_rate
+
+
+## [param authored_ticks], a count written at [member authored_tick_rate], as a count at
+## [param running_rate]. Unchanged when the definition names no rate, or names this one.
+##
+## Rounded to the nearest tick, and never from above zero down to zero (see
+## [member authored_tick_rate]). Integer in, integer out, so a client and a server
+## running at one rate reach the same deadline.
+func ticks_at(authored_ticks: int, running_rate: int) -> int:
+	if authored_ticks <= 0 or not scales_at(running_rate):
+		return authored_ticks
+	return maxi(
+		1,
+		int(round(float(authored_ticks) * float(running_rate) / float(authored_tick_rate)))
+	)
+
+
+## [param amount], something applied once per tick at [member authored_tick_rate], as the
+## amount per tick at [param running_rate]: twice the rate, half each tick.
+func per_tick_at(amount: float, running_rate: int) -> float:
+	if not scales_at(running_rate):
+		return amount
+	return amount * float(authored_tick_rate) / float(running_rate)
 
 
 ## One value from [member params], falling back when the key is absent.
@@ -295,6 +352,11 @@ func validate() -> DotResult:
 			DotError.CODE_INVALID, "min_charge must be above 0 and at most 1.", where
 		)
 
+	if authored_tick_rate < 0:
+		return DotResult.fail(
+			DotError.CODE_INVALID, "authored_tick_rate must be 0 (unscaled) or above.", where
+		)
+
 	if tuning != null:
 		var res := tuning.validate()
 		if not res.ok:
@@ -314,6 +376,7 @@ func describe() -> Dictionary:
 		"magazine": magazine,
 		"reserve": reserve,
 		"tags": tags.map(func(t: StringName) -> String: return String(t)),
+		"authored_tick_rate": authored_tick_rate,
 	}
 
 

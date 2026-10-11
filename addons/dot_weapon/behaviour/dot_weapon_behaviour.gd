@@ -160,6 +160,38 @@ func _reloaded(_rounds: int) -> void:
 
 # --- Helpers for subclasses -------------------------------------------------
 
+## The tick rate the arsenal runs at, or zero when there is no arsenal to ask (a unit test
+## driving the behaviour directly), which leaves every count as written.
+##
+## Duck-typed: [member arsenal] is an [Object] so a test can hand in anything.
+func running_tick_rate() -> int:
+	if arsenal == null:
+		return 0
+	var v: Variant = arsenal.get("tick_rate")
+	return int(v) if v is int else 0
+
+
+## [param authored_ticks], a count from this weapon's tuning, as a count at the running
+## tick rate. See [member DotWeaponDef.authored_tick_rate].
+##
+## [b]For a count that leaves this behaviour[/b]: a spawn's fuse and life, which the game
+## flies at its own rate, and anything compared with [member DotWeaponContext.held_ticks],
+## which the arsenal counts at its own. A cooldown handed back in
+## [member DotWeaponOutcome.cooldown_ticks] is NOT scaled here; the arsenal does that.
+func scaled_ticks(authored_ticks: int) -> int:
+	if def == null:
+		return authored_ticks
+	return def.ticks_at(authored_ticks, running_tick_rate())
+
+
+## [param amount], applied once per tick at the authored rate, per tick at the running one.
+## A bloom recovery of 0.15 degrees a tick at 64 Hz is 0.075 a tick at 128.
+func scaled_per_tick(amount: float) -> float:
+	if def == null:
+		return amount
+	return def.per_tick_at(amount, running_tick_rate())
+
+
 ## Reads a tuning field from [member DotWeaponDef.tuning] if it has one, then from
 ## [member DotWeaponDef.params], then the fallback.
 ##

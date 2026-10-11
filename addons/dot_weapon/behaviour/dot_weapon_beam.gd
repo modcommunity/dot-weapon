@@ -32,7 +32,7 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 
 	# Ramp is a fraction of full output at zero held ticks, reaching 1 after
 	# `ramp_ticks`. Zero ramp_ticks means full output immediately.
-	var ramp_ticks := tune_int(&"ramp_ticks", 0)
+	var ramp_ticks := scaled_ticks(tune_int(&"ramp_ticks", 0))
 	if ramp_ticks > 0:
 		var ramp_from := tune_float(&"ramp_from", 0.4)
 		var t := clampf(float(ctx.held_ticks) / float(ramp_ticks), 0.0, 1.0)
