@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 203
+const CHECKS := 233
 
 
 func _ready() -> void:
@@ -30,6 +30,7 @@ func _run() -> void:
 	_test_definition()
 	_test_catalogue()
 	_test_id_order()
+	_test_content_follow()
 	_test_behaviour_resolution()
 	_test_carrying_and_switching()
 	_test_cadence()
@@ -96,6 +97,125 @@ func _check(condition: bool, what: String, detail: String = "") -> bool:
 
 func _close(got: float, want: float, what: String, epsilon: float = 0.01) -> bool:
 	return _check(absf(got - want) <= epsilon, what, "got %.4f, want %.4f" % [got, want])
+
+
+# --- Content packs ----------------------------------------------------------
+
+const _PACK := "res://fixtures/workshop_pack"
+
+
+func _provides(entries: Array) -> Dictionary:
+	return {"schema": 1, "title": "Fixture arms", "kinds": ["weapon"], "entries": entries}
+
+
+func _wentry(id: String, extra: Dictionary = {}) -> Dictionary:
+	var d := {
+		"kind": "weapon", "id": id, "name": id.capitalize(),
+		"def": "weapons/%s.tres" % id, "category": "fixture",
+		"thumbnail": "icons/%s.png" % id,
+	}
+	d.merge(extra, true)
+	return d
+
+
+func _test_content_follow() -> void:
+	_section("delivered weapons")
+
+	var index := DotContentIndex.new()
+	index.set_session(DotContentIndex.SESSION_SOLO)
+	var c := _catalogue()
+	c.add(_catalogue_extra(), "toys")
+	var base := c.size()
+
+	var added: Array[String] = []
+	var changes := [0]
+	c.weapon_added.connect(func(l: DotWeaponListing) -> void: added.append(String(l.id)))
+	c.listings_changed.connect(func() -> void: changes[0] += 1)
+
+	# A pack mounted before the catalogue follows: order does not matter.
+	index.add_pack({
+		"content_id": "tmc/fixture-arms", "version": "1.0.0", "prefix": _PACK,
+		"session": "solo", "source": "subscription",
+		"provides": _provides([_wentry("flare_gun", {"tags": ["sidearm"]})]),
+	})
+	c.follow_content(index)
+	_check(c.size() == base + 1, "a pack mounted before following is seen", str(c.size()))
+	_check(added == ["flare_gun"], "and announced as added", str(added))
+	_check(changes[0] >= 1, "with a listings_changed signal")
+	_check(c.has(&"flare_gun") and c.get_def(&"flare_gun").slot == 2, "the def loads from the mount")
+	var l := c.listing(&"flare_gun")
+	_check(l != null and l.is_delivered() and l.display_name == "Flare Gun", "the listing carries the entry's name")
+	_check(l.category == "fixture" and l.content_id == "tmc/fixture-arms", "category and pack")
+	_check(l.icon_path == _PACK + "/icons/flare_gun.png", "the thumbnail is resolved onto the mount")
+	_check(l.icon() == null, "a missing thumbnail is null, not an error")
+	_check(l.source == &"subscription" and l.tags == PackedStringArray(["sidearm"]), "source and tags")
+	_check(c.ids_in_slot(2) == ([&"flare_gun"] as Array[StringName]) or c.ids_in_slot(2).has(&"flare_gun"), "slot index includes it")
+	_check(c.instantiate(&"flare_gun").ok, "and it instantiates a behaviour")
+
+	# A pack mounted afterwards.
+	index.add_pack({
+		"content_id": "tmc/more-arms", "version": "2.0.0", "prefix": _PACK,
+		"session": "solo", "source": "subscription",
+		"provides": _provides([
+			_wentry("ember_blade"),
+			_wentry("rifle"),
+			_wentry("wrong_id"),
+			_wentry("not_there"),
+			{"kind": "weapon", "id": "no_def", "name": "x"},
+		]),
+	})
+	_check(added == ["flare_gun", "ember_blade"], "a later pack adds only its good rows", str(added))
+	_check(c.get_def(&"rifle").display_name == "Rifle", "code wins an id clash")
+	_check(not c.has(&"other_name") and not c.has(&"wrong_id"), "a def whose id differs from its entry is refused")
+	_check(not c.has(&"not_there") and not c.has(&"no_def"), "missing and absent defs are refused")
+	_check(c.validate().ok, "the code table still validates")
+	_check(c.categories().has("fixture") and c.categories().has("toys"), "categories cover both sources")
+	_check(c.listings("fixture").size() == 2, "listings filter by category")
+	_check(c.listings()[0].is_delivered() == false, "code weapons list first")
+
+	# Sessions.
+	var other_changes: int = changes[0]
+	index.set_session(DotContentIndex.SESSION_ONLINE)
+	_check(c.size() == base, "online, every solo weapon is gone", str(c.size()))
+	_check(not c.has(&"flare_gun") and c.listing(&"ember_blade") == null, "queries agree")
+	_check(changes[0] > other_changes, "the switch is announced")
+	var n_added := added.size()
+	index.set_session(DotContentIndex.SESSION_SOLO)
+	_check(c.has(&"flare_gun") and c.has(&"ember_blade"), "back in solo they return")
+	_check(added.size() == n_added + 2, "and are announced again")
+
+	# Reuse by a server: tagged online as well.
+	index.tag_pack(&"tmc/fixture-arms", "1.0.0", DotContentIndex.SESSION_ONLINE)
+	index.set_session(DotContentIndex.SESSION_ONLINE)
+	_check(c.has(&"flare_gun") and not c.has(&"ember_blade"), "a pack also tagged online shows online")
+	index.set_session(DotContentIndex.SESSION_SOLO)
+
+	var lines := c.describe_lines()
+	_check(lines.size() >= base + 2 and "\n".join(lines).contains("tmc/fixture-arms"), "describe_lines names the pack")
+	_check(c.describe()["delivered"] == 2, "describe counts delivered")
+
+	c.unfollow_content()
+	_check(c.size() == base and not c.has(&"flare_gun"), "unfollowing forgets delivered weapons")
+	index.add_pack({
+		"content_id": "tmc/late", "version": "1", "prefix": _PACK, "session": "solo",
+		"provides": _provides([_wentry("flare_gun")]),
+	})
+	_check(not c.has(&"flare_gun"), "and stops listening")
+
+	# Default: the shared index.
+	var mine := DotContentIndex.new()
+	DotRegistry.register(DotContentIndex.SERVICE, mine)
+	var d := DotWeaponCatalogue.new().follow_content()
+	_check(d.describe()["session"] == "solo", "follow_content() with no argument uses the registered index")
+	d.unfollow_content()
+	DotRegistry.unregister(DotContentIndex.SERVICE)
+	_done()
+
+
+func _catalogue_extra() -> DotWeaponDef:
+	var d := _pistol()
+	d.id = &"toy_blaster"
+	return d
 
 
 # --- Fixtures ---------------------------------------------------------------

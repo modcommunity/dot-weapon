@@ -18,8 +18,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first.
 | Path | What |
 | --- | --- |
 | `core/dot_weapon_def.gd` | `DotWeaponDef`: `authored_tick_rate`, slot, deploy/holster ticks, `Fire` mode, cost, reload, `behaviour_path`, `params`, `tuning` |
-| `dot_weapon_api.gd` | the API level ([DotAddonApi](../dot-core/addons/dot_core/core/dot_addon_api.gd)); 2 = `authored_tick_rate` and the scaling helpers |
-| `core/` (rest) | `DotWeaponCatalogue`, `DotWeaponCommand` (the per-tick input), `DotWeaponContext`, `DotWeaponOutcome`, `DotWeaponSpawn`, `DotWeaponSlot`, `DotWeaponAmmo` |
+| `dot_weapon_api.gd` | the API level ([DotAddonApi](../dot-core/addons/dot_core/core/dot_addon_api.gd)); 2 = `authored_tick_rate` and the scaling helpers; 3 = `follow_content` and the menu listings |
+| `core/` (rest) | `DotWeaponCatalogue` (code weapons plus `follow_content(index)` for weapons delivered by mounted packs, session-aware), `DotWeaponListing` (a menu row), `DotWeaponCommand` (the per-tick input), `DotWeaponContext`, `DotWeaponOutcome`, `DotWeaponSpawn`, `DotWeaponSlot`, `DotWeaponAmmo` |
 | `behaviour/` | `DotWeaponBehaviour` (the extension point) and the stock `DotWeaponHitscan`, `DotWeaponProjectile`, `DotWeaponMelee`, `DotWeaponBeam`, `DotWeaponThrown` |
 | `tuning/` | `DotWeaponTuning` (subclass for typed fields) and `DotWeaponBallistics` (what the gun-like behaviours read) |
 | `runtime/dot_weapon_arsenal.gd` | `DotWeaponArsenal`: the state machine; `select`, `use`, `begin_reload`, snapshots |

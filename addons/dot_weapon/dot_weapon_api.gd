@@ -14,5 +14,12 @@ extends RefCounted
 ## rate fails to compile on a host built before it. OLDEST stays 1: a definition that
 ## names no rate behaves exactly as before.
 
-const LEVEL := 2
+## 3: [method DotWeaponCatalogue.follow_content] and [method DotWeaponCatalogue.unfollow_content]
+## (weapons delivered by mounted content packs, session-aware), [DotWeaponListing] with
+## [method DotWeaponCatalogue.listings], [method DotWeaponCatalogue.listing] and
+## [method DotWeaponCatalogue.categories], the [signal DotWeaponCatalogue.weapon_added] and
+## [signal DotWeaponCatalogue.listings_changed] signals, and the optional category and icon arguments of
+## [method DotWeaponCatalogue.add]. Needs dot-core API 9 ([DotContentIndex]); OLDEST stays 1.
+
+const LEVEL := 3
 const OLDEST := 1
