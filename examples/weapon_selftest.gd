@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 233
+const CHECKS := 304
 
 
 func _ready() -> void:
@@ -46,6 +46,8 @@ func _run() -> void:
 	_test_loadout_bridge()
 	_test_inventory_bridge()
 	_test_net_sync()
+	_test_attachments()
+	_test_attachments_wire()
 	_test_extension_point()
 	_test_player_bridge()
 
@@ -1625,6 +1627,284 @@ class _FakeNet extends Object:
 	var net_slot: int = 0
 	var net_magazine: int = 0
 	var net_reserve: int = 0
+
+
+# --- Attachments ------------------------------------------------------------
+
+func _att(
+	id: String, mount: StringName, scale: Dictionary = {}, add: Dictionary = {}
+) -> DotWeaponAttachment:
+	var a := DotWeaponAttachment.new()
+	a.id = StringName(id)
+	a.mount = mount
+	a.scale = scale
+	a.add = add
+	return a
+
+
+## A rifle with three mounts, and a catalogue of attachments for it.
+func _modular_rifle() -> DotWeaponDef:
+	var d := _rifle()
+	d.mounts = [&"optic", &"muzzle", &"magazine"] as Array[StringName]
+	return d
+
+
+func _attachment_catalogue() -> DotWeaponAttachments:
+	var c := DotWeaponAttachments.new()
+	var suppressor := _att("suppressor", &"muzzle", {"spread": 0.5, "damage": 0.9})
+	suppressor.tags_added = [&"quiet"] as Array[StringName]
+	var brake := _att("brake", &"muzzle", {"recoil_pitch": 0.5})
+	var scope := _att("scope", &"optic", {}, {"spread": -0.1})
+	scope.params_set = {"zoom": 4.0}
+	scope.fits_tags = [&"primary"] as Array[StringName]
+	var pistol_dot := _att("dot_sight", &"optic")
+	pistol_dot.fits_weapons = [&"pistol"] as Array[StringName]
+	var drum := _att("drum", &"magazine", {"magazine": 2.0}, {"reload_ticks": 30})
+	var tiny := _att("tiny_mag", &"magazine", {"magazine": 0.01})
+	for a in [suppressor, brake, scope, pistol_dot, drum, tiny]:
+		var res := c.add(a)
+		if not res.ok:
+			push_error(res.error.message)
+	return c
+
+
+func _test_attachments() -> void:
+	_section("attachments")
+
+	var c := _attachment_catalogue()
+	var rifle := _modular_rifle()
+	var fits_scope := c.get_attachment(&"scope").fits(rifle)
+	_check(fits_scope, "an optic fits a weapon that has the mount and the tag")
+	_check(not c.get_attachment(&"dot_sight").fits(rifle), "a list of weapon ids refuses another weapon")
+	_check(not c.get_attachment(&"scope").fits(_pistol()), "a weapon without the mount refuses it")
+	var untagged := _modular_rifle()
+	untagged.tags = [] as Array[StringName]
+	_check(not c.get_attachment(&"scope").fits(untagged), "a tag list refuses a weapon without the tag")
+	_check(c.get_attachment(&"drum").fits(untagged), "empty fit lists fit any weapon with the mount")
+
+	_check(not c.add(_att("brake", &"muzzle")).ok, "a duplicate id is refused")
+	_check(c.add(_att("brake", &"muzzle")).code() == DotError.CODE_CONFLICT, "as a conflict")
+	_check(not c.add(_att("", &"muzzle")).ok, "an attachment without an id is refused")
+	_check(not c.add(_att("zero", &"muzzle", {"damage": 0.0})).ok, "a zero multiplier is refused")
+	_check(not c.add(_att("inf", &"muzzle", {}, {"damage": INF})).ok, "an infinite addition is refused")
+	_check(not c.add(_att("nomount", &"")).ok, "an empty mount is refused")
+
+	_check(
+		c.ids() == [&"brake", &"dot_sight", &"drum", &"scope", &"suppressor", &"tiny_mag"],
+		"ids are in text order"
+	)
+	var choices := c.choices_for(rifle)
+	_check(choices.size() == 3, "choices cover every mount of the weapon")
+	_check(choices[&"muzzle"] == [&"brake", &"suppressor"], "in text order", str(choices[&"muzzle"]))
+	_check(choices[&"optic"] == [&"scope"], "and only what fits")
+
+	# apply returns a copy and never touches the shared definition or its tuning.
+	var base_spread := (rifle.tuning as DotWeaponBallistics).spread
+	var base_recoil := (rifle.tuning as DotWeaponBallistics).recoil_pitch
+	var base_damage := (rifle.tuning as DotWeaponBallistics).damage
+	var f := DotWeaponFitting.make(&"rifle")
+	f.fit(&"muzzle", &"suppressor")
+	f.fit(&"magazine", &"drum")
+	f.fit(&"optic", &"scope")
+	var applied := c.apply(rifle, f)
+	_check(applied.ok, "a legal fitting applies")
+	var out: DotWeaponDef = applied.value
+	_check(out != rifle and out.tuning != rifle.tuning, "to a copy, tuning included")
+	_check(out.magazine == 60 and out.reload_ticks == rifle.reload_ticks + 30, "int fields scale and add")
+	_close((out.tuning as DotWeaponBallistics).damage, base_damage * 0.9, "tuning fields resolve after the def")
+	_close((out.tuning as DotWeaponBallistics).spread, 0.0 * 0.5 - 0.1, "scaling comes before adding")
+	_check(
+		(rifle.tuning as DotWeaponBallistics).spread == base_spread
+		and (rifle.tuning as DotWeaponBallistics).recoil_pitch == base_recoil
+		and (rifle.tuning as DotWeaponBallistics).damage == base_damage
+		and rifle.magazine == 30 and not rifle.tags.has(&"quiet") and not rifle.params.has("zoom"),
+		"the base definition and its tuning are untouched"
+	)
+	_check(out.tags.has(&"quiet") and out.tags.count(&"quiet") == 1, "tags are added once")
+	_check(is_equal_approx(float(out.params.get("zoom", 0.0)), 4.0), "params are merged")
+	_check(c.apply(rifle, DotWeaponFitting.make(&"rifle")).value == rifle, "an empty fitting returns the def itself")
+
+	var typo := DotWeaponAttachments.new()
+	typo.add(_att("typo", &"muzzle", {"dammage": 0.5}))
+	var tf := DotWeaponFitting.make(&"rifle")
+	tf.fit(&"muzzle", &"typo")
+	var rifle2 := _modular_rifle()
+	var bad := typo.apply(rifle2, tf)
+	_check(not bad.ok and bad.code() == DotError.CODE_INVALID, "an unknown field is refused, not skipped")
+	var notnum := DotWeaponAttachments.new()
+	notnum.add(_att("name", &"muzzle", {"display_name": 2.0}))
+	var nf := DotWeaponFitting.make(&"rifle")
+	nf.fit(&"muzzle", &"name")
+	_check(not notnum.apply(rifle2, nf).ok, "so is a field that is not a number")
+
+	var tm := DotWeaponFitting.make(&"rifle")
+	tm.fit(&"magazine", &"tiny_mag")
+	var floor_def: DotWeaponDef = c.apply(rifle, tm).value
+	_check(floor_def.magazine == 1, "a magazine that held rounds keeps at least one", str(floor_def.magazine))
+
+	# Refusals, by code.
+	var unknown := DotWeaponFitting.make(&"rifle")
+	unknown.fit(&"muzzle", &"nothing")
+	_check(c.validate_fitting(rifle, unknown).code() == DotError.CODE_INVALID, "an unknown id: invalid")
+	var wrong_mount := DotWeaponFitting.make(&"rifle")
+	wrong_mount.fit(&"optic", &"suppressor")
+	_check(c.validate_fitting(rifle, wrong_mount).code() == DotError.CODE_CONFLICT, "the wrong mount: conflict")
+	var no_fit := DotWeaponFitting.make(&"rifle")
+	no_fit.fit(&"optic", &"dot_sight")
+	_check(c.validate_fitting(rifle, no_fit).code() == DotError.CODE_FORBIDDEN, "does not fit: forbidden")
+	var other := DotWeaponFitting.make(&"pistol")
+	_check(c.validate_fitting(rifle, other).code() == DotError.CODE_STATE, "another weapon's fitting: state")
+	_check(c.validate_fitting(rifle, f).ok, "and a legal one passes")
+
+	var mixed := DotWeaponFitting.make(&"rifle")
+	mixed.fit(&"muzzle", &"suppressor")
+	mixed.fit(&"optic", &"dot_sight")
+	mixed.fit(&"side", &"brake")
+	var kept := c.conform(rifle, mixed)
+	_check(kept.key() == "muzzle=suppressor", "conform drops what is illegal and keeps the rest", kept.key())
+
+	# Fitting value type.
+	_check(f.key() == "magazine=drum,muzzle=suppressor,optic=scope", "a key is in mount text order", f.key())
+	_check(f.mounts() == [&"magazine", &"muzzle", &"optic"] and f.ids() == [&"drum", &"scope", &"suppressor"], "mounts and ids are sorted by text")
+	var round_trip := DotWeaponFitting.from_dictionary(f.to_dictionary())
+	_check(round_trip.ok and (round_trip.value as DotWeaponFitting).key() == f.key(), "a fitting round-trips a dictionary")
+	_check(not DotWeaponFitting.from_dictionary({"weapon": "rifle", "mounts": {"muzzle": 5}}).ok, "a non-string id is refused, not coerced")
+	var copy := f.duplicate_fitting()
+	copy.remove(&"muzzle")
+	_check(f.attachment_on(&"muzzle") == &"suppressor" and copy.attachment_on(&"muzzle") == &"", "a duplicate is independent")
+
+	# Every combination of the three mounts survives the wire encoding.
+	var combos := 0
+	var wrong := 0
+	var optics: Array = [&""] + choices[&"optic"]
+	var muzzles: Array = [&""] + choices[&"muzzle"]
+	var mags: Array = [&""] + choices[&"magazine"]
+	for o: StringName in optics:
+		for m: StringName in muzzles:
+			for g: StringName in mags:
+				var combo := DotWeaponFitting.make(&"rifle")
+				for pair in [[&"optic", o], [&"muzzle", m], [&"magazine", g]]:
+					if pair[1] != &"":
+						combo.fit(pair[0], pair[1])
+				combos += 1
+				var code := c.encode(rifle, combo)
+				if c.decode(rifle, code).key() != combo.key() or code >= (1 << c.code_bits(rifle)):
+					wrong += 1
+	_check(combos == 2 * 3 * 3 and wrong == 0, "every combination round-trips through encode and decode", "%d wrong of %d" % [wrong, combos])
+	_check(c.code_bits(rifle) == 1 + 2 + 2, "with just enough bits per mount", str(c.code_bits(rifle)))
+	_check(c.decode(rifle, 0).is_empty() and c.decode(rifle, 3).is_empty(), "code 0 and an index past the choices decode as none")
+
+	# The arsenal.
+	var cat := DotWeaponCatalogue.new()
+	cat.add(_modular_rifle())
+	var a := _arsenal(cat)
+	_check(not a.fit(1, f).ok and a.fit(1, f).code() == DotError.CODE_STATE, "an arsenal with no attachments cannot fit")
+	a.attachments = c
+	_check(a.give(&"rifle").ok, "an arsenal carries the rifle")
+	_check(a.fitting_at(1).is_empty() and a.fitting_at(7).is_empty(), "fresh, nothing is fitted, and fitting_at is never null")
+	_check(not a.fit(5, f).ok, "an empty slot cannot be fitted")
+	var before := a.current().magazine
+	_check(before == 30, "the magazine starts full")
+	_check(a.fit(1, f).ok, "fit succeeds")
+	_check(a.current_def().magazine == 60 and a.slot_at(1).def != cat.get_def(&"rifle"), "the slot uses the applied def")
+	_check(cat.get_def(&"rifle").magazine == 30, "the catalogue's is untouched")
+	_check(a.fitting_at(1).key() == f.key(), "fitting_at reports it")
+	f.remove(&"optic")
+	_check(a.fitting_at(1).key() != f.key(), "the arsenal stored a copy")
+
+	var shrink := DotWeaponFitting.make(&"rifle")
+	shrink.fit(&"magazine", &"tiny_mag")
+	a.slot_at(1).magazine = 30
+	a.fit(1, shrink)
+	_check(a.slot_at(1).magazine == 1, "a magazine above the new capacity is clamped", str(a.slot_at(1).magazine))
+
+	# Snapshot and restore on another machine.
+	a.fit(1, c.conform(rifle, mixed))
+	var snap := a.snapshot()
+	_check(snap["slots"][1].has("fit"), "the snapshot carries the fitting")
+	var b := _arsenal(cat)
+	var no_att := b.restore(snap)
+	_check(not no_att.ok and no_att.code() == DotError.CODE_STATE, "restoring a fitting without a catalogue is a state error")
+	b.attachments = c
+	_check(b.restore(snap).ok, "with one it restores")
+	_check(b.fitting_at(1).key() == "muzzle=suppressor", "and keeps the fitting", b.fitting_at(1).key())
+	_check(b.current_def().has_tag(&"quiet"), "so the second arsenal uses the applied def")
+	a.fit(1, DotWeaponFitting.make(&"rifle"))
+	_check(a.current_def() == cat.get_def(&"rifle"), "an empty fitting restores the base def")
+	_check(not a.snapshot()["slots"][1].has("fit"), "and the snapshot carries nothing")
+	b.restore(a.snapshot())
+	_check(b.fitting_at(1).is_empty() and b.current_def() == cat.get_def(&"rifle"), "restoring that unfits the second arsenal")
+
+	_drop(a)
+	_drop(b)
+	_done()
+
+
+class _FakeFitted extends Object:
+	var net_slot: int = 0
+	var net_magazine: int = 0
+	var net_reserve: int = 0
+	var net_fitted: int = 0
+
+
+func _test_attachments_wire() -> void:
+	_section("attachments on the wire")
+
+	var c := _attachment_catalogue()
+	var cat := DotWeaponCatalogue.new()
+	cat.add(_modular_rifle())
+	var shooter := _arsenal(cat)
+	shooter.attachments = c
+	shooter.give(&"rifle")
+	var f := DotWeaponFitting.make(&"rifle")
+	f.fit(&"muzzle", &"suppressor")
+	f.fit(&"optic", &"scope")
+	shooter.fit(1, f)
+
+	_check(DotWeaponNetSync.specs().size() == 3, "specs() is unchanged")
+	var fs := DotWeaponNetSync.fitting_specs()
+	_check(fs.size() == 1 and fs[0]["property"] == &"net_fitted" and not bool(fs[0]["owner_only"]), "fitting_specs is one public property")
+	_check(int(fs[0]["bits"]) == DotWeaponNetSync.FITTED_BITS and DotWeaponNetSync.fitting_bits() == 16, "of 16 bits")
+
+	var fake := _FakeFitted.new()
+	DotWeaponNetSync.pull(shooter, fake)
+	_check(fake.net_fitted != 0, "pull writes the code")
+
+	var watcher := _arsenal(cat)
+	watcher.attachments = c
+	watcher.give(&"rifle")
+	DotWeaponNetSync.push(fake, watcher)
+	_check(watcher.fitting_at(1).key() == f.key(), "push gives a watcher the same fitting", watcher.fitting_at(1).key())
+	_check(watcher.current_def().has_tag(&"quiet"), "which it uses")
+
+	shooter.fit(1, DotWeaponFitting.make(&"rifle"))
+	DotWeaponNetSync.pull(shooter, fake)
+	_check(fake.net_fitted == 0, "an unfitted weapon pulls zero")
+	DotWeaponNetSync.push(fake, watcher)
+	_check(watcher.fitting_at(1).is_empty(), "and the watcher unfits")
+
+	var plain := _FakeNet.new()
+	shooter.fit(1, f)
+	DotWeaponNetSync.pull(shooter, plain)
+	_check(plain.net_magazine == shooter.current().magazine, "an object without net_fitted is still pulled")
+	var untouched := _arsenal(cat)
+	untouched.attachments = c
+	untouched.give(&"rifle")
+	DotWeaponNetSync.push(plain, untouched)
+	_check(untouched.fitting_at(1).is_empty(), "and its push leaves the fitting alone")
+
+	var no_cat := _arsenal(cat)
+	no_cat.give(&"rifle")
+	DotWeaponNetSync.push(fake, no_cat)
+	_check(no_cat.fitting_at(1).is_empty(), "an arsenal with no attachment catalogue ignores the code")
+
+	fake.free()
+	plain.free()
+	_drop(shooter)
+	_drop(watcher)
+	_drop(untouched)
+	_drop(no_cat)
+	_done()
 
 
 func _test_extension_point() -> void:

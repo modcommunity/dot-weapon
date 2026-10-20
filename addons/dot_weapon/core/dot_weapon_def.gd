@@ -95,6 +95,12 @@ enum Fire {
 ## own fields; [member params] stays available for a pack that cannot register a class.
 @export var tuning: DotWeaponTuning = null
 
+@export_group("Attachments")
+
+## The mount points this weapon has ("optic", "muzzle"...). An attachment fits only a
+## weapon with its mount; which sockets a model has is named by these.
+@export var mounts: Array[StringName] = []
+
 @export_group("Timing")
 
 ## The tick rate every tick count on this definition was written for. Zero means "the
@@ -377,6 +383,7 @@ func describe() -> Dictionary:
 		"reserve": reserve,
 		"tags": tags.map(func(t: StringName) -> String: return String(t)),
 		"authored_tick_rate": authored_tick_rate,
+		"mounts": mounts.map(func(m: StringName) -> String: return String(m)),
 	}
 
 

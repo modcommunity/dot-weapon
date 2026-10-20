@@ -60,6 +60,10 @@ signal carried_changed()
 ## Every weapon this carrier could hold. Required before [method setup].
 @export var catalogue: DotWeaponCatalogue = null
 
+## The attachment catalogue. Null means nothing can be fitted. Plain var: it is a RefCounted.
+## Must be the same on every machine (see [DotWeaponAttachments]).
+var attachments: DotWeaponAttachments = null
+
 @export_group("Rules")
 
 ## Switches away from a weapon that has run out entirely.
@@ -749,6 +753,45 @@ func _switch_off_empty(tick: int) -> void:
 			return
 
 
+# --- Attachments ------------------------------------------------------------
+
+## Fits [param fitting] to the weapon in [param slot], replacing what was there. The slot's
+## definition becomes a copy with the attachments applied (the catalogue's is untouched), a
+## magazine above the new capacity is clamped, and an empty fitting restores the base.
+func fit(slot: int, fitting: DotWeaponFitting) -> DotResult:
+	if attachments == null:
+		return DotResult.fail(DotError.CODE_STATE, "This arsenal has no attachment catalogue.")
+	var s: DotWeaponSlot = _slots.get(slot, null)
+	if s == null:
+		return DotResult.fail(DotError.CODE_INVALID, "Nothing in slot %d." % slot)
+	return _apply_fitting(s, fitting)
+
+
+func _apply_fitting(s: DotWeaponSlot, fitting: DotWeaponFitting) -> DotResult:
+	var base := catalogue.get_def(s.id())
+	if base == null:
+		return DotResult.fail(DotError.CODE_INVALID, "%s is not in the catalogue." % String(s.id()))
+	var res := attachments.apply(base, fitting)
+	if not res.ok:
+		return res
+	s.def = res.value
+	s.fitting = null if fitting.is_empty() else fitting.duplicate_fitting()
+	if s.def.uses_magazine():
+		s.magazine = mini(s.magazine, s.def.magazine)
+	carried_changed.emit()
+	return DotResult.success(s)
+
+
+## What is fitted to [param slot]. Never null; empty when nothing is.
+func fitting_at(slot: int) -> DotWeaponFitting:
+	var s: DotWeaponSlot = _slots.get(slot, null)
+	if s == null:
+		return DotWeaponFitting.make(&"")
+	if s.fitting == null:
+		return DotWeaponFitting.make(s.id())
+	return s.fitting.duplicate_fitting()
+
+
 # --- Netcode ----------------------------------------------------------------
 
 ## Everything that has to travel and everything a rollback has to restore.
@@ -801,6 +844,25 @@ func restore(d: Dictionary) -> DotResult:
 			var def := catalogue.get_def(id)
 			existing = DotWeaponSlot.make(def, made.value)
 			_slots[index] = existing
+
+		var wanted_fit: Variant = row.get("fit", null)
+		var want_key := ""
+		var want: DotWeaponFitting = null
+		if wanted_fit is Dictionary:
+			var parsed := DotWeaponFitting.from_dictionary(wanted_fit as Dictionary)
+			if not parsed.ok:
+				return parsed
+			want = parsed.value
+			want_key = want.key()
+		var have_key := existing.fitting.key() if existing.fitting != null else ""
+		if want_key != have_key:
+			if want != null and attachments == null:
+				return DotResult.fail(
+					DotError.CODE_STATE, "The snapshot has a fitting and this arsenal has no attachments."
+				)
+			var fitted := _apply_fitting(existing, want if want != null else DotWeaponFitting.make(id))
+			if not fitted.ok:
+				return fitted
 
 		existing.restore(row)
 

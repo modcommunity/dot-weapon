@@ -22,6 +22,10 @@ const SLOT_BITS := 5
 const MAGAZINE_BITS := 9
 const RESERVE_BITS := 11
 
+## Bits of [code]net_fitted[/code]: [method DotWeaponAttachments.encode]. A weapon whose
+## [method DotWeaponAttachments.code_bits] exceed this does not replicate its fitting.
+const FITTED_BITS := 16
+
 
 static func specs() -> Array[Dictionary]:
 	return [
@@ -49,6 +53,22 @@ static func specs() -> Array[Dictionary]:
 	]
 
 
+## The attachment half, separate from [method specs] on purpose: a game registers [method specs]
+## on a carrier that has no [code]net_fitted[/code], and adding a spec there would break that
+## registration. A game that wants attachments adds the property and registers this too.
+## Not owner-only: a watcher has to see the suppressor.
+static func fitting_specs() -> Array[Dictionary]:
+	return [
+		{
+			"property": &"net_fitted",
+			"type": "UINT",
+			"bits": FITTED_BITS,
+			"owner_only": false,
+			"interpolated": false,
+		},
+	]
+
+
 static func properties() -> Array[StringName]:
 	var out: Array[StringName] = []
 	for spec in specs():
@@ -64,6 +84,14 @@ static func pull(arsenal: DotWeaponArsenal, target: Object) -> void:
 	target.set(&"net_slot", clampi(arsenal.current_slot(), 0, (1 << SLOT_BITS) - 1))
 
 	var slot := arsenal.current()
+
+	if &"net_fitted" in target:
+		var code := 0
+		if slot != null and arsenal.attachments != null and slot.fitting != null:
+			var base := arsenal.catalogue.get_def(slot.id())
+			if base != null and arsenal.attachments.code_bits(base) <= FITTED_BITS:
+				code = arsenal.attachments.encode(base, slot.fitting)
+		target.set(&"net_fitted", code)
 
 	if slot == null:
 		target.set(&"net_magazine", 0)
@@ -95,6 +123,19 @@ static func push(source: Object, arsenal: DotWeaponArsenal) -> void:
 	if slot > 0 and slot != arsenal.current_slot() and arsenal.has_slot(slot):
 		arsenal.select(slot, 0)
 
+	if not (&"net_fitted" in source) or arsenal.attachments == null:
+		return
+
+	var current := arsenal.current()
+	if current == null:
+		return
+	var base := arsenal.catalogue.get_def(current.id())
+	if base == null or arsenal.attachments.code_bits(base) > FITTED_BITS:
+		return
+	var code := int(source.get(&"net_fitted"))
+	if code != arsenal.attachments.encode(base, arsenal.fitting_at(arsenal.current_slot())):
+		arsenal.fit(arsenal.current_slot(), arsenal.attachments.decode(base, code))
+
 
 ## Applies an authoritative ammunition correction to a predicted arsenal.
 ##
@@ -121,3 +162,8 @@ static func correct_ammo(source: Object, arsenal: DotWeaponArsenal) -> void:
 ## Bits one carrier's weapon state costs. For a bandwidth estimate.
 static func estimated_bits() -> int:
 	return SLOT_BITS + MAGAZINE_BITS + RESERVE_BITS
+
+
+## Bits [code]net_fitted[/code] costs, on top of [method estimated_bits].
+static func fitting_bits() -> int:
+	return FITTED_BITS

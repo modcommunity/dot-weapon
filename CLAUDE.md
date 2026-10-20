@@ -23,6 +23,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first.
 | `behaviour/` | `DotWeaponBehaviour` (the extension point) and the stock `DotWeaponHitscan`, `DotWeaponProjectile`, `DotWeaponMelee`, `DotWeaponBeam`, `DotWeaponThrown` |
 | `tuning/` | `DotWeaponTuning` (subclass for typed fields) and `DotWeaponBallistics` (what the gun-like behaviours read) |
 | `runtime/dot_weapon_arsenal.gd` | `DotWeaponArsenal`: the state machine; `select`, `use`, `begin_reload`, snapshots |
+| `core/dot_weapon_attachment.gd`, `dot_weapon_fitting.gd`, `dot_weapon_attachments.gd` | attachments: a mod (`DotWeaponAttachment`), what is fitted to one gun as ids (`DotWeaponFitting`), the catalogue with fit rules, copy-on-apply and the packed wire code (`DotWeaponAttachments`); `arsenal.fit` uses them (API 4) |
 | `net/dot_weapon_net_sync.gd` | `DotWeaponNetSync`: slot, magazine, reserve specs (ammunition owner-only) |
 | `math/dot_weapon_recoil.gd` | `DotWeaponRecoil` |
 | `bridge/` | `DotWeaponLoadoutBridge` (dot-loadout to arsenal), `DotWeaponInventoryBridge` (bag to reserve), `DotWeaponPlayerBridge` (player to context, view-model mount) |
@@ -49,6 +50,7 @@ The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything
 - `DotSpread` stays in dot-combat; behaviours set `DotShot.spread`. [design](docs/design.md#spread-lives-in-dot-combat-not-here)
 - Never name a class from dot-net, dot-loadout, dot-inventory or dot-player: duck-type it (a writer is `Variant`), or the script fails to parse where that addon is absent. [design](docs/design.md#optional-neighbours-are-duck-typed)
 - `DotWeaponCatalogue.ids()` and `DotWeaponAmmo.pools()` are in text order: sort StringNames with `String(a) < String(b)`, never `sort()` (interning order, differs per process). The suite's id-order section is armed against it. [gdscript-hazards](../../docs/gdscript-hazards.md)
+- Attachments apply to a deep copy of the definition, never the catalogue's row; both machines must share the attachment catalogue (the wire carries indices into it). [design](docs/design.md#attachments)
 - The suite's extension-point section (`fixtures/lightning_rod.gd`) must keep passing. [design](docs/design.md#the-extension-point-is-tested)
 
 ## Consumers

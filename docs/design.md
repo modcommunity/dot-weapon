@@ -80,3 +80,15 @@ dot-net, dot-loadout, dot-inventory and dot-player are not dependencies, and no 
 ## The extension point is tested
 
 `fixtures/lightning_rod.gd` is a weapon this addon knows nothing about, written the way a game would write one. It chains to several targets, costs more the further it chains, sets its own cadence and refuses to fire indoors, and none of those ideas appear anywhere in the addon. If a refactor ever breaks the extension point, the suite's "extension point" section is what says so.
+
+## Attachments
+
+A scope, a suppressor or a longer magazine is logic every game needs (which mount, which gun, what it changes, what a watcher must see), so it lives here and not in a weapons pack (which would be copied per pack) or in dot-loadout (which says what a player brought, not how a weapon's numbers change). A pack supplies the attachment rows and the models for the sockets named by each mount.
+
+A `DotWeaponDef` lists its `mounts`; a `DotWeaponAttachment` names one mount, which weapons or tags it fits, and numbers to scale and add on the definition or its tuning (an unknown field is an error, not a silent skip). A `DotWeaponFitting` is ids only (mount to attachment id), so a content-less server validates, stores and replicates it against its `DotWeaponAttachments` catalogue.
+
+**Applying copies.** `DotWeaponAttachments.apply` deep-duplicates the definition (tuning included) and mutates the copy; the catalogue's row is shared by every carrier and mutating it would fit everybody's rifle. An empty fitting returns the shared definition itself. `DotWeaponArsenal.fit` swaps the slot's definition for the copy and clamps the magazine.
+
+**The wire is a packed index.** `encode` writes, per mount in text order, the 1-based position of the attachment among `choices_for(def)[mount]` (0 is none) in just enough bits; `FITTED_BITS` is 16 and a weapon needing more does not replicate its fitting. That makes **both machines share the same attachment catalogue**, as they share the weapon catalogue: differing catalogues decode the same bits into different attachments.
+
+`DotWeaponNetSync.fitting_specs()` is separate from `specs()` because games register `specs()` on carriers that have no `net_fitted` property; adding a spec there would break their registration. `pull` and `push` touch `net_fitted` only when the object has it.

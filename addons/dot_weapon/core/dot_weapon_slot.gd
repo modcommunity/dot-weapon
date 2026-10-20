@@ -24,6 +24,9 @@ var magazine: int = 0
 ## Ticks of reloading already done, for a reload that survives a holster.
 var reload_progress: int = 0
 
+## What is fitted, or null when nothing is. [member def] is already the applied copy.
+var fitting: DotWeaponFitting = null
+
 
 static func make(p_def: DotWeaponDef, p_behaviour: DotWeaponBehaviour) -> DotWeaponSlot:
 	var s := DotWeaponSlot.new()
@@ -57,12 +60,15 @@ func magazine_space() -> int:
 ## and not the draw on the bow is one that reconciles a correction by silently
 ## un-drawing it, which reads to the player as the bow firing by itself.
 func snapshot() -> Dictionary:
-	return {
+	var out := {
 		"id": String(id()),
 		"mag": magazine,
 		"reload": reload_progress,
 		"behaviour": behaviour.state.duplicate(true) if behaviour != null else {},
 	}
+	if fitting != null and not fitting.is_empty():
+		out["fit"] = fitting.to_dictionary()
+	return out
 
 
 func restore(d: Dictionary) -> void:
@@ -78,4 +84,5 @@ func describe() -> Dictionary:
 		"id": String(id()),
 		"magazine": magazine,
 		"capacity": def.magazine if def != null else 0,
+		"fitting": fitting.key() if fitting != null else "",
 	}

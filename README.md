@@ -95,6 +95,10 @@ for spawn in outcome.spawns:
     my_projectiles.launch(spawn)
 ```
 
+## Attachments
+
+A weapon lists its mount points; a `DotWeaponAttachment` names a mount and the numbers it scales or adds, and a `DotWeaponFitting` records which ones a player fitted. `arsenal.fit(slot, fitting)` gives that slot a copy of the definition with them applied, and `DotWeaponNetSync.fitting_specs()` replicates the choice so a watcher sees the suppressor. Both machines must share the attachment catalogue.
+
 ## Loadouts and bags
 
 `DotWeaponLoadoutBridge` fills an arsenal from what [dot-loadout](https://github.com/modcommunity/dot-loadout) resolved, and `DotWeaponInventoryBridge` keeps reserve ammunition agreeing with what [dot-inventory](https://github.com/modcommunity/dot-inventory) says is in the bag. Neither is a dependency and neither is named in the code: both are duck-typed, so this addon installs and runs without either.

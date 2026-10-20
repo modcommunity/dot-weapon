@@ -21,5 +21,10 @@ extends RefCounted
 ## [signal DotWeaponCatalogue.listings_changed] signals, and the optional category and icon arguments of
 ## [method DotWeaponCatalogue.add]. Needs dot-core API 9 ([DotContentIndex]); OLDEST stays 1.
 
-const LEVEL := 3
+## 4: weapon attachments: [member DotWeaponDef.mounts], [DotWeaponAttachment],
+## [DotWeaponFitting], [DotWeaponAttachments], [member DotWeaponArsenal.attachments] with
+## [method DotWeaponArsenal.fit] and [method DotWeaponArsenal.fitting_at], and
+## [method DotWeaponNetSync.fitting_specs]. OLDEST stays 1.
+
+const LEVEL := 4
 const OLDEST := 1
