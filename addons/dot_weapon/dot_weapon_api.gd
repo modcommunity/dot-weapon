@@ -33,5 +33,7 @@ extends RefCounted
 ## the optional `layer` of [method DotWeaponProfiles.make_set] and [method DotWeaponProfiles.refresh_def].
 ## OLDEST stays 1.
 
-const LEVEL := 6
+## 7: [method DotWeaponProfiles.profile_schemas]. OLDEST stays 1.
+
+const LEVEL := 7
 const OLDEST := 1

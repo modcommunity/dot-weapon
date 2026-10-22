@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 324
+const CHECKS := 325
 
 
 func _ready() -> void:
@@ -2088,6 +2088,7 @@ func _test_profiles() -> void:
 	_profile_write(w.path_join("bad.yml"), "wobble: 1\n")
 	var set := DotWeaponProfiles.make_set("demo", "g", PackedStringArray([root]))
 	_check(Array(DotWeaponProfiles.list_ids(set)) == ["bad", "knife", "pistol"], "ids are listed from the files, folder form included")
+	_check(DotWeaponProfiles.profile_schemas()["weapon"]["children"].has("upgrades"), "profile_schemas names weapon with its upgrades child")
 	var res := DotWeaponProfiles.load_def(set, "pistol")
 	var d: DotWeaponDef = res.value if res.ok else null
 	_check(d != null and d.slot == 2 and d.fire_mode == DotWeaponDef.Fire.AUTO and d.magazine == 12 and d.has_tag(&"gun"), "a profile fills the common DotWeaponDef fields")

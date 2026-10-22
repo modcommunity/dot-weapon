@@ -47,6 +47,11 @@ static func schema() -> Array:
 	]
 
 
+## Kind to schema for tools that validate profiles without a game (dot-core profile_check).
+static func profile_schemas() -> Dictionary:
+	return {"weapon": {"schema": schema(), "children": {"upgrades": upgrade_schema()}}}
+
+
 ## The schema of an upgrade. `set`, `mul` and `add` name keys of the weapon (schema or `extra:`).
 static func upgrade_schema() -> Array:
 	var f := DotProfileSet.field

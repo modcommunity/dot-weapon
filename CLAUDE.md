@@ -18,13 +18,13 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first.
 | Path | What |
 | --- | --- |
 | `core/dot_weapon_def.gd` | `DotWeaponDef`: `authored_tick_rate`, slot, deploy/holster ticks, `Fire` mode, cost, reload, `behaviour_path`, `params`, `tuning` |
-| `dot_weapon_api.gd` | the API level ([DotAddonApi](../dot-core/addons/dot_core/core/dot_addon_api.gd)); 2 = `authored_tick_rate` and the scaling helpers; 3 = `follow_content` and the menu listings; 6 = `DotWeaponProfileGroup` |
+| `dot_weapon_api.gd` | the API level ([DotAddonApi](../dot-core/addons/dot_core/core/dot_addon_api.gd)); 2 = `authored_tick_rate` and the scaling helpers; 3 = `follow_content` and the menu listings; 6 = `DotWeaponProfileGroup`; 7 = `profile_schemas` |
 | `core/` (rest) | `DotWeaponCatalogue` (code weapons plus `follow_content(index)` for weapons delivered by mounted packs, session-aware), `DotWeaponListing` (a menu row), `DotWeaponCommand` (the per-tick input), `DotWeaponContext`, `DotWeaponOutcome`, `DotWeaponSpawn`, `DotWeaponSlot`, `DotWeaponAmmo` |
 | `behaviour/` | `DotWeaponBehaviour` (the extension point) and the stock `DotWeaponHitscan`, `DotWeaponProjectile`, `DotWeaponMelee`, `DotWeaponBeam`, `DotWeaponThrown` |
 | `tuning/` | `DotWeaponTuning` (subclass for typed fields) and `DotWeaponBallistics` (what the gun-like behaviours read) |
 | `runtime/dot_weapon_arsenal.gd` | `DotWeaponArsenal`: the state machine; `select`, `use`, `begin_reload`, snapshots |
 | `core/dot_weapon_attachment.gd`, `dot_weapon_fitting.gd`, `dot_weapon_attachments.gd` | attachments: a mod (`DotWeaponAttachment`), what is fitted to one gun as ids (`DotWeaponFitting`), the catalogue with fit rules, copy-on-apply and the packed wire code (`DotWeaponAttachments`); `arsenal.fit` uses them (API 4) |
-| `core/dot_weapon_profiles.gd` | `DotWeaponProfiles`: the `weapon` profile kind (schema, `flat`, `apply_common`, `menu_entries`, `upgrade_set`, `apply_upgrades`); a pack keeps its own keys under `extra:` (API 5); `core/dot_weapon_profile_group.gd` `DotWeaponProfileGroup`: all packs' sets behind one `weapon` kind and one runtime layer, so a runtime edit reaches every pack (API 6) |
+| `core/dot_weapon_profiles.gd` | `DotWeaponProfiles`: the `weapon` profile kind (schema, `profile_schemas()` for dot-core's `profile_check` and dot-ci `profiles: true` (API 7), `flat`, `apply_common`, `menu_entries`, `upgrade_set`, `apply_upgrades`); a pack keeps its own keys under `extra:` (API 5); `core/dot_weapon_profile_group.gd` `DotWeaponProfileGroup`: all packs' sets behind one `weapon` kind and one runtime layer, so a runtime edit reaches every pack (API 6) |
 | `net/dot_weapon_net_sync.gd` | `DotWeaponNetSync`: slot, magazine, reserve specs (ammunition owner-only) |
 | `math/dot_weapon_recoil.gd` | `DotWeaponRecoil` |
 | `bridge/` | `DotWeaponLoadoutBridge` (dot-loadout to arsenal), `DotWeaponInventoryBridge` (bag to reserve), `DotWeaponPlayerBridge` (player to context, view-model mount) |
