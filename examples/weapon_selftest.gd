@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 325
+const CHECKS := 336
 
 
 func _ready() -> void:
@@ -51,6 +51,7 @@ func _run() -> void:
 	_test_extension_point()
 	_test_player_bridge()
 	_test_profiles()
+	_test_overlay()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -2074,6 +2075,44 @@ func _profile_write(path: String, text: String) -> void:
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	f.store_string(text)
 	f.close()
+
+
+func _test_overlay() -> void:
+	_section("weapon profile overlay")
+	var root := OS.get_user_data_dir().path_join("overlay_profiles")
+	DirAccess.make_dir_recursive_absolute(root.path_join("addons/ov/weapon/gun/upgrades"))
+	_profile_write(root.path_join("addons/ov/weapon/gun/gun.yml"), "magazine: 30.0\nextra:\n  tuning:\n    damage: 42\n    nope: 1\n  params:\n    bash: 9\n")
+	_profile_write(root.path_join("addons/ov/weapon/gun/upgrades/big.yml"), "cost: 7\nadd:\n  magazine: 5\nmul:\n  tuning.damage: 2.0\n")
+	_profile_write(root.path_join("addons/ov/weapon/ghost.yml"), "slot: 4\n")
+	var gun := DotWeaponDef.new()
+	gun.id = &"gun"
+	gun.magazine = 12
+	gun.slot = 1
+	gun.tuning = DotWeaponBallistics.new()
+	gun.params = {&"bash": 3.0, &"keep": 1}
+	var other := DotWeaponDef.new()
+	other.id = &"other"
+	other.slot = 1
+	var defs: Array[DotWeaponDef] = [gun, other]
+	var set := DotWeaponProfiles.overlay_set("ov", "", "", PackedStringArray([root]))
+	var errors := DotWeaponProfiles.tune(defs, set)
+	_check(errors.is_empty(), "tune reports no load failure")
+	_check(gun.magazine == 30 and typeof(gun.magazine) == TYPE_INT, "a float in a file keeps the builder's int type")
+	_check(gun.slot == 1, "a key the file does not set keeps the builder's value")
+	_check(is_equal_approx((gun.tuning as DotWeaponBallistics).damage, 42.0), "extra: tuning: sets a tuning number")
+	_check(is_equal_approx(float(gun.params[&"bash"]), 9.0) and gun.params[&"keep"] == 1, "extra: params: sets one param and leaves the rest")
+	_check(other.slot == 1, "a weapon without a file is untouched; a file with no weapon is ignored")
+	var flat := DotWeaponProfiles.flat_of(gun)
+	_check(flat["magazine"] == 30 and flat["tuning.damage"] == 42.0 and flat["params.bash"] == 9.0, "flat_of reads common, tuning and params keys")
+	var again := DotWeaponProfiles.upgraded(gun, ["big"], set)
+	var up: DotWeaponDef = again.value["def"] if again.ok else null
+	_check(again.ok and again.value["cost"] == 7 and up.magazine == 35 and is_equal_approx((up.tuning as DotWeaponBallistics).damage, 84.0), "upgraded applies add and mul to a copy")
+	_check(gun.magazine == 30, "the original definition is not changed by an upgrade")
+	var yml := DotWeaponProfiles.to_yaml(gun, "Demo")
+	_check(yml.contains("magazine: 30") and yml.contains("  tuning:\n") and yml.contains("    damage: 42"), "to_yaml writes the numbers back")
+	_check(DotWeaponProfiles.profile_path("ov", "gun", root) == root.path_join("addons/ov/weapon/gun/gun.yml"), "profile_path finds the folder form")
+	set.clear_cache()
+	_done()
 
 
 func _test_profiles() -> void:

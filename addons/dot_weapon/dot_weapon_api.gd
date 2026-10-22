@@ -35,5 +35,8 @@ extends RefCounted
 
 ## 7: [method DotWeaponProfiles.profile_schemas]. OLDEST stays 1.
 
-const LEVEL := 7
+## 8: the overlay on code-built defs in [DotWeaponProfiles]: `overlay_set`, `tune`, `file_flat`, `apply_flat`,
+## `flat_of`, `to_yaml`, `profile_path`, `upgraded`. OLDEST stays 1.
+
+const LEVEL := 8
 const OLDEST := 1
