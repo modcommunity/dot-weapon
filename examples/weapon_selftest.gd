@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 316
+const CHECKS := 324
 
 
 func _ready() -> void:
@@ -2105,6 +2105,33 @@ func _test_profiles() -> void:
 	_check(DotWeaponProfiles.apply_upgrades(base, ups, ["scope", "after"]).value["cost"] == 55, "a prerequisite met earlier in the list passes")
 	_check(not DotWeaponProfiles.apply_upgrades(base, ups, ["after"]).ok, "a prerequisite missing fails")
 	_check(not DotWeaponProfiles.apply_upgrades(base, ups, ["ghost"]).ok, "an upgrade naming no key fails")
+
+	_profile_write(root.path_join("addons/other/weapon/zz_rifle.yml"), "name: \"Rifle\"\nextra:\n  damage: 30.0\n")
+	var group := DotWeaponProfileGroup.make("g", PackedStringArray([root]))
+	var _a := group.add_pack("demo")
+	var _b := group.add_pack("other")
+	_check(Array(group.list_ids()) == ["bad", "knife", "pistol", "zz_rifle"], "a group lists every pack's weapons under the one kind")
+	_check(group.profile_for("zz_rifle") == "zz_rifle" and group.profile_for("pk_x_pistol") == "pistol" and group.profile_for("nope") == "", "a definition id finds its profile by suffix")
+	var rt := DotProfileRuntime.new()
+	rt.add_set(group)
+	rt.permit = func(_actor: Variant, _flag: String) -> bool: return true
+	var done := rt.handle_request("a", DotProfileRuntime.make_request("set", "weapon", "zz_rifle", "extra.damage", 55.0))
+	_check(done.ok, "one runtime edits a weapon of either pack", "" if done.ok else done.error.message)
+	var theirs := DotWeaponProfiles.make_set("other", "g", PackedStringArray([root]), group.runtime)
+	_check(float(theirs.load_profile("zz_rifle").value.get_extra("damage")) == 55.0, "a pack's own set handed the layer reads the edit")
+	var plain := DotWeaponProfiles.make_set("other", "g", PackedStringArray([root]))
+	_check(float(plain.load_profile("zz_rifle").value.get_extra("damage")) == 30.0, "while a set without it keeps the file")
+	_check(not rt.handle_request("a", DotProfileRuntime.make_request("set", "weapon", "ghost", "slot", 2)).ok, "an id no pack has is refused")
+	var from := DotWeaponDef.new()
+	from.display_name = "New"
+	var into := DotWeaponDef.new()
+	DotWeaponProfiles.refresh_def(into, from)
+	_check(into.display_name == "New", "refresh_def copies a rebuilt definition onto the one holders have")
+	rt.handle_request("a", DotProfileRuntime.make_request("reset", "weapon", "zz_rifle"))
+	_check(group.runtime.is_empty(), "a reset empties the shared layer")
+	group.clear_cache()
+	theirs.clear_cache()
+	plain.clear_cache()
 	set.clear_cache()
 	ups.clear_cache()
 	_done()

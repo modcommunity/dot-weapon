@@ -29,5 +29,9 @@ extends RefCounted
 ## 5: [DotWeaponProfiles], weapons as `weapon` profiles (dot-core [DotProfileSet]) with upgrade children.
 ## Needs dot-core API with DotProfileSet; OLDEST stays 1.
 
-const LEVEL := 5
+## 6: [DotWeaponProfileGroup] (every pack's weapon set behind the one `weapon` kind, one runtime layer),
+## the optional `layer` of [method DotWeaponProfiles.make_set] and [method DotWeaponProfiles.refresh_def].
+## OLDEST stays 1.
+
+const LEVEL := 6
 const OLDEST := 1

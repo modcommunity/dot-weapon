@@ -63,10 +63,20 @@ static func upgrade_schema() -> Array:
 
 
 ## A profile set for weapons of [param addon] and [param game]; [param roots] overrides the config roots (tests).
-static func make_set(addon: String, game: String, roots: PackedStringArray = PackedStringArray()) -> DotProfileSet:
+## [param layer] (a Dictionary, see [member DotWeaponProfileGroup.runtime]) is shared as the set's runtime layer, so live edits reach it.
+static func make_set(addon: String, game: String, roots: PackedStringArray = PackedStringArray(), layer: Variant = null) -> DotProfileSet:
 	var s := DotProfileSet.create(addon, game, KIND, schema())
 	s.roots = roots
+	if layer is Dictionary:
+		s.runtime = layer
 	return s
+
+
+## Copies every script variable of [param from] onto [param into], so holders of [param into] see a rebuilt definition.
+static func refresh_def(into: DotWeaponDef, from: DotWeaponDef) -> void:
+	for p: Dictionary in from.get_property_list():
+		if int(p["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			into.set(p["name"], from.get(p["name"]))
 
 
 ## Weapon ids found on disk, sorted; opens no file.
