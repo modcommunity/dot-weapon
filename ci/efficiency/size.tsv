@@ -1,0 +1,9 @@
+# size
+# Baselines only shrink: scripts/<gate> --update lowers or drops entries and refuses to add.
+addons/dot_weapon/runtime/dot_weapon_arsenal.gd	923
+examples/weapon_selftest.gd	2068
+examples/weapon_selftest.gd::_test_attachments	170
+examples/weapon_selftest.gd::_test_charge_and_bow	83
+examples/weapon_selftest.gd::_test_content_follow	92
+examples/weapon_selftest.gd::_test_reloading	92
+examples/weapon_selftest.gd::_test_tick_rate	107
