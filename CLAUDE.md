@@ -24,6 +24,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first.
 | `tuning/` | `DotWeaponTuning` (subclass for typed fields) and `DotWeaponBallistics` (what the gun-like behaviours read) |
 | `runtime/dot_weapon_arsenal.gd` | `DotWeaponArsenal`: the state machine; `select`, `use`, `begin_reload`, snapshots |
 | `core/dot_weapon_attachment.gd`, `dot_weapon_fitting.gd`, `dot_weapon_attachments.gd` | attachments: a mod (`DotWeaponAttachment`), what is fitted to one gun as ids (`DotWeaponFitting`), the catalogue with fit rules, copy-on-apply and the packed wire code (`DotWeaponAttachments`); `arsenal.fit` uses them (API 4) |
+| `core/dot_weapon_profiles.gd` | `DotWeaponProfiles`: the `weapon` profile kind (schema, `flat`, `apply_common`, `menu_entries`, `upgrade_set`, `apply_upgrades`); a pack keeps its own keys under `extra:` (API 5) |
 | `net/dot_weapon_net_sync.gd` | `DotWeaponNetSync`: slot, magazine, reserve specs (ammunition owner-only) |
 | `math/dot_weapon_recoil.gd` | `DotWeaponRecoil` |
 | `bridge/` | `DotWeaponLoadoutBridge` (dot-loadout to arsenal), `DotWeaponInventoryBridge` (bag to reserve), `DotWeaponPlayerBridge` (player to context, view-model mount) |

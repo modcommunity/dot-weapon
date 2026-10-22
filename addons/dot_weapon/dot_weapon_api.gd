@@ -26,5 +26,8 @@ extends RefCounted
 ## [method DotWeaponArsenal.fit] and [method DotWeaponArsenal.fitting_at], and
 ## [method DotWeaponNetSync.fitting_specs]. OLDEST stays 1.
 
-const LEVEL := 4
+## 5: [DotWeaponProfiles], weapons as `weapon` profiles (dot-core [DotProfileSet]) with upgrade children.
+## Needs dot-core API with DotProfileSet; OLDEST stays 1.
+
+const LEVEL := 5
 const OLDEST := 1

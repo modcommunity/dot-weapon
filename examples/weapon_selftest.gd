@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 304
+const CHECKS := 316
 
 
 func _ready() -> void:
@@ -50,6 +50,7 @@ func _run() -> void:
 	_test_attachments_wire()
 	_test_extension_point()
 	_test_player_bridge()
+	_test_profiles()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -2065,4 +2066,45 @@ func _test_player_bridge() -> void:
 	)
 
 	player.queue_free()
+	_done()
+
+
+func _profile_write(path: String, text: String) -> void:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
+
+
+func _test_profiles() -> void:
+	_section("weapon profiles")
+	var root := OS.get_temp_dir().path_join("dw_prof_%d" % Time.get_ticks_usec())
+	var w := root.path_join("addons/demo/weapon")
+	_profile_write(w.path_join("pistol/pistol.yml"), "name: \"Pistol\"\nslot: 2\nfire_mode: \"auto\"\nmagazine: 12\ntags: [\"gun\"]\nmenu:\n  category: guns\n  sort: 2\nextra:\n  damage: 20.0\n")
+	_profile_write(w.path_join("pistol/upgrades/scope.yml"), "cost: 50\nmul:\n  damage: 1.5\nadd:\n  magazine: 3\nset:\n  slot: 3\n")
+	_profile_write(w.path_join("pistol/upgrades/ghost.yml"), "add:\n  nope: 1\n")
+	_profile_write(w.path_join("pistol/upgrades/after.yml"), "requires: [\"scope\"]\ncost: 5\n")
+	_profile_write(w.path_join("knife.yml"), "name: \"Knife\"\nmenu:\n  sort: 1\n  hidden: true\n")
+	_profile_write(w.path_join("bad.yml"), "wobble: 1\n")
+	var set := DotWeaponProfiles.make_set("demo", "g", PackedStringArray([root]))
+	_check(Array(DotWeaponProfiles.list_ids(set)) == ["bad", "knife", "pistol"], "ids are listed from the files, folder form included")
+	var res := DotWeaponProfiles.load_def(set, "pistol")
+	var d: DotWeaponDef = res.value if res.ok else null
+	_check(d != null and d.slot == 2 and d.fire_mode == DotWeaponDef.Fire.AUTO and d.magazine == 12 and d.has_tag(&"gun"), "a profile fills the common DotWeaponDef fields")
+	_check(d != null and d.display_name == "Pistol" and is_equal_approx(float(d.params["damage"]), 20.0), "and its extra keys become params")
+	_check(not DotWeaponProfiles.load_def(set, "bad").ok, "an unknown top-level key is refused")
+	_check(Array(set.child_kinds("pistol")) == ["upgrades"] and Array(DotWeaponProfiles.list_upgrades(set, "pistol")) == ["after", "ghost", "scope"], "upgrades are listed")
+	var menu := DotWeaponProfiles.menu_entries(set)
+	_check(menu.size() == 1 and menu[0]["id"] == "pistol" and menu[0]["category"] == "guns", "the menu lists visible weapons with their menu: keys")
+	_check(DotWeaponProfiles.menu_entries(set, true).size() == 2, "hidden ones on request")
+	var base := DotWeaponProfiles.flat(set.load_profile("pistol").value)
+	var ups := DotWeaponProfiles.upgrade_set(set, "pistol")
+	var up := DotWeaponProfiles.apply_upgrades(base, ups, ["scope"])
+	_check(up.ok and is_equal_approx(float(up.value["values"]["damage"]), 30.0) and up.value["values"]["magazine"] == 15 and up.value["values"]["slot"] == 3 and up.value["cost"] == 50, "set, mul and add apply and cost is summed")
+	_check(is_equal_approx(float(base["damage"]), 20.0), "the base dictionary is not changed")
+	_check(DotWeaponProfiles.apply_upgrades(base, ups, ["scope", "after"]).value["cost"] == 55, "a prerequisite met earlier in the list passes")
+	_check(not DotWeaponProfiles.apply_upgrades(base, ups, ["after"]).ok, "a prerequisite missing fails")
+	_check(not DotWeaponProfiles.apply_upgrades(base, ups, ["ghost"]).ok, "an upgrade naming no key fails")
+	set.clear_cache()
+	ups.clear_cache()
 	_done()
