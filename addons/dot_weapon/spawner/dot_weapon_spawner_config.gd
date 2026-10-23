@@ -35,7 +35,7 @@ const MAP_KEYS := {
 	"spawner_pool": {"type": "string"},
 }
 
-## The game whose `cfg/game/<game>/` tiers are read.
+## The game whose `cfg/game/<game>/` tiers are read; empty uses [member DotAddonConfig.game].
 var game: String = ""
 ## An extra config root, as [method DotAddonConfig.file_layers] takes.
 var config_dir: String = ""
@@ -54,7 +54,12 @@ var _files := PackedStringArray()
 func load_files() -> DotResult:
 	raw = {}
 	_files = PackedStringArray()
-	for path in DotAddonConfig.file_layers(ADDON, FILE, config_dir):
+	var saved := DotAddonConfig.game
+	if game != "":
+		DotAddonConfig.game = game
+	var paths := DotAddonConfig.file_layers(ADDON, FILE, config_dir)
+	DotAddonConfig.game = saved
+	for path in paths:
 		var parsed := DotYaml.parse_file(path)
 		if not parsed.ok or not (parsed.value is Dictionary or parsed.value == null):
 			DotLog.warn(CHANNEL, "spawner file unreadable", {"file": path})
