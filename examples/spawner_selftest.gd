@@ -7,7 +7,7 @@ var _failed: int = 0
 var _sections_entered: int = 0
 var _sections_finished: int = 0
 
-const CHECKS := 55
+const CHECKS := 59
 
 const CONFIG := {
 	"default_pool": "guns",
@@ -236,7 +236,19 @@ func _test_caps_and_settings() -> void:
 	var bad := _spawner("m", [_site("q", {"pool": "nope"})])
 	bad.begin_round(0.0, 1)
 	bad.tick(0.0)
-	_check(bad.alive() == 0 and bad.seconds_until(&"q") < 0.0, "an unknown pool spawns nothing")
+	_check(bad.alive() == 0 and bad.seconds_until(&"q") >= 0.0, "an unknown pool spawns nothing now but is retried")
+	bad.config.set_setting("spawner_pool", "stock")
+	bad.tick(6.0)
+	_check(bad.alive() == 1, "an empty draw is retried on a later tick and spawns once the pool exists")
+	var dead := _spawner("m", [_site("q", {"pool": "nope"})])
+	dead.begin_round(0.0, 1)
+	for i in 10:
+		dead.tick(float(i) * 6.0)
+	_check(dead.alive() == 0 and dead.seconds_until(&"q") < 0.0, "retries are bounded; the slot then rests")
+	var huge := _spawner("m", [_site("h", {"max_alive": 999999999, "item": "x"})])
+	huge.begin_round(0.0, 1)
+	huge.tick(0.0)
+	_check(huge.alive() == huge.config.max_alive_cap and huge.config.max_alive_cap == 64, "a marker's max_alive is clamped to the configured cap")
 	_done()
 
 

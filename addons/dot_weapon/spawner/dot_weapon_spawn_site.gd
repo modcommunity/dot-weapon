@@ -54,7 +54,7 @@ func apply(d: Dictionary) -> DotWeaponSpawnSite:
 			"respawn_seconds", "respawn": respawn_seconds = maxf(float(v), 0.0)
 			"respawn_jitter": respawn_jitter = clampf(float(v), 0.0, 1.0)
 			"initial_delay": initial_delay = maxf(float(v), 0.0)
-			"max_alive", "max": max_alive = maxi(int(v), 0)
+			"max_alive", "max": max_alive = clampi(int(v), 0, 100000)
 			"one_shot": one_shot = _bool(v)
 			"lifetime_seconds", "lifetime": lifetime_seconds = maxf(float(v), 0.0)
 			"group": group = StringName(str(v))

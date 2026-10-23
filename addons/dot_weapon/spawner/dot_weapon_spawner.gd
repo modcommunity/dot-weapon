@@ -31,6 +31,10 @@ signal changed(event: Array)
 signal spawned(instance: int, site: StringName, item: StringName, kind: StringName, at: Vector3)
 signal taken(instance: int, site: StringName, item: StringName, taker: StringName)
 
+## An empty draw is retried this many times, this far apart, before the slot rests for the round.
+const EMPTY_RETRIES := 5
+const EMPTY_RETRY_SECONDS := 5.0
+
 var config := DotWeaponSpawnerConfig.new()
 var map_id: String = ""
 var round_number: int = 0
@@ -223,7 +227,13 @@ func describe_lines() -> PackedStringArray:
 func _cap(site: DotWeaponSpawnSite) -> int:
 	if site.max_alive <= 0 or config.max_scale() <= 0.0:
 		return 0
-	return maxi(roundi(site.max_alive * config.max_scale()), 1)
+	var want := maxi(roundi(site.max_alive * config.max_scale()), 1)
+	if want > config.max_alive_cap:
+		if not _warned.has(StringName("cap_" + String(site.id))):
+			_warned[StringName("cap_" + String(site.id))] = true
+			DotLog.warn(CHANNEL, "a spawner site's max_alive was clamped", {"site": String(site.id), "wanted": want, "cap": config.max_alive_cap})
+		return config.max_alive_cap
+	return want
 
 
 func _stream(site_id: StringName) -> DotRandomStream:
@@ -252,8 +262,14 @@ func _try_spawn(site: DotWeaponSpawnSite, slot: Dictionary) -> void:
 		if not _warned.has(site.id):
 			_warned[site.id] = true
 			DotLog.warn(CHANNEL, "a spawner site has nothing to draw", {"site": String(site.id), "pool": String(site.pool)})
-		slot["ready"] = -1.0
+		var tries: int = int(slot.get("retries", 0))
+		if tries < EMPTY_RETRIES:
+			slot["retries"] = tries + 1
+			slot["ready"] = _now + EMPTY_RETRY_SECONDS
+		else:
+			slot["ready"] = -1.0
 		return
+	slot["retries"] = 0
 	var inst := _next_instance
 	_next_instance += 1
 	var data: Dictionary = site.data.duplicate(true)

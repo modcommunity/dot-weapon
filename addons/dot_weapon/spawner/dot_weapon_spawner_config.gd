@@ -50,6 +50,9 @@ var default_pool: StringName = &""
 ## The merged file content, before a map is picked.
 var raw: Dictionary = {}
 
+## The most simultaneous items one site may hold, whatever a map marker asks for.
+var max_alive_cap: int = 64
+
 var _settings := {"spawner_enabled": true, "spawner_respawn_scale": 1.0, "spawner_max_scale": 1.0, "spawner_seed": 0, "spawner_pool": ""}
 var _files := PackedStringArray()
 

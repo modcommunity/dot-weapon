@@ -35,7 +35,7 @@ Paths except `examples/` and `fixtures/` are in `addons/dot_weapon/`.
 
 ## Running and testing
 
-The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything)), then `timeout 180 godot --headless --path . res://examples/weapon_selftest.tscn` and `res://examples/spawner_selftest.tscn` (7 sections, 55 checks).
+The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything)), then `timeout 180 godot --headless --path . res://examples/weapon_selftest.tscn` and `res://examples/spawner_selftest.tscn` (7 sections, 59 checks).
 
 ## Rules that bite
 
