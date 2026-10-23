@@ -106,6 +106,9 @@ func _test_pool() -> void:
 	var cat: DotWeaponSpawnPool = DotWeaponSpawnPool.from_dictionary(&"c", {"catalogue": {"tags_any": ["primary"], "weights": {"b": 4}}, "entries": [{"id": "a", "weight": 9}]}, defs).value
 	_check(cat.entries.size() == 2 and float(cat.candidates({"ids": ["a"]})[0]["weight"]) == 9.0, "an explicit entry replaces a catalogue one")
 	_check(float(cat.candidates({"ids": ["b"]})[0]["weight"]) == 4.0, "catalogue weights override")
+	var weighed: DotWeaponSpawnPool = DotWeaponSpawnPool.from_dictionary(&"w", {"channel": "shop", "catalogue": {"tags_any": ["primary"]}}, defs,
+			func(channel: StringName, id: StringName, w: float) -> float: return 0.0 if channel == &"shop" and id == &"b" else w).value
+	_check(weighed.channel == &"shop" and weighed.candidates({"ids": ["b"]}).is_empty() and not weighed.candidates({"ids": ["a"]}).is_empty(), "a weigher re-weighs by pool channel (0 removes)")
 	_check(not DotWeaponSpawnPool.from_dictionary(&"x", {"entries": [{"weight": 1}]}).ok, "an entry without an id is refused")
 	_done()
 

@@ -43,6 +43,8 @@ var game: String = ""
 var config_dir: String = ""
 ## `DotWeaponDef`s a pool's `catalogue:` block draws from (any array of objects with `id` and `tags`).
 var defs: Array = []
+## Optional `(channel: StringName, id: StringName, weight: float) -> float`, applied to every pool entry as pools are built: a game's own availability rules per pool `channel`.
+var weigher: Callable = Callable()
 ## Names used when a site names no pool.
 var default_pool: StringName = &""
 ## The merged file content, before a map is picked.
@@ -99,7 +101,7 @@ func resolve(map_id: String) -> Dictionary:
 		for pid: Variant in pool_dicts as Dictionary:
 			if not (pool_dicts[pid] is Dictionary):
 				continue
-			var built := DotWeaponSpawnPool.from_dictionary(StringName(str(pid)), pool_dicts[pid], defs)
+			var built := DotWeaponSpawnPool.from_dictionary(StringName(str(pid)), pool_dicts[pid], defs, weigher)
 			if built.ok:
 				pools[StringName(str(pid))] = built.value
 			else:

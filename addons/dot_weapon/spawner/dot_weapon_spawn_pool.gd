@@ -10,6 +10,8 @@ extends RefCounted
 var id: StringName = &""
 ## The kind an entry gets when it names none (`weapon`, `ammo`, `trader`...).
 var kind: StringName = &"weapon"
+## A free label the game gives a pool (`channel:` in the config: where its items are offered, e.g. a shop or a crate); [member DotWeaponSpawnerConfig.weigher] is told it.
+var channel: StringName = &""
 ## Each entry: `{id: StringName, kind: StringName, weight: float, tags: PackedStringArray, data: Dictionary}`.
 var entries: Array[Dictionary] = []
 
@@ -57,11 +59,12 @@ func pick(filter: Dictionary, unit: float) -> Dictionary:
 	return pool[pool.size() - 1]
 
 
-## Builds a pool from its config mapping (entries end up in id order, so layering order never changes a draw): `kind`, `entries` (list of `{id, weight, tags, data, kind}`) and an optional `catalogue` block that adds every def of [param defs] (`DotWeaponDef`s) whose tags match `{tags_any, tags_none, weight, weights: {id: w}}`. An explicit entry replaces a catalogue one of the same id.
-static func from_dictionary(pool_id: StringName, d: Dictionary, defs: Array = []) -> DotResult:
+## Builds a pool from its config mapping (entries end up in id order, so layering order never changes a draw): `kind`, `channel`, `entries` (list of `{id, weight, tags, data, kind}`) and an optional `catalogue` block that adds every def of [param defs] (`DotWeaponDef`s) whose tags match `{tags_any, tags_none, weight, weights: {id: w}}`. An explicit entry replaces a catalogue one of the same id. [param weigher] `(channel, id, weight) -> weight` lets the game re-weigh every entry (0 removes it).
+static func from_dictionary(pool_id: StringName, d: Dictionary, defs: Array = [], weigher: Callable = Callable()) -> DotResult:
 	var pool := DotWeaponSpawnPool.new()
 	pool.id = pool_id
 	pool.kind = StringName(str(d.get("kind", "weapon")))
+	pool.channel = StringName(str(d.get("channel", "")))
 	var by_id := {}
 	var cat: Variant = d.get("catalogue")
 	if cat is Dictionary:
@@ -89,7 +92,10 @@ static func from_dictionary(pool_id: StringName, d: Dictionary, defs: Array = []
 	var ids := by_id.keys()
 	ids.sort()
 	for item: Variant in ids:
-		pool.entries.append(by_id[item])
+		var entry: Dictionary = by_id[item]
+		if weigher.is_valid():
+			entry["weight"] = float(weigher.call(pool.channel, entry["id"], float(entry["weight"])))
+		pool.entries.append(entry)
 	return DotResult.success(pool)
 
 
