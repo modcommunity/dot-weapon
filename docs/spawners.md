@@ -44,19 +44,38 @@ default_pool: guns
 pools:
   guns:
     kind: weapon
-    catalogue: {tags_any: [primary, sidearm], tags_none: [heavy], weight: 1, weights: {shotgun: 3}}
+    catalogue:
+      tags_any: [primary, sidearm]
+      tags_none: [heavy]
+      weight: 1
+      weights:
+        shotgun: 3
     entries:
-      - {id: medkit, kind: pickup, weight: 1, tags: [heal], data: {price: 0}}
+      - id: medkit
+        kind: pickup
+        weight: 1
+        tags: [heal]
+        data:
+          price: 0
 sites:                      # by site id, over the marker's own fields
-  armoury: {pool: guns, respawn: 45, max: 2, group: guns, tags_any: primary}
-groups: {guns: 6}           # at most six alive across sites of the group
+  armoury:
+    pool: guns
+    respawn: 45
+    max: 2
+    group: guns
+groups:
+  guns: 6                   # at most six alive across sites of the group
 classes:                    # entity classnames (globs) a converter maps to spawners
-  weapon_spawn_*: {pool: guns}
+  weapon_spawn_*:
+    pool: guns
 maps:                       # per-map blocks, same keys; id or glob, the more literal characters win
-  zz_lot: {sites: {armoury: {respawn: 20}}}
+  zz_lot:
+    sites:
+      armoury:
+        respawn: 20
 ```
 
-A site's fields come from, weakest first: the marker or entity, `sites:` in the file, the matching `maps:` blocks. Site keys accept `respawn`/`max`/`lifetime` as short names. A filter is `tags_any`, `tags_all`, `tags_none`, `ids` (lists or `"a, b"`); weight 0 removes an entry.
+The parser (`DotYaml`) has no inline mappings (`{a: 1}` is an error); lists of scalars may be inline (`[a, b]`). A site's fields come from, weakest first: the marker or entity, `sites:` in the file, the matching `maps:` blocks. Site keys accept `respawn`/`max`/`lifetime` as short names. A filter is `tags_any`, `tags_all`, `tags_none`, `ids` (lists or `"a, b"`); weight 0 removes an entry.
 
 ### Scalars through dot-map's per-map files
 

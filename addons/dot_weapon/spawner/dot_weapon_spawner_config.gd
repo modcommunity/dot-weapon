@@ -9,18 +9,20 @@ extends RefCounted
 ## pools:
 ##   wall_guns:
 ##     kind: weapon
-##     catalogue: {tags_any: [primary], tags_none: [heavy], weight: 1, weights: {shotgun: 3}}
-##     entries: [{id: medkit, kind: item, weight: 2, tags: [heal], data: {price: 50}}]
+##     catalogue:
+##       tags_any: [primary]
+##       weight: 1
 ## sites:                  # defaults by spawner id, over what the marker says
-##   armoury: {pool: wall_guns, respawn: 45, max: 2, group: guns}
-## groups: {guns: 6}       # at most six alive across the group
-## classes:                # entity classnames a converter maps to spawners
-##   weapon_spawn_*: {pool: wall_guns}
-## default_pool: wall_guns
-## game: {shop: {prices: {primary: 500}}}   # free-form block for the game, merged per map like the rest
-## maps:
-##   zz_lot: {sites: {armoury: {respawn: 20}}}
+##   armoury:
+##     pool: wall_guns
+##     respawn: 45
+## game:                   # free-form block for the game
+##   shop:
+##     prices:
+##       primary: 500
 ## [/codeblock]
+##
+## DotYaml has no inline mappings: write every mapping in block style (lists of scalars may stay inline).
 
 const CHANNEL := "weapon.spawner"
 const ADDON := "dot-weapon"
