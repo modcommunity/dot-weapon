@@ -26,6 +26,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first.
 | `core/dot_weapon_attachment.gd`, `dot_weapon_fitting.gd`, `dot_weapon_attachments.gd` | attachments: a mod (`DotWeaponAttachment`), what is fitted to one gun as ids (`DotWeaponFitting`), the catalogue with fit rules, copy-on-apply and the packed wire code (`DotWeaponAttachments`); `arsenal.fit` uses them (API 4) |
 | `core/dot_weapon_profiles.gd` | `DotWeaponProfiles`: the `weapon` profile kind (schema, `profile_schemas()` for dot-core's `profile_check` and dot-ci `profiles: true` (API 7), `flat`, `apply_common`, `menu_entries`, `upgrade_set`, `apply_upgrades`; and, for a pack that builds its defs in code, the overlay (API 8): `overlay_set`, `tune` (lays the profiles over the built defs, only the keys a file sets, `DotProfile.file_keys`), `flat_of`, `to_yaml`, `profile_path`, `upgraded`); a pack keeps its own keys under `extra:` (API 5); `core/dot_weapon_profile_group.gd` `DotWeaponProfileGroup`: all packs' sets behind one `weapon` kind and one runtime layer, so a runtime edit reaches every pack (API 6) |
 | `net/dot_weapon_net_sync.gd` | `DotWeaponNetSync`: slot, magazine, reserve specs (ammunition owner-only) |
+| `spawner/` | [docs/spawners.md](docs/spawners.md): `DotWeaponSpawner` (server: sites, seeded draws, timers, caps), `DotWeaponSpawnView` (client), `DotWeaponSpawnPool`, `DotWeaponSpawnSite`, `DotWeaponSpawnPoint` (marker), `DotWeaponSpawnerConfig` (layered `spawner.yml`, `MAP_KEYS` for dot-map); suite `examples/spawner_selftest.tscn` (API 9) |
 | `math/dot_weapon_recoil.gd` | `DotWeaponRecoil` |
 | `bridge/` | `DotWeaponLoadoutBridge` (dot-loadout to arsenal), `DotWeaponInventoryBridge` (bag to reserve), `DotWeaponPlayerBridge` (player to context, view-model mount) |
 | `examples/weapon_selftest.tscn` | the suite; `fixtures/lightning_rod.gd` is the outside weapon it proves the extension point with |
@@ -34,7 +35,7 @@ Paths except `examples/` and `fixtures/` are in `addons/dot_weapon/`.
 
 ## Running and testing
 
-The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything)), then `timeout 180 godot --headless --path . res://examples/weapon_selftest.tscn`.
+The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything)), then `timeout 180 godot --headless --path . res://examples/weapon_selftest.tscn` and `res://examples/spawner_selftest.tscn` (7 sections, 55 checks).
 
 ## Rules that bite
 

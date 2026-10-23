@@ -38,5 +38,8 @@ extends RefCounted
 ## 8: the overlay on code-built defs in [DotWeaponProfiles]: `overlay_set`, `tune`, `file_flat`, `apply_flat`,
 ## `flat_of`, `to_yaml`, `profile_path`, `upgraded`. OLDEST stays 1.
 
-const LEVEL := 8
+## 9: spawners (`spawner/`, docs/spawners.md): [DotWeaponSpawner], [DotWeaponSpawnView], [DotWeaponSpawnPool],
+## [DotWeaponSpawnSite], [DotWeaponSpawnPoint], [DotWeaponSpawnerConfig]. OLDEST stays 1.
+
+const LEVEL := 9
 const OLDEST := 1
