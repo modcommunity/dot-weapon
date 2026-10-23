@@ -95,6 +95,10 @@ The file's `game:` mapping is the game's own block (prices, rules); `spawner.gam
 
 Same machinery: a trader is a site with `pool: stock`, entries carrying `data: {price: 50}` (it rides on the event) and `max_alive` for shelf slots, or `roll()` for a fixed shelf; a fixed map pickup is a site with `item: medkit` and a respawn time (or `one_shot`).
 
+## Channels: where an item is offered
+
+A pool may carry `channel: shop` (any label). Set `config.weigher = func(channel, id, weight) -> float` and every entry of every pool is re-weighed through it as the pools are built (0 removes the entry), so a game keeps "never in the shop" or per-weapon odds in its own config without a pool per rule.
+
 ## Limits
 
 Ammo for a weapon found is the game's. The spawner does not know a pickup was moved or destroyed other than through `take` (call it, or let `lifetime_seconds` expire it).
