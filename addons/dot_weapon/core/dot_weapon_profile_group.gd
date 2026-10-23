@@ -13,7 +13,7 @@ var _members: Array[DotProfileSet] = []
 
 ## A group for [param p_game]; [param p_roots] replaces the config roots (tests).
 static func make(p_game: String, p_roots: PackedStringArray = PackedStringArray()) -> DotWeaponProfileGroup:
-	var g := DotWeaponProfileGroup.new()
+	var g := new()
 	g.game = p_game
 	g.rel_path = DotWeaponProfiles.KIND
 	g.schema = DotWeaponProfiles.schema()
