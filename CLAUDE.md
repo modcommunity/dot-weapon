@@ -6,6 +6,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first.
 
 **The distributable is `addons/dot_weapon/`.** It requires [dot-core](../dot-core) and [dot-combat](../dot-combat) (symlinked into `addons/`, gitignored). dot-net, dot-loadout, dot-inventory and dot-player are optional and never named.
 
+Also requires **dot-profile** (`DotProfileSet`, `DotProfile`, `DotProfileRuntime`, split from dot-core): link `addons/dot_profile` next to `addons/dot_core`.
+
 ## Read before
 
 | Read | Before |
