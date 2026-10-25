@@ -62,18 +62,40 @@ static func context_for(
 	var key := str(player.get("player_key"))
 	ctx.entity = entity_of(key)
 
-	var eye := _eye_of(player)
+	# The controllers are looked up once for both the eye and the motion: a server does this
+	# for every player every tick.
+	var controllers := _controllers_of(player)
+	var eye := _eye_from(player, controllers)
 	ctx.origin = eye.origin
 	# -Z is Godot's forward, and a basis column rather than a rotated vector so that a
 	# rig with a non-uniform scale still aims where it looks.
 	ctx.direction = -eye.basis.z
 
-	var motion := _motion_of(player)
+	var motion := _motion_from(controllers)
 	ctx.speed = float(motion.get("speed", 0.0))
 	ctx.airborne = not bool(motion.get("on_floor", true))
 	ctx.crouched = bool(motion.get("crouched", false))
 
 	return ctx
+
+
+## The switch's active controller, then the player's controller: the nodes asked for an eye and
+## a motion, in that order. Either may be missing.
+static func _controllers_of(player: Node) -> Array:
+	var out: Array = []
+	var switch: Variant = _component(player, "DotPlayerControllerSwitch")
+
+	if switch != null and (switch as Node).has_method(&"active_controller"):
+		var active: Variant = (switch as Node).call(&"active_controller")
+		if active is Node:
+			out.append(active)
+
+	var controller: Variant = _component(player, "DotPlayerController")
+
+	if controller is Node:
+		out.append(controller)
+
+	return out
 
 
 ## Where a player's eyes are, falling back sensibly twice.
@@ -83,17 +105,13 @@ static func context_for(
 ## a server with no camera has. Then the body, which is wrong and is better than
 ## nothing — and is the case a game should notice, so it is logged.
 static func _eye_of(player: Node) -> Transform3D:
-	var switch: Variant = _component(player, "DotPlayerControllerSwitch")
+	return _eye_from(player, _controllers_of(player))
 
-	if switch != null and (switch as Node).has_method("active_controller"):
-		var active: Variant = (switch as Node).call("active_controller")
-		if active is Node and (active as Node).has_method("eye_transform"):
-			return (active as Node).call("eye_transform") as Transform3D
 
-	var controller: Variant = _component(player, "DotPlayerController")
-
-	if controller is Node and (controller as Node).has_method("eye_transform"):
-		return (controller as Node).call("eye_transform") as Transform3D
+static func _eye_from(player: Node, controllers: Array) -> Transform3D:
+	for node: Node in controllers:
+		if node.has_method(&"eye_transform"):
+			return node.call(&"eye_transform") as Transform3D
 
 	var character: Variant = _component(player, "DotPlayerChar")
 
@@ -113,20 +131,15 @@ static func _eye_of(player: Node) -> Transform3D:
 
 
 static func _motion_of(player: Node) -> Dictionary:
-	var switch: Variant = _component(player, "DotPlayerControllerSwitch")
+	return _motion_from(_controllers_of(player))
 
-	if switch != null and (switch as Node).has_method("active_controller"):
-		var active: Variant = (switch as Node).call("active_controller")
-		if active is Node and (active as Node).has_method("motion"):
-			return (active as Node).call("motion") as Dictionary
 
-	var controller: Variant = _component(player, "DotPlayerController")
-
-	if controller is Node and (controller as Node).has_method("motion"):
-		return (controller as Node).call("motion") as Dictionary
+static func _motion_from(controllers: Array) -> Dictionary:
+	for node: Node in controllers:
+		if node.has_method(&"motion"):
+			return node.call(&"motion") as Dictionary
 
 	return {}
-
 
 ## Parents a view model to the player's weapon mount, if their character has one.
 ##
