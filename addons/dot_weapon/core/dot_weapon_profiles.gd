@@ -1,10 +1,8 @@
 class_name DotWeaponProfiles
 extends RefCounted
 
-## Loads weapons from `weapon` profiles (cfg/addons/<addon>/weapon, cfg/game/<game>/weapon, cfg/server/addons/<addon>/weapon, cfg/server/game/<game>/weapon).
-##
-## A pack's own keys go under `extra:`; [method flat] merges them back for the pack's builder.
-## A weapon may be a folder with `upgrades/<id>.yml` children ([method apply_upgrades]).
+## Loads weapons from `weapon` profiles (the `cfg/addons`, `cfg/game`, `cfg/server/addons` and `cfg/server/game` tiers).
+## A pack's own keys go under `extra:`; [method flat] merges them back. A weapon may be a folder with `upgrades/<id>.yml` children ([method apply_upgrades]).
 
 const KIND := "weapon"
 const UPGRADES := "upgrades"

@@ -2,27 +2,8 @@ class_name DotWeaponSpawnerConfig
 extends RefCounted
 
 ## The spawner's rules, layered: what pools exist, per-site defaults, groups, and what a map changes.
-##
-## [b]Two kinds of setting.[/b] The structure (pools, sites, groups) is `spawner.yml` in each `dot-weapon` tier of [DotAddonConfig]: `cfg/addons/dot_weapon/`, `cfg/game/<game>/dot_weapon/`, then the operator's `cfg/server/...` copies, merged weakest first. A top-level `maps:` mapping holds per-map blocks (same keys) under a map id or a glob (`zz_*`, case-insensitive); the more literal characters win. The scalars in [method map_keys] go through dot-map's per-map files instead (`dot_map/map/<name>.yml`), which is where a game's [code]DotGameModule._map_config_get/_set[/code] reach them, so a map can switch spawners off or halve a timer without a block here.
-##
-## [codeblock]
-## pools:
-##   wall_guns:
-##     kind: weapon
-##     catalogue:
-##       tags_any: [primary]
-##       weight: 1
-## sites:                  # defaults by spawner id, over what the marker says
-##   armoury:
-##     pool: wall_guns
-##     respawn: 45
-## game:                   # free-form block for the game
-##   shop:
-##     prices:
-##       primary: 500
-## [/codeblock]
-##
-## DotYaml has no inline mappings: write every mapping in block style (lists of scalars may stay inline).
+## Structure is `spawner.yml` in each `dot-weapon` tier of [DotAddonConfig], merged weakest first; the scalars in [method map_keys] go through dot-map's per-map files.
+## Format, per-map blocks and an example: docs/spawners.md.
 
 const CHANNEL := "weapon.spawner"
 const ADDON := "dot-weapon"

@@ -102,3 +102,45 @@ A pool may carry `channel: shop` (any label). Set `config.weigher = func(channel
 ## Limits
 
 Ammo for a weapon found is the game's. The spawner does not know a pickup was moved or destroyed other than through `take` (call it, or let `lifetime_seconds` expire it).
+
+
+## Reference moved from the class docs
+
+### DotWeaponSpawner: usage and determinism
+
+It places nothing in the world: it says "item X now lies at P" through [signal changed] and the game makes the pickup (a loot entry, a node, a trader's shelf). When the game's pickup is used it calls [method take], which frees the slot and starts the timer. Time is whatever clock the game passes to [method tick], so a test can drive it.
+
+```
+var spawner := DotWeaponSpawner.new()
+spawner.config.game = "game-x"          # the cfg/game/<game>/dot_weapon/spawner.yml tier
+spawner.config.load_files()
+spawner.load_map(map_id, DotWeaponSpawnPoint.collect(map_root))   # or add_entities(doc_entities)
+spawner.changed.connect(func(ev: Array) -> void: send_to_clients(ev))
+spawner.begin_round(now, round_number)  # then spawner.tick(now) every server tick
+# on use:  var r := spawner.take(instance, player_id)   # r.value = {item, kind, site, data}
+```
+
+[b]Determinism.[/b] A draw is `stream(seed, site, round).unit_at(n)`, n the site's own draw count, so the same seed, map and round give the same items whatever order sites tick in; a new round changes them.
+
+### DotWeaponSpawnerConfig: layers and format
+
+[b]Two kinds of setting.[/b] The structure (pools, sites, groups) is `spawner.yml` in each `dot-weapon` tier of [DotAddonConfig]: `cfg/addons/dot_weapon/`, `cfg/game/<game>/dot_weapon/`, then the operator's `cfg/server/...` copies, merged weakest first. A top-level `maps:` mapping holds per-map blocks (same keys) under a map id or a glob (`zz_*`, case-insensitive); the more literal characters win. The scalars in [method map_keys] go through dot-map's per-map files instead (`dot_map/map/<name>.yml`), which is where a game's [code]DotGameModule._map_config_get/_set[/code] reach them, so a map can switch spawners off or halve a timer without a block here.
+
+```
+pools:
+  wall_guns:
+    kind: weapon
+    catalogue:
+      tags_any: [primary]
+      weight: 1
+sites:                  # defaults by spawner id, over what the marker says
+  armoury:
+    pool: wall_guns
+    respawn: 45
+game:                   # free-form block for the game
+  shop:
+    prices:
+      primary: 500
+```
+
+DotYaml has no inline mappings: write every mapping in block style (lists of scalars may stay inline).

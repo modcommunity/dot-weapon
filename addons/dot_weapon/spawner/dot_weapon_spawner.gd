@@ -2,20 +2,8 @@ class_name DotWeaponSpawner
 extends RefCounted
 
 ## The server's spawner: sites, seeded draws from pools, respawn timers, caps. Authoritative; clients mirror it with [DotWeaponSpawnView].
-##
-## It places nothing in the world: it says "item X now lies at P" through [signal changed] and the game makes the pickup (a loot entry, a node, a trader's shelf). When the game's pickup is used it calls [method take], which frees the slot and starts the timer. Time is whatever clock the game passes to [method tick], so a test can drive it.
-##
-## [codeblock]
-## var spawner := DotWeaponSpawner.new()
-## spawner.config.game = "game-x"          # the cfg/game/<game>/dot_weapon/spawner.yml tier
-## spawner.config.load_files()
-## spawner.load_map(map_id, DotWeaponSpawnPoint.collect(map_root))   # or add_entities(doc_entities)
-## spawner.changed.connect(func(ev: Array) -> void: send_to_clients(ev))
-## spawner.begin_round(now, round_number)  # then spawner.tick(now) every server tick
-## # on use:  var r := spawner.take(instance, player_id)   # r.value = {item, kind, site, data}
-## [/codeblock]
-##
-## [b]Determinism.[/b] A draw is `stream(seed, site, round).unit_at(n)`, n the site's own draw count, so the same seed, map and round give the same items whatever order sites tick in; a new round changes them.
+## It places nothing: it says "item X now lies at P" through [signal changed] and the game makes the pickup. Time is whatever clock the game passes to [method tick].
+## Usage and determinism: docs/spawners.md.
 
 const CHANNEL := "weapon.spawner"
 ## The classname a marker entity uses when the config's `classes` names no other.

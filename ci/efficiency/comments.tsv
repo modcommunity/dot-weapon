@@ -29,10 +29,8 @@ addons/dot_weapon/dot_weapon_plugin.gd::long_block	1
 addons/dot_weapon/math/dot_weapon_recoil.gd::long_block	3
 addons/dot_weapon/net/dot_weapon_net_sync.gd::history	1
 addons/dot_weapon/net/dot_weapon_net_sync.gd::long_block	4
-addons/dot_weapon/runtime/dot_weapon_arsenal.gd::banner	12
-addons/dot_weapon/runtime/dot_weapon_arsenal.gd::long_block	11
+addons/dot_weapon/runtime/dot_weapon_arsenal.gd::long_block	9
 addons/dot_weapon/tuning/dot_weapon_ballistics.gd::long_block	3
 addons/dot_weapon/tuning/dot_weapon_tuning.gd::long_block	2
-examples/weapon_selftest.gd::banner	6
-examples/weapon_selftest.gd::long_block	6
+examples/weapon_selftest.gd::long_block	3
 fixtures/lightning_rod.gd::long_block	1

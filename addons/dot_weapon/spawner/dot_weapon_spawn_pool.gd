@@ -2,8 +2,7 @@ class_name DotWeaponSpawnPool
 extends RefCounted
 
 ## What a spawner may hand out: weighted entries (an id, a kind, tags, free data), drawn through a tag filter.
-##
-## An entry id is any string a game's catalogue knows: a weapon, an ammo pile, a trader's stock line. [member kind] is only what the game does with it, so one pool type serves weapons, pickups and a trader.
+## An entry id is any string a game's catalogue knows; [member kind] is only what the game does with it.
 ## A filter is `{tags_any, tags_all, tags_none, ids}`, each a list of strings; an absent key allows everything.
 
 ## The pool's name in the config.

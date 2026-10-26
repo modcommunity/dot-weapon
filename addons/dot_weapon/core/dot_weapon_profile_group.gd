@@ -2,11 +2,7 @@ class_name DotWeaponProfileGroup
 extends DotProfileSet
 
 ## Every pack's `weapon` profiles behind the one kind, sharing one runtime layer.
-##
-## [DotProfileRuntime] keys a set by kind, so two packs cannot both be registered as `weapon`. Add this
-## group instead: ids stay the bare profile ids (the game and server tiers already share them across
-## packs), an edit lands in [member DotProfileSet.runtime], and every member set reads that same layer.
-## Packs are handed [member DotProfileSet.runtime] to rebuild their numbers from.
+## [DotProfileRuntime] keys a set by kind, so packs cannot each register `weapon`; ids stay bare and an edit lands in [member DotProfileSet.runtime], which every member set reads.
 
 var _members: Array[DotProfileSet] = []
 

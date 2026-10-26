@@ -11,9 +11,8 @@ extends Node
 ## decides who dies.
 ##
 ## [b]It is a pure function of the commands it is given.[/b] No device, no wall clock,
-## no node lookups, no randomness. That is what lets a client predict a use, a server
-## re-run it authoritatively, and a reconciliation replay re-run it again, all reaching
-## the same answer. See dot-combat's [DotSpread] (reached through [method DotShot.scatter]) for the one place that is easy to get wrong.
+## no node lookups, no randomness, so a client can predict, a server re-run and a
+## reconciliation replay re-run it to the same answer. See dot-combat's [DotSpread].
 ##
 ## [b]Every weapon-specific decision belongs to a [DotWeaponBehaviour].[/b] This file
 ## knows about slots, cadence, ammunition, reloading and switching, and deliberately
@@ -36,6 +35,8 @@ signal charge_full(slot: int)
 signal switched(from: int, to: int)
 signal ammo_changed(pool: StringName, amount: int)
 signal carried_changed()
+
+const _Io := preload("dot_weapon_arsenal_io.gd")
 
 @export_group("Simulation")
 
@@ -78,8 +79,6 @@ var attachments: DotWeaponAttachments = null
 ## resolve damage. A client still runs everything, for prediction.
 @export var authority: bool = false
 
-# --- State ------------------------------------------------------------------
-
 var _slots: Dictionary = {}          ## int -> DotWeaponSlot
 var _ammo := DotWeaponAmmo.new()
 var _current: int = 0
@@ -116,8 +115,6 @@ var _replaying: bool = false
 var _ready_for_use: bool = false
 
 
-# --- Tick rate --------------------------------------------------------------
-
 ## [param authored_ticks], a count off [param def], as a count at [member tick_rate].
 ##
 ## The one place a definition's durations meet the running rate. Public so a layer over
@@ -135,8 +132,6 @@ func charge_for(def: DotWeaponDef, ticks_held: int) -> float:
 		return 1.0
 	return def.charge_at(ticks_held, tick_rate)
 
-
-# --- Lifecycle --------------------------------------------------------------
 
 ## Validates the catalogue and makes the arsenal usable.
 ##
@@ -160,8 +155,6 @@ func setup() -> DotResult:
 func is_ready() -> bool:
 	return _ready_for_use
 
-
-# --- Carrying ---------------------------------------------------------------
 
 ## Gives the carrier a weapon, in the slot its definition names.
 ##
@@ -279,8 +272,6 @@ func add_ammo(pool: StringName, amount: int) -> int:
 	return added
 
 
-# --- Switching --------------------------------------------------------------
-
 func is_switching() -> bool:
 	return _switch_done_tick >= 0
 
@@ -292,11 +283,8 @@ func is_switching() -> bool:
 ## rather than an instant teleport between weapons.
 ##
 ## [b]Asking again for the slot already being switched to is not a new switch.[/b] A command
-## carries the slot it wants on every tick — that is how it survives a lost packet, and four
-## games in the family were written that way — and a switch restarted on each of them never
-## finishes: the holster's deadline moved a tick further every tick, the old weapon stayed in
-## hand for good, and nothing could be fired. A rendered view model holding the spade it had
-## been given first, under a chat line saying "You were handed a marksman", was the tell.
+## carries its slot every tick, and a switch restarted on each would push the holster
+## deadline back for ever.
 func select(slot: int, tick: int) -> bool:
 	if disabled or slot == _current or not _slots.has(slot):
 		return false
@@ -310,8 +298,7 @@ func select(slot: int, tick: int) -> bool:
 	_holstering = true
 	_switch_done_tick = tick + (ticks_for(from.def, from.def.holster_ticks) if from != null else 0)
 
-	# A switch cancels everything the old weapon was in the middle of. A reload that
-	# survived a switch would finish into a magazine nobody is holding.
+	# A reload that survived a switch would finish into a magazine nobody is holding.
 	_cancel_transient()
 
 	return true
@@ -366,8 +353,6 @@ func _cancel_transient() -> void:
 	_charge_announced = false
 	_held_ticks = 0
 
-
-# --- Reloading --------------------------------------------------------------
 
 func is_reloading() -> bool:
 	return _reloading
@@ -431,8 +416,6 @@ func _finish_reload(tick: int) -> void:
 		ammo_changed.emit(def.ammo_type, _ammo.count(def.ammo_type))
 
 	# A per-round reload keeps going until the magazine is full or the reserve is dry.
-	# Stopping after one round is the bug where a shotgun loads a single shell and then
-	# stands there, which looks like the reload being interrupted by nothing.
 	if (
 		def.reload_per_round
 		and slot.magazine_space() > 0
@@ -444,8 +427,6 @@ func _finish_reload(tick: int) -> void:
 		_reload_done_tick = -1
 		reload_finished.emit(_current, slot.magazine)
 
-
-# --- Replay -----------------------------------------------------------------
 
 ## Marks the start of a reconciliation replay.
 ##
@@ -463,8 +444,6 @@ func end_replay() -> void:
 func is_replaying() -> bool:
 	return _replaying
 
-
-# --- The tick ---------------------------------------------------------------
 
 ## Runs one tick of one command. The only entry point a game needs.
 ##
@@ -506,9 +485,9 @@ func simulate_tick(
 	return _advance_use(slot, command, ctx, previous)
 
 
-## Whether [method simulate_tick] would do nothing but tick the weapon in hand: no button, no request
-## for another slot (asking again for the one in hand is a no-op), nothing switching, reloading, charging or bursting, and a behaviour whose tick reads no
-## context. A server asks this of every shooter every tick to skip building a context for none.
+## Whether [method simulate_tick] would only tick the weapon in hand: no button, no other slot
+## asked for, nothing switching, reloading, charging or bursting, and a behaviour whose tick
+## reads no context. A server asks it of every shooter to skip building a context.
 func is_idle_for(command: DotWeaponCommand, previous: DotWeaponCommand) -> bool:
 	if not _ready_for_use or disabled or command.buttons != 0 or (command.slot > 0 and command.slot != _current):
 		return false
@@ -585,8 +564,6 @@ func _charge_value(slot: DotWeaponSlot, tick: int) -> float:
 	return charge_for(slot.def, tick - _charge_started)
 
 
-# --- Using ------------------------------------------------------------------
-
 func _advance_use(
 	slot: DotWeaponSlot,
 	command: DotWeaponCommand,
@@ -629,9 +606,7 @@ func _advance_charge(
 	var def := slot.def
 
 	if down and not was_down:
-		# Starting a draw is refused up front when there is nothing to spend, rather
-		# than at release. A bow that lets you draw and then does nothing is a bow the
-		# player believes is broken.
+		# Refused up front, not at release: a draw that then does nothing reads as a broken bow.
 		if not _can_pay(slot):
 			dry_used.emit(_current)
 			return DotWeaponOutcome.nothing("Nothing to spend.")
@@ -676,9 +651,7 @@ func _advance_burst(
 	var out := _try_use(slot, ctx)
 	if out.used:
 		_burst_left -= 1
-		# The gap within a burst is its own, and it is usually shorter than the gap
-		# between bursts. Using one interval for both is the bug that makes a
-		# three-round burst indistinguishable from automatic fire.
+		# The gap within a burst is its own; one interval for both makes a burst look automatic.
 		if _burst_left > 0:
 			_next_use_tick = ctx.tick + maxi(1, ticks_for(slot.def, slot.def.burst_interval_ticks))
 	elif out.refusal != "":
@@ -714,16 +687,8 @@ func _try_use(slot: DotWeaponSlot, ctx: DotWeaponContext) -> DotWeaponOutcome:
 			_switch_off_empty(ctx.tick)
 		return DotWeaponOutcome.nothing("Nothing to spend.")
 
-	# [b]Whether the weapon can pay is asked BEFORE the reload is cancelled, and the
-	# order is the whole of it.[/b] Cancelling first means a held trigger on an empty
-	# weapon cancels the reload it just started, every time the cadence comes round,
-	# so the reload restarts for ever and the magazine never refills. Nothing errors;
-	# the gun simply stops working, and the only symptom is that a bot holding its
-	# trigger does about a fifth of the damage it should.
-	#
-	# With the order this way round, using cancels a reload only when there is
-	# something to fire, which is what every shooter does and what a player expects
-	# from a reload they started by accident.
+	# Whether the weapon can pay is asked BEFORE the reload is cancelled: the other way round,
+	# a held trigger on an empty weapon cancels its own reload every cadence and it never refills.
 	if _reloading:
 		cancel_reload()
 
@@ -777,8 +742,6 @@ func _switch_off_empty(tick: int) -> void:
 			return
 
 
-# --- Attachments ------------------------------------------------------------
-
 ## Fits [param fitting] to the weapon in [param slot], replacing what was there. The slot's
 ## definition becomes a copy with the attachments applied (the catalogue's is untouched), a
 ## magazine above the new capacity is clamped, and an empty fitting restores the base.
@@ -816,132 +779,19 @@ func fitting_at(slot: int) -> DotWeaponFitting:
 	return s.fitting.duplicate_fitting()
 
 
-# --- Netcode ----------------------------------------------------------------
-
-## Everything that has to travel and everything a rollback has to restore.
-##
-## [b]The behaviours' own state is in here[/b], because a snapshot that carried the
-## magazine and not the bow's draw reconciles a correction by silently un-drawing it.
+## Everything that has to travel and everything a rollback has to restore, behaviours' own state included.
 func snapshot() -> Dictionary:
-	var carried: Dictionary = {}
-	for key: int in _slots.keys():
-		carried[key] = (_slots[key] as DotWeaponSlot).snapshot()
-
-	return {
-		"slots": carried,
-		"ammo": _ammo.snapshot(),
-		"current": _current,
-		"previous": _previous,
-		"next_use": _next_use_tick,
-		"switch_to": _switch_to,
-		"switch_done": _switch_done_tick,
-		"holstering": _holstering,
-		"reloading": _reloading,
-		"reload_done": _reload_done_tick,
-		"burst_left": _burst_left,
-		"charge_started": _charge_started,
-		"held": _held_ticks,
-		"use_index": _use_index,
-	}
+	return _Io.snapshot(self)
 
 
 ## Restores a snapshot, rebuilding any weapon this carrier is not currently holding.
 func restore(d: Dictionary) -> DotResult:
-	if not _ready_for_use:
-		return DotResult.fail(DotError.CODE_STATE, "setup() has not been called.")
+	return _Io.restore(self, d)
 
-	var carried: Dictionary = d.get("slots", {})
-	var wanted: Dictionary = {}
-
-	for key: Variant in carried.keys():
-		var index := int(key)
-		var row: Dictionary = carried[key]
-		var id := StringName(str(row.get("id", "")))
-		wanted[index] = true
-
-		var existing: DotWeaponSlot = _slots.get(index, null)
-
-		if existing == null or existing.id() != id:
-			var made := catalogue.instantiate(id, self)
-			if not made.ok:
-				return made
-			var def := catalogue.get_def(id)
-			existing = DotWeaponSlot.make(def, made.value)
-			_slots[index] = existing
-
-		var wanted_fit: Variant = row.get("fit", null)
-		var want_key := ""
-		var want: DotWeaponFitting = null
-		if wanted_fit is Dictionary:
-			var parsed := DotWeaponFitting.from_dictionary(wanted_fit as Dictionary)
-			if not parsed.ok:
-				return parsed
-			want = parsed.value
-			want_key = want.key()
-		var have_key := existing.fitting.key() if existing.fitting != null else ""
-		if want_key != have_key:
-			if want != null and attachments == null:
-				return DotResult.fail(
-					DotError.CODE_STATE, "The snapshot has a fitting and this arsenal has no attachments."
-				)
-			var fitted := _apply_fitting(existing, want if want != null else DotWeaponFitting.make(id))
-			if not fitted.ok:
-				return fitted
-
-		existing.restore(row)
-
-	for key: int in _slots.keys().duplicate():
-		if not wanted.has(key):
-			_slots.erase(key)
-
-	_ammo.restore(d.get("ammo", {}))
-	_current = int(d.get("current", 0))
-	_previous = int(d.get("previous", 0))
-	_next_use_tick = int(d.get("next_use", 0))
-	_switch_to = int(d.get("switch_to", 0))
-	_switch_done_tick = int(d.get("switch_done", -1))
-	_holstering = bool(d.get("holstering", false))
-	_reloading = bool(d.get("reloading", false))
-	_reload_done_tick = int(d.get("reload_done", -1))
-	_burst_left = int(d.get("burst_left", 0))
-	_charge_started = int(d.get("charge_started", -1))
-	_held_ticks = int(d.get("held", 0))
-	_use_index = int(d.get("use_index", 0))
-
-	return DotResult.success(null)
-
-
-# --- Reporting --------------------------------------------------------------
 
 func describe() -> Dictionary:
-	var slot := current()
-	return {
-		"ready": _ready_for_use,
-		"tick_rate": tick_rate,
-		"current": _current,
-		"weapon": String(slot.id()) if slot != null else "",
-		"magazine": slot.magazine if slot != null else 0,
-		"switching": is_switching(),
-		"reloading": _reloading,
-		"carried": _slots.keys().size(),
-		"ammo": _ammo.describe(),
-	}
+	return _Io.describe(self)
 
 
 func describe_lines() -> PackedStringArray:
-	var out := PackedStringArray()
-	out.append("arsenal: %d carried, slot %d%s" % [
-		_slots.keys().size(), _current, " (switching)" if is_switching() else ""
-	])
-
-	for s in slots():
-		var slot: DotWeaponSlot = _slots[s]
-		var mark := ">" if s == _current else " "
-		out.append("%s %d %-18s mag %d/%d" % [
-			mark, s, String(slot.id()), slot.magazine, slot.def.magazine
-		])
-
-	for pool in _ammo.pools():
-		out.append("  reserve %-12s %d" % [String(pool), _ammo.count(pool)])
-
-	return out
+	return _Io.describe_lines(self)
