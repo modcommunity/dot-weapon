@@ -106,6 +106,26 @@ func tick(ctx: DotWeaponContext) -> void:
 	_tick(ctx)
 
 
+## Whether [method _tick] may read its context. False for a behaviour whose `_tick` is the empty
+## one or [DotWeaponHitscan]'s (bloom recovery, no context), so an idle arsenal ticks it with none.
+func tick_needs_context() -> bool:
+	if _needs_context < 0:
+		_needs_context = 0
+		var script := get_script() as Script
+
+		while script != null:
+			var file := script.resource_path.get_file()
+
+			if file != "dot_weapon_behaviour.gd" and file != "dot_weapon_hitscan.gd":
+				for method in script.get_script_method_list():
+					if method["name"] == "_tick":
+						_needs_context = 1
+
+			script = script.get_base_script()
+
+	return _needs_context == 1
+
+
 ## The use button was released.
 ##
 ## Called for every fire mode, not only [constant DotWeaponDef.Fire.CHARGE], because a
@@ -144,6 +164,9 @@ func _can_use(_ctx: DotWeaponContext) -> DotResult:
 
 func _use(_ctx: DotWeaponContext) -> DotWeaponOutcome:
 	return DotWeaponOutcome.nothing("This weapon does nothing when used.")
+
+
+var _needs_context: int = -1
 
 
 func _tick(_ctx: DotWeaponContext) -> void:

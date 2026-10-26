@@ -15,7 +15,7 @@ var _sections_finished: int = 0
 
 const RATE := 64
 
-const CHECKS := 336
+const CHECKS := 338
 
 
 func _ready() -> void:
@@ -41,6 +41,7 @@ func _run() -> void:
 	_test_beam()
 	_test_thrown()
 	_test_determinism()
+	_test_idle_tick()
 	_test_tick_rate()
 	_test_snapshot()
 	_test_loadout_bridge()
@@ -1384,6 +1385,58 @@ func _test_determinism() -> void:
 	_drop(a)
 	_drop(b)
 	_drop(c)
+	_done()
+
+
+func _test_idle_tick() -> void:
+	_section("an idle tick skips the context and changes nothing")
+
+	var cat := _catalogue()
+	(cat.get_def(&"rifle").tuning as DotWeaponBallistics).bloom = 2.0
+	(cat.get_def(&"rifle").tuning as DotWeaponBallistics).bloom_recovery = 0.2
+	var slow := _arsenal(cat)
+	var fast := _arsenal(cat)
+
+	for a in [slow, fast]:
+		a.give(&"rifle")
+		a.give(&"pistol")
+		a.give(&"bow")
+		a.give(&"knife")
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 424242
+	var skipped := 0
+	var same := true
+	var previous: DotWeaponCommand = null
+
+	for tick in range(1200):
+		var cmd := DotWeaponCommand.new()
+		# Long quiet stretches (the case being skipped) between bursts of every button.
+		if (tick / 40) % 3 == 0:
+			cmd.set_button(DotWeaponCommand.BUTTON_ATTACK, rng.randf() < 0.7)
+			cmd.set_button(DotWeaponCommand.BUTTON_RELOAD, rng.randf() < 0.03)
+			cmd.slot = rng.randi_range(1, 4) if rng.randf() < 0.05 else 0
+
+		var want := slow.simulate_tick(cmd, _ctx(tick), previous)
+		var got: DotWeaponOutcome
+		if fast.is_idle_for(cmd, previous):
+			got = fast.idle_tick()
+			skipped += 1
+		else:
+			got = fast.simulate_tick(cmd, _ctx(tick), previous)
+
+		if want.used != got.used or want.kind != got.kind or want.refusal != got.refusal \
+				or var_to_str(slow.snapshot()) != var_to_str(fast.snapshot()):
+			same = false
+			break
+
+		previous = cmd
+
+	_check(same, "outcomes and snapshots agree on every tick of a mixed stream")
+	_check(skipped > 300, "and the idle path ran for much of it", str(skipped))
+
+	_drop(slow)
+	_drop(fast)
 	_done()
 
 

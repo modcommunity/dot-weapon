@@ -506,6 +506,30 @@ func simulate_tick(
 	return _advance_use(slot, command, ctx, previous)
 
 
+## Whether [method simulate_tick] would do nothing but tick the weapon in hand: no button, no request
+## for another slot (asking again for the one in hand is a no-op), nothing switching, reloading, charging or bursting, and a behaviour whose tick reads no
+## context. A server asks this of every shooter every tick to skip building a context for none.
+func is_idle_for(command: DotWeaponCommand, previous: DotWeaponCommand) -> bool:
+	if not _ready_for_use or disabled or command.buttons != 0 or (command.slot > 0 and command.slot != _current):
+		return false
+
+	if previous != null and previous.buttons != 0:
+		return false
+
+	if _switch_done_tick >= 0 or _reloading or _burst_left > 0 or _charge_started >= 0:
+		return false
+
+	var slot := current()
+	return slot != null and not slot.behaviour.tick_needs_context()
+
+
+## The tick [method is_idle_for] promised: what [method simulate_tick] does for it, with no context.
+func idle_tick() -> DotWeaponOutcome:
+	_held_ticks = 0
+	current().behaviour.tick(null)
+	return DotWeaponOutcome.nothing("")
+
+
 func _advance_switch(ctx: DotWeaponContext) -> void:
 	if _switch_done_tick < 0 or ctx.tick < _switch_done_tick:
 		return
