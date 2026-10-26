@@ -101,6 +101,12 @@ enum Fire {
 ## weapon with its mount; which sockets a model has is named by these.
 @export var mounts: Array[StringName] = []
 
+@export_group("Carrying")
+
+## What it weighs against a carrier's limit ([DotWeaponCarry]); 0 weighs nothing. Ignored while the
+## arsenal has no carry rules.
+@export_range(0.0, 1000.0, 0.1) var weight: float = 0.0
+
 @export_group("Timing")
 
 ## The tick rate every tick count on this definition was written for. Zero means "the

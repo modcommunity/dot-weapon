@@ -39,6 +39,7 @@ static func schema() -> Array:
 		f.call("reload_per_round", "bool", false),
 		f.call("reload_start_ticks", "int", 22, {"min": 0, "max": 100000}),
 		f.call("auto_reload", "bool", true),
+		f.call("weight", "float", 0.0, {"min": 0.0, "max": 1000.0}),
 		f.call("mounts", "list", []),
 		f.call("enabled", "bool", true),
 		f.call("menu", "dict", {}),
@@ -128,6 +129,8 @@ static func apply_common(d: DotWeaponDef, c: Dictionary) -> void:
 			d.set(k, bool(c[k]))
 	if c.has("min_charge"):
 		d.min_charge = float(c["min_charge"])
+	if c.has("weight"):
+		d.weight = float(c["weight"])
 
 
 ## Loads one profile into a [DotWeaponDef] of the common fields, with [member DotWeaponDef.params] taken from `extra:`.

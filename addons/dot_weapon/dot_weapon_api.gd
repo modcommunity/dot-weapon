@@ -41,5 +41,8 @@ extends RefCounted
 ## 9: spawners (`spawner/`, docs/spawners.md): [DotWeaponSpawner], [DotWeaponSpawnView], [DotWeaponSpawnPool],
 ## [DotWeaponSpawnSite], [DotWeaponSpawnPoint], [DotWeaponSpawnerConfig]. OLDEST stays 1.
 
-const LEVEL := 9
+## 10: carry weight ([DotWeaponCarry], `DotWeaponDef.weight`, `weight` profile key; arsenal `carry`, `backpack_tier`,
+## `cycle_slot`, `weapons_in`, `carried_weight`, `capacity`, `enforce_limit`). Off unless a game sets `carry`. OLDEST stays 1.
+
+const LEVEL := 10
 const OLDEST := 1

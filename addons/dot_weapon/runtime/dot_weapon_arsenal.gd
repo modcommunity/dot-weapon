@@ -65,6 +65,12 @@ const _Io := preload("dot_weapon_arsenal_io.gd")
 ## Must be the same on every machine (see [DotWeaponAttachments]).
 var attachments: DotWeaponAttachments = null
 
+## Weight and slot-capacity rules, shared by every arsenal of a game. Null: no limit, one weapon per slot.
+var carry: DotWeaponCarry = null
+
+## Backpack tier this carrier wears (0: none); see [method DotWeaponCarry.limit_for].
+var backpack_tier: int = 0
+
 @export_group("Rules")
 
 ## Switches away from a weapon that has run out entirely.
@@ -79,7 +85,8 @@ var attachments: DotWeaponAttachments = null
 ## resolve damage. A client still runs everything, for prediction.
 @export var authority: bool = false
 
-var _slots: Dictionary = {}          ## int -> DotWeaponSlot
+var _slots: Dictionary = {}          ## int -> DotWeaponSlot (the one in hand of that slot)
+var _shelf: Dictionary = {}          ## int -> Array[DotWeaponSlot], stowed behind the active one
 var _ammo := DotWeaponAmmo.new()
 var _current: int = 0
 var _previous: int = 0
@@ -181,6 +188,27 @@ func give(id: StringName, full: bool = true) -> DotResult:
 
 	var slot := DotWeaponSlot.make(def, made.value)
 	slot.magazine = def.magazine if full else 0
+
+	var held: DotWeaponSlot = _slots.get(def.slot, null)
+	var stow := held != null and held.id() != id and weapons_in(def.slot).size() < slot_capacity() \
+		and not _shelf_has(def.slot, id)
+	var gone := held if (held != null and not stow) else null
+	if carry != null and carry.enabled:
+		var after: float = carried_weight() + carry.weight_of(def) - (carry.weight_of(gone.def) if gone != null else 0.0)
+		if after > capacity() and carry.weight_of(def) > carry.weight_of(gone.def if gone != null else null):
+			return DotResult.fail(
+				DotError.CODE_QUOTA,
+				"Too heavy: %s weighs %.1f and you carry %.1f of %.1f." % [
+					def.display_name if def.display_name != "" else String(id),
+					carry.weight_of(def), carried_weight(), capacity()
+				],
+				String(id)
+			)
+
+	if stow:
+		_shelf_of(def.slot).append(held)
+	elif held != null:
+		_shelf_drop(def.slot, id)
 	_slots[def.slot] = slot
 
 	if def.ammo_type != &"":
@@ -204,17 +232,24 @@ func take(slot: int) -> DotResult:
 	if not _slots.has(slot):
 		return DotResult.fail(DotError.CODE_INVALID, "Nothing in slot %d." % slot)
 
-	if _current == slot:
+	if _current == slot and _shelf_of(slot).is_empty():
 		var next := _first_other_slot(slot)
 		_force_select(next)
 
-	_slots.erase(slot)
+	var behind := _shelf_of(slot)
+	if behind.is_empty():
+		_slots.erase(slot)
+	else:
+		_slots[slot] = behind.pop_front()
+		if behind.is_empty():
+			_shelf.erase(slot)
 	carried_changed.emit()
 	return DotResult.success(null)
 
 
 func clear() -> void:
 	_slots.clear()
+	_shelf.clear()
 	_current = 0
 	_previous = 0
 	_switch_done_tick = -1
@@ -228,7 +263,7 @@ func carries(id: StringName) -> bool:
 	for slot: DotWeaponSlot in _slots.values():
 		if slot.id() == id:
 			return true
-	return false
+	return _shelf_has(0, id)
 
 
 func has_slot(slot: int) -> bool:
@@ -262,6 +297,124 @@ func slots() -> Array[int]:
 
 func ammo() -> DotWeaponAmmo:
 	return _ammo
+
+
+# --- Weight and slot capacity -------------------------------------------------
+
+## Weapons one slot may hold.
+func slot_capacity() -> int:
+	return carry.slot_capacity if carry != null else 1
+
+
+## Every weapon in [param slot], the one in hand first.
+func weapons_in(slot: int) -> Array[DotWeaponSlot]:
+	var out: Array[DotWeaponSlot] = []
+	if _slots.has(slot):
+		out.append(_slots[slot])
+		out.append_array(_shelf_of(slot))
+	return out
+
+
+## Total weight carried now.
+func carried_weight() -> float:
+	if carry == null:
+		return 0.0
+	var total := 0.0
+	for s: int in _slots:
+		for w in weapons_in(s):
+			total += carry.weight_of(w.def)
+	return total
+
+
+## The most this carrier may carry now; INF with no carry rules.
+func capacity() -> float:
+	return carry.limit_for(backpack_tier) if carry != null else INF
+
+
+## Weight over [method capacity], 0 when under.
+func over_by() -> float:
+	return maxf(carried_weight() - capacity(), 0.0)
+
+
+## Speed multiplier for the weight carried (1 unless the carry rule is SLOW and this is over).
+func speed_scale() -> float:
+	return carry.speed_scale(carried_weight(), capacity()) if carry != null else 1.0
+
+
+## Wears a backpack of [param tier] if it is bigger than the one worn. False when it is not an upgrade.
+func equip_backpack(tier: int) -> bool:
+	if carry == null or tier <= backpack_tier or tier > carry.max_backpack_tier():
+		return false
+	backpack_tier = tier
+	carried_changed.emit()
+	return true
+
+
+## Drops the heaviest stowed or held weapons (not the one in hand) until under the limit.
+## Returns the ids dropped, in order.
+func enforce_limit() -> Array[StringName]:
+	var dropped: Array[StringName] = []
+	while carry != null and carry.enabled and over_by() > 0.0001:
+		var worst: DotWeaponSlot = null
+		var worst_slot := 0
+		for s: int in _slots:
+			for w in weapons_in(s):
+				if w == current():
+					continue
+				if worst == null or carry.weight_of(w.def) > carry.weight_of(worst.def):
+					worst = w
+					worst_slot = s
+		if worst == null:
+			break
+		dropped.append(worst.id())
+		if _slots[worst_slot] == worst:
+			take(worst_slot)
+		else:
+			_shelf_of(worst_slot).erase(worst)
+			carried_changed.emit()
+	return dropped
+
+
+## Brings the next weapon of the current slot into hand (pressing the slot key again). False when
+## the slot holds one weapon.
+func cycle_slot(tick: int) -> bool:
+	var behind := _shelf_of(_current)
+	if disabled or behind.is_empty() or not _slots.has(_current):
+		return false
+	_cancel_transient()
+	behind.append(_slots[_current])
+	_slots[_current] = behind.pop_front()
+	var to := current()
+	_switch_to = _current
+	_holstering = false
+	_switch_done_tick = tick + ticks_for(to.def, to.def.deploy_ticks)
+	switched.emit(_current, _current)
+	carried_changed.emit()
+	return true
+
+
+func _shelf_of(slot: int) -> Array:
+	if not _shelf.has(slot):
+		_shelf[slot] = []
+	return _shelf[slot]
+
+
+func _shelf_has(slot: int, id: StringName) -> bool:
+	for s: int in _shelf:
+		if slot != 0 and s != slot:
+			continue
+		for w: DotWeaponSlot in _shelf[s]:
+			if w.id() == id:
+				return true
+	return false
+
+
+func _shelf_drop(slot: int, id: StringName) -> void:
+	var behind := _shelf_of(slot)
+	for i in behind.size():
+		if (behind[i] as DotWeaponSlot).id() == id:
+			behind.remove_at(i)
+			return
 
 
 ## Adds reserve ammunition. Returns how many rounds actually fitted.

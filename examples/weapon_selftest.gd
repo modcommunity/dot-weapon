@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 338
+const CHECKS := 368
 
 
 func _ready() -> void:
@@ -40,6 +40,7 @@ func _run() -> void:
 	_test_player_bridge()
 	_test_profiles()
 	_test_overlay()
+	_test_carry()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -795,3 +796,70 @@ func _test_thrown() -> void:
 
 
 ## Ticks for one weapon to finish a reload started on [param from], driving no buttons.
+
+
+func _test_carry() -> void:
+	_section("carry weight")
+	var cat := _catalogue()
+	var twin := _pistol()
+	twin.id = &"pistol2"
+	cat.add(twin)
+	cat.get_def(&"rifle").weight = 12.0
+	cat.get_def(&"pistol").weight = 4.0
+	twin.weight = 5.0
+	cat.get_def(&"knife").weight = 1.0
+	var a := _arsenal(cat)
+	_check(a.give(&"rifle").ok and a.carried_weight() == 0.0 and a.capacity() == INF, "with no carry rules nothing weighs and nothing is refused")
+	_check(a.give(&"pistol2").ok and a.weapons_in(2).size() == 1, "and a slot holds one weapon")
+	a.clear()
+	var carry := DotWeaponCarry.new()
+	a.carry = carry
+	_check(a.give(&"rifle").ok and a.carried_weight() == 0.0, "a disabled carry weighs nothing")
+	carry.enabled = true
+	carry.base_limit = 20.0
+	carry.slot_capacity = 2
+	_check(is_equal_approx(a.carried_weight(), 12.0) and is_equal_approx(a.capacity(), 20.0), "enabled, weights count and the limit is the base")
+	_check(a.give(&"pistol").ok and is_equal_approx(a.carried_weight(), 16.0), "a weapon under the limit is taken")
+	var refused := a.give(&"pistol2")
+	_check(not refused.ok and refused.error.code == DotError.CODE_QUOTA and refused.error.message.contains("Too heavy"), "an over-weight pickup is refused with a message")
+	_check(a.weapons_in(2).size() == 1 and not a.carries(&"pistol2"), "and nothing changed")
+	_check(not a.equip_backpack(4) and a.equip_backpack(1) and is_equal_approx(a.capacity(), 30.0), "a backpack raises the limit, a tier that does not exist is refused")
+	_check(not a.equip_backpack(1), "and the same tier again is not an upgrade")
+	_check(a.give(&"pistol2").ok and a.weapons_in(2).size() == 2, "the same pickup now fits and stows beside the first")
+	_check(a.slot_at(2).id() == &"pistol2" and a.weapons_in(2)[1].id() == &"pistol", "the new weapon is in hand, the old behind it")
+	_check(a.carries(&"pistol") and a.carries(&"pistol2"), "carries sees stowed weapons")
+	_check(a.select(2, 0) and a.is_switching(), "slot 2 selected")
+	_drive(a, 1, 60, false)
+	_check(a.current_slot() == 2, "slot 2 is in hand")
+	_check(a.cycle_slot(100) and a.slot_at(2).id() == &"pistol" and a.weapons_in(2)[1].id() == &"pistol2", "the slot key again brings the next weapon")
+	_check(a.is_switching(), "and it deploys")
+	_check(not a.cycle_slot(101) or a.slot_at(2).id() == &"pistol2", "cycling twice returns")
+	var snap := a.snapshot()
+	var b := _arsenal(cat)
+	b.carry = carry
+	_check(b.restore(snap).ok and b.weapons_in(2).size() == 2 and b.backpack_tier == 1, "a snapshot carries the shelf and the backpack")
+	_check(is_equal_approx(b.carried_weight(), a.carried_weight()), "and the same weight")
+	carry.set_modifier(&"heavy_box", 2.0)
+	_check(is_equal_approx(carry.weight_factor(), 2.0) and a.over_by() > 0.0, "a modifier doubling weights puts the carrier over")
+	_check(a.speed_scale() < 1.0 and a.speed_scale() >= carry.slow_floor, "SLOW mode slows within the floor")
+	carry.over_limit = DotWeaponCarry.OverLimit.DROP
+	_check(is_equal_approx(a.speed_scale(), 1.0), "DROP mode does not slow")
+	var dropped := a.enforce_limit()
+	_check(a.over_by() <= 0.0001 and not dropped.is_empty() and a.current() != null, "DROP sheds weapons until under, keeping the one in hand")
+	carry.clear_modifier(&"heavy_box")
+	carry.set_modifier(&"depression", 1.0, 0.5)
+	_check(is_equal_approx(a.capacity(), 15.0), "a limit modifier halves the capacity")
+	carry.set_modifier(&"depression", 1.0, 1.0, 5.0)
+	_check(is_equal_approx(a.capacity(), 35.0), "a flat addition raises it")
+	carry.clear_modifiers()
+	carry.multiplier = 0.5
+	_check(is_equal_approx(carry.weight_of(cat.get_def(&"rifle")), 6.0), "the global multiplier scales a weight")
+	carry.over_limit = DotWeaponCarry.OverLimit.SLOW
+	_check(carry.speed_scale(10.0, 20.0) == 1.0 and carry.speed_scale(40.0, 20.0) == 0.5, "speed scale is 1 under, floored over")
+	var from_file := DotWeaponDef.new()
+	DotWeaponProfiles.apply_common(from_file, {"weight": 7.5})
+	_check(is_equal_approx(from_file.weight, 7.5), "weight is a profile key")
+	_check(str(DotWeaponProfiles.schema()).contains("weight"), "and in the schema")
+	var t := a.take(2)
+	_check(t.ok and a.carried_weight() < 16.0, "take removes a weapon")
+	_done()

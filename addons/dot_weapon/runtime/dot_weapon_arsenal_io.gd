@@ -10,8 +10,18 @@ static func snapshot(a: Node) -> Dictionary:
 	for key: int in a._slots.keys():
 		carried[key] = (a._slots[key] as DotWeaponSlot).snapshot()
 
+	var stowed: Dictionary = {}
+	for key: int in a._shelf.keys():
+		var rows: Array = []
+		for w: DotWeaponSlot in a._shelf[key]:
+			rows.append(w.snapshot())
+		if not rows.is_empty():
+			stowed[key] = rows
+
 	return {
 		"slots": carried,
+		"shelf": stowed,
+		"pack": a.backpack_tier,
 		"ammo": a._ammo.snapshot(),
 		"current": a._current,
 		"previous": a._previous,
@@ -76,6 +86,29 @@ static func restore(a: Node, d: Dictionary) -> DotResult:
 	for key: int in a._slots.keys().duplicate():
 		if not wanted.has(key):
 			a._slots.erase(key)
+
+	var rebuilt: Dictionary = {}
+	var stowed: Dictionary = d.get("shelf", {})
+	for key: Variant in stowed.keys():
+		var list: Array = []
+		var old: Array = a._shelf.get(int(key), [])
+		for row: Dictionary in stowed[key]:
+			var sid := StringName(str(row.get("id", "")))
+			var piece: DotWeaponSlot = null
+			for o: DotWeaponSlot in old:
+				if o.id() == sid:
+					piece = o
+					break
+			if piece == null:
+				var made2: DotResult = a.catalogue.instantiate(sid, a)
+				if not made2.ok:
+					return made2
+				piece = DotWeaponSlot.make(a.catalogue.get_def(sid), made2.value)
+			piece.restore(row)
+			list.append(piece)
+		rebuilt[int(key)] = list
+	a._shelf = rebuilt
+	a.backpack_tier = int(d.get("pack", 0))
 
 	a._ammo.restore(d.get("ammo", {}))
 	a._current = int(d.get("current", 0))

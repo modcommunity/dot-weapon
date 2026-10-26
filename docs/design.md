@@ -92,3 +92,9 @@ A `DotWeaponDef` lists its `mounts`; a `DotWeaponAttachment` names one mount, wh
 **The wire is a packed index.** `encode` writes, per mount in text order, the 1-based position of the attachment among `choices_for(def)[mount]` (0 is none) in just enough bits; `FITTED_BITS` is 16 and a weapon needing more does not replicate its fitting. That makes **both machines share the same attachment catalogue**, as they share the weapon catalogue: differing catalogues decode the same bits into different attachments.
 
 `DotWeaponNetSync.fitting_specs()` is separate from `specs()` because games register `specs()` on carriers that have no `net_fitted` property; adding a spec there would break their registration. `pull` and `push` touch `net_fitted` only when the object has it.
+
+## Carry weight
+
+`DotWeaponCarry` is one object a game shares between its arsenals (`arsenal.carry`); null or `enabled = false` is the old behaviour: no limit, one weapon per slot. Weight is `DotWeaponDef.weight` times `multiplier` times every modifier's factor; the limit is `base_limit` plus the backpack tier's bonus, scaled and shifted by the modifiers. A modifier is just a named source the game sets and clears (`set_modifier(&"box_x", weight_factor, limit_factor, limit_add)`), so no game-specific concept lives here.
+
+`give` is refused with `CODE_QUOTA` when it would put the carrier over the limit (a swap for a lighter weapon is always allowed). A slot holds `slot_capacity` weapons: the one in hand and a shelf behind it; `cycle_slot` rotates them, and the snapshot carries the shelf and `backpack_tier`. Going over after a limit change is the game's choice: `speed_scale()` slows (SLOW) or `enforce_limit()` returns the ids it dropped (DROP); the arsenal never deletes in SLOW mode.
