@@ -13,6 +13,8 @@ extends Node
 signal hit(id: int, owner_id: int, info: Dictionary, distance: float, damage_mult: float, tuning: DotWeaponBallistics)
 ## A tracer bullet moved from [param from] to [param to] this tick.
 signal tracer(id: int, from: Vector3, to: Vector3)
+## Emitted just before the world is rewound for [param owner_id]'s bullet, so a game can leave the shooter where they are.
+signal rewinding(owner_id: int)
 ## A bullet ended without hitting anything.
 signal expired(id: int)
 
@@ -81,6 +83,7 @@ func _fly_tick(i: int, now_tick: float, subs: int) -> bool:
 	var start := _pos[i]
 	var rewound := false
 	if _lags[i] > 0.0 and rewind_fn.is_valid() and restore_fn.is_valid():
+		rewinding.emit(_owners[i])
 		rewind_fn.call(now_tick - _lags[i])
 		rewound = true
 	var done := false

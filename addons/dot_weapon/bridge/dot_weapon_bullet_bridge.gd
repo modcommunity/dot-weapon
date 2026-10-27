@@ -9,6 +9,8 @@ extends Node
 ## dot-combat's own ([member DotCombatManager.trace], `rewind_fn`, `apply_damage`), so a game writes none.
 
 signal bullet_hit(id: int, damage: DotDamage)
+## Before the world is rewound for a bullet of [param owner_id] (a game keeps the shooter in place).
+signal rewinding(owner_id: int)
 
 var combat: DotCombatManager = null
 var bullets: DotWeaponBullets = null
@@ -27,6 +29,7 @@ func setup(manager: DotCombatManager, rules: DotWeaponBallisticsRules, tick_rate
 	bullets.rewind_fn = _rewind
 	bullets.restore_fn = _restore
 	bullets.hit.connect(_on_hit)
+	bullets.rewinding.connect(func(o: int) -> void: rewinding.emit(o))
 	bullets.expired.connect(func(id: int) -> void: _shots.erase(id))
 	add_child(bullets)
 
@@ -79,7 +82,7 @@ func _on_hit(id: int, owner_id: int, info: Dictionary, distance: float, mult: fl
 	var hit: Variant = info.get("trace")
 	if shot == null or hit == null or hit.blocked or hit.entity == null:
 		return
-	var victim := combat._entity_id_of(hit.entity)
+	var victim := combat.entity_id_of(hit.entity)
 	if victim == 0:
 		return
 	var type := shot.damage_type if shot.damage_type != null else combat.damage_type(&"")

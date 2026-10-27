@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 486
+const CHECKS := 499
 
 
 func _ready() -> void:
@@ -49,6 +49,7 @@ func _run() -> void:
 	_test_ballistics()
 	_test_bullets()
 	_test_hitscan_unchanged()
+	_test_bullet_bridge()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -1311,4 +1312,133 @@ func _test_hitscan_unchanged() -> void:
 	_check(recoil is DotWeaponCvarRules and recoil.cvar_name(&"enabled") == "sv_recoil" and recoil.cvar_name(&"scale") == "sv_recoil_scale", "recoil rules keep their cvar names on the shared base")
 	_check(recoil.set_cvar("sv_recoil_scale", "2") and recoil.scale == 2.0, "and still set from cvars")
 	_check(recoil.describe().has("scale"), "and describe")
+	_done()
+
+
+func _bridge_target(z: float) -> Node3D:
+	var body := Node3D.new()
+	body.position = Vector3(0.0, 0.0, z)
+	var health := DotHealth.new()
+	health.max_health = 100.0
+	health.regen_per_second = 0.0
+	body.add_child(health)
+	var set_node := DotHitboxSet.new()
+	set_node.bounds_offset = Vector3(0.0, 0.9, 0.0)
+	set_node.bounds_radius = 1.4
+	var chest := DotHitbox.new()
+	chest.group = DotHitGroup.CHEST
+	chest.shape = DotHitbox.Shape.CAPSULE
+	chest.radius = 0.4
+	chest.height = 1.6
+	chest.position = Vector3(0.0, 1.0, 0.0)
+	set_node.add_child(chest)
+	body.add_child(set_node)
+	add_child(body)
+	return body
+
+
+func _bridge_shot(tick: int, pellets: int, dir: Vector3 = Vector3.FORWARD) -> DotShot:
+	var shot := DotShot.make(&"rifle", 1, tick, 0)
+	shot.origin = Vector3(0.0, 1.0, 0.0)
+	shot.direction = dir
+	shot.pellet_count = pellets
+	shot.fixed_pattern = true
+	shot.damage = 20.0
+	shot.max_range = 200.0
+	shot.deferred = true
+	shot.scatter()
+	return shot
+
+
+func _test_bullet_bridge() -> void:
+	_section("bullet bridge against a real combat manager")
+	var manager := DotCombatManager.new()
+	manager.register_service = false
+	manager.trace = DotTraceFlat.with_floor(0.0)
+	manager.rules = DotDamageRules.new()
+	manager.config = DotCombatConfig.new()
+	manager.config.tick_rate = 64
+	add_child(manager)
+	var victim := _bridge_target(-30.0)
+	var set_node: DotHitboxSet = null
+	for c in victim.get_children():
+		if c is DotHitboxSet:
+			set_node = c
+	set_node.register_with(manager, 2)
+	var health: DotHealth = null
+	for c in victim.get_children():
+		if c is DotHealth:
+			health = c
+	manager.register_health(2, health)
+	_check(manager.entity_id_of(victim) == 0 or manager.entity_id_of(victim) == 2, "entity_id_of is public")
+
+	var rules := DotWeaponBallisticsRules.new()
+	rules.enabled = true
+	var b := DotWeaponBallistics.new()
+	b.muzzle_velocity = 600.0
+	b.bullet_gravity = 0.0
+	b.drag = 0.0
+	b.max_range = 200.0
+	var bridge := DotWeaponBulletBridge.new()
+	add_child(bridge)
+	bridge.setup(manager, rules, 64)
+	var hits: Array = []
+	bridge.bullet_hit.connect(func(_id: int, d: DotDamage) -> void: hits.append(d))
+
+	var shot := bridge.resolve_shot(_bridge_shot(100, 1), b, -1.0)
+	_check(shot.deferred and bridge.bullets.count() == 1 and hits.is_empty(), "a deferred shot launches a bullet and does no damage yet")
+	for t in range(1, 12):
+		bridge.tick(100.0 + t)
+	_check(hits.size() == 1 and bridge.bullets.count() == 0, "the bullet hits the target and is gone", str(hits.size()))
+	_check(health.health == 80.0, "damage applied once", str(health.health))
+	_check(hits[0].victim == 2 and hits[0].hit_group == DotHitGroup.CHEST and hits[0].distance > 28.0, "to the right victim, group and distance")
+
+	hits.clear()
+	var _miss := bridge.resolve_shot(_bridge_shot(110, 1, Vector3(0.5, 0.0, -1.0)), b, -1.0)
+	for t in range(1, 40):
+		bridge.tick(110.0 + t)
+	_check(hits.is_empty() and health.health == 80.0 and bridge.bullets.count() == 0, "a bullet aimed away misses and expires")
+
+	var _two := bridge.resolve_shot(_bridge_shot(120, 3), b, -1.0)
+	_check(bridge.bullets.count() == 3, "three pellets, three bullets")
+	for t in range(1, 12):
+		bridge.tick(120.0 + t)
+	_check(hits.size() >= 1 and hits.size() <= 3 and bridge.bullets.count() == 0, "pellets resolve", str(hits.size()))
+	var expected := 80.0 - 20.0 * hits.size()
+	_check(is_equal_approx(health.health, expected), "each hitting pellet damages once", "%s vs %s" % [health.health, expected])
+
+	# Lag compensation: the target has since stepped aside; the shooter saw it in line at tick 100.
+	health.health = 100.0
+	hits.clear()
+	victim.position.x = 5.0
+	var rewinds: Array = []
+	manager.rewind_fn = func(t: float) -> void:
+		rewinds.append(t)
+		victim.position.x = 0.0 if t < 112.0 else 5.0
+	manager.restore_fn = func() -> int:
+		victim.position.x = 5.0
+		return 0
+	var lagged := _bridge_shot(106, 1)
+	var _l := bridge.resolve_shot(lagged, b, 100.0)
+	for t in range(1, 12):
+		bridge.tick(106.0 + t)
+	_check(hits.size() == 1 and health.health == 80.0, "a lag-compensated bullet hits where the shooter saw the target", str(hits.size()))
+	_check(not rewinds.is_empty() and victim.position.x == 5.0, "and the world is restored afterwards")
+	hits.clear()
+	health.health = 100.0
+	manager.rewind_fn = Callable()
+	var _n := bridge.resolve_shot(_bridge_shot(106, 1), b, -1.0)
+	for t in range(1, 12):
+		bridge.tick(106.0 + t)
+	_check(hits.is_empty() and health.health == 100.0, "the same shot without lag compensation misses")
+
+	rules.enabled = false
+	health.health = 100.0
+	victim.position.x = 0.0
+	manager.restore_fn = Callable()
+	var hitscan := _bridge_shot(130, 1)
+	hitscan.deferred = false
+	var flying := bridge.bullets.count()
+	var _plain := bridge.resolve_shot(hitscan, b, -1.0)
+	_check(bridge.bullets.count() == flying and health.health == 80.0, "switched off, the bridge is plain hitscan", str(health.health))
 	_done()
