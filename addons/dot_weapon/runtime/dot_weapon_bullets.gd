@@ -43,6 +43,21 @@ func count() -> int:
 	return _ids.size()
 
 
+## The velocity bullet [param id] flies with now, or ZERO when it is not in flight.
+func velocity_of(id: int) -> Vector3:
+	var i := _ids.find(id)
+	return _vel[i] if i >= 0 else Vector3.ZERO
+
+
+## Drops bullet [param id] without a hit or expiry (a mirror told it ended). True when it was in flight.
+func despawn(id: int) -> bool:
+	var i := _ids.find(id)
+	if i < 0:
+		return false
+	_remove(i)
+	return true
+
+
 ## Starts a bullet; returns its id, or 0 when rules are off, the weapon is hitscan, or the cap is hit.
 func spawn(owner_id: int, origin: Vector3, dir: Vector3, b: DotWeaponBallistics, lag_ticks: float = 0.0) -> int:
 	if not DotWeaponBallisticsRules.simulates(rules, b) or _ids.size() >= int(rules.max_bullets):

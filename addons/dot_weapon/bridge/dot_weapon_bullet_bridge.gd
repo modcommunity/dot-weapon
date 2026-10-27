@@ -11,6 +11,8 @@ extends Node
 signal bullet_hit(id: int, damage: DotDamage)
 ## Before the world is rewound for a bullet of [param owner_id] (a game keeps the shooter in place).
 signal rewinding(owner_id: int)
+## A simulated bullet left the muzzle: what a game sends a remote client so it can fly the same path.
+signal bullet_spawned(id: int, owner_id: int, weapon_id: StringName, origin: Vector3, velocity: Vector3)
 
 var combat: DotCombatManager = null
 var bullets: DotWeaponBullets = null
@@ -54,6 +56,7 @@ func resolve_shot(shot: DotShot, tuning: DotWeaponBallistics, view_tick: float =
 		var id := bullets.spawn(shot.attacker, shot.origin, dir, flown, lag)
 		if id > 0:
 			_shots[id] = shot
+			bullet_spawned.emit(id, shot.attacker, shot.weapon_id, shot.origin, bullets.velocity_of(id))
 			if ammo != null:
 				_ammo[id] = ammo
 	return res
