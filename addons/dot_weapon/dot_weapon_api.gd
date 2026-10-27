@@ -49,5 +49,7 @@ extends RefCounted
 ## [signal DotWeaponArsenal.fire_mode_changed] signal and [constant DotWeaponCommand.BUTTON_FIRE_MODE]
 ## (the command is one bit wider). OLDEST stays 1.
 
-const LEVEL := 11
+## 12: [DotWeaponMuzzle] and the `muzzle_flash` key under `extra:`. OLDEST stays 1.
+
+const LEVEL := 12
 const OLDEST := 1
