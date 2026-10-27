@@ -328,7 +328,7 @@ static func flat_of(def: DotWeaponDef) -> Dictionary:
 		"reserve_max": def.reserve_max, "cost_per_use": def.cost_per_use,
 		"infinite_reserve": def.infinite_reserve, "reload_ticks": def.reload_ticks,
 		"reload_per_round": def.reload_per_round, "reload_start_ticks": def.reload_start_ticks,
-		"auto_reload": def.auto_reload,
+		"auto_reload": def.auto_reload, "weight": def.weight,
 		"mounts": Array(def.mounts).map(func(m: StringName) -> String: return String(m)),
 	}
 	if def.tuning != null:
