@@ -38,6 +38,7 @@ static func attach(
 	_spares.erase(key)
 	if flash != null and is_instance_valid(flash):
 		# Warmed under the node it is attached to: moving a built flash re-enters its whole subtree, which costs as much as building it.
+		flash.process_mode = Node.PROCESS_MODE_INHERIT
 		if flash.get_parent() == parent:
 			return flash
 		if flash.get_parent() != null:
@@ -70,6 +71,8 @@ static func warm(
 	flash.set("size", size)
 	flash.set("first_person", first_person)
 	flash.set("variant", 1 + (hash(key) % 6))
+	# The host may be a node a load gate froze (disabled): an inheriting flash would never build its pool.
+	flash.process_mode = Node.PROCESS_MODE_ALWAYS
 	host.add_child(flash)
 	_spares[key] = flash
 	return true
