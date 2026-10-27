@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 436
+const CHECKS := 442
 
 
 func _ready() -> void:
@@ -45,6 +45,7 @@ func _run() -> void:
 	_test_spread_ladder()
 	_test_recoil_rules()
 	_test_fire_modes()
+	_test_muzzle()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -1138,4 +1139,21 @@ func _test_fire_modes() -> void:
 	_check(res.ok and b.fire_mode() == DotWeaponDef.Fire.SEMI, "the selection survives a weapon switch and a snapshot")
 	_drop(a)
 	_drop(b)
+	_done()
+
+
+func _test_muzzle() -> void:
+	_section("the muzzle flash bridge falls back without dot-fx or a display")
+
+	var d := _rifle()
+	_check(DotWeaponMuzzle.flash_name(d) == "" and DotWeaponMuzzle.flash_name(null) == "", "no profile size is an empty name")
+	d.params[DotWeaponMuzzle.KEY] = "big"
+	_check(DotWeaponMuzzle.flash_name(d) == "big", "the profile's size name is read")
+	var host := Node3D.new()
+	add_child(host)
+	_check(not DotWeaponMuzzle.warm(host, "rifle", d), "warm builds nothing here (no dot-fx or headless)")
+	_check(not DotWeaponMuzzle.warm(null, "rifle"), "warm with no host is false")
+	_check(DotWeaponMuzzle.attach(host, "rifle", d) == null and host.get_child_count() == 0, "attach returns null and adds nothing here")
+	_check(DotWeaponMuzzle.warm_done() and DotWeaponMuzzle.spare_count() == 0, "nothing warming, nothing waiting")
+	host.queue_free()
 	_done()
