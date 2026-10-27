@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 442
+const CHECKS := 460
 
 
 func _ready() -> void:
@@ -46,6 +46,7 @@ func _run() -> void:
 	_test_recoil_rules()
 	_test_fire_modes()
 	_test_muzzle()
+	_test_ballistics()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -1156,4 +1157,55 @@ func _test_muzzle() -> void:
 	_check(DotWeaponMuzzle.attach(host, "rifle", d) == null and host.get_child_count() == 0, "attach returns null and adds nothing here")
 	_check(DotWeaponMuzzle.warm_done() and DotWeaponMuzzle.spare_count() == 0, "nothing warming, nothing waiting")
 	host.queue_free()
+	_done()
+
+
+func _test_ballistics() -> void:
+	_section("ballistic trajectory")
+	var b := DotWeaponBallistics.new()
+	b.muzzle_velocity = 800.0
+	b.max_range = 1200.0
+	_check(DotWeaponTrajectory.is_simulated(b) and not DotWeaponTrajectory.is_simulated(DotWeaponBallistics.new()), "velocity 0 stays hitscan")
+	var carbine := DotWeaponBallistics.new()
+	carbine.muzzle_velocity = 350.0
+	var sniper := DotWeaponBallistics.new()
+	sniper.muzzle_velocity = 900.0
+	sniper.drag = 0.0002
+	sniper.max_range = 1200.0
+	var last := {}
+	for w in [carbine, b, sniper]:
+		var d100 := DotWeaponTrajectory.drop_at(w, 100.0)
+		var d300 := DotWeaponTrajectory.drop_at(w, 300.0)
+		_check(d300.drop > d100.drop and d100.drop > 0.0, "drop grows with range", "%f %f" % [d100.drop, d300.drop])
+		_check(d300.time > d100.time and d300.speed < w.muzzle_velocity, "it takes time and slows")
+		last = d300
+	var nodrag := DotWeaponBallistics.new()
+	nodrag.muzzle_velocity = 500.0
+	nodrag.drag = 0.0
+	var t100 := DotWeaponTrajectory.drop_at(nodrag, 100.0)
+	_close(t100.drop, 0.5 * 9.8 * 0.2 * 0.2, "no drag: drop is g*t^2/2 at t = 0.2 s", 0.04)
+	var wall := func(from: Vector3, to: Vector3) -> Dictionary:
+		if from.z > -400.0 and to.z <= -400.0:
+			return {"position": Vector3(from.x, from.y, -400.0)}
+		return {}
+	var shot := DotWeaponTrajectory.fly(Vector3.ZERO, Vector3(0, 0, -1), sniper, wall)
+	_check(not shot.hit.is_empty(), "a bullet at 900 m/s does not tunnel a paper-thin wall at 400 m")
+	_close(shot.position.z, -400.0, "and stops on it")
+	var open_shot := DotWeaponTrajectory.fly(Vector3.ZERO, Vector3(0, 0, -1), sniper, Callable())
+	_check(open_shot.hit.is_empty() and open_shot.distance >= sniper.max_range - 1.0, "with nothing in the way it runs out at max range")
+	var again := DotWeaponTrajectory.fly(Vector3.ZERO, Vector3(0, 0, -1), sniper, wall)
+	_check(again.position == shot.position and again.time == shot.time, "the flight is deterministic")
+	var fb := DotWeaponBallistics.new()
+	fb.max_range = 100.0
+	fb.falloff_start = 20.0
+	fb.falloff_min = 0.5
+	_close(DotWeaponTrajectory.falloff(fb, 10.0) + DotWeaponTrajectory.falloff(fb, 100.0), 1.5, "falloff: full inside, half at max range")
+	fb.penetration = 0.4
+	_close(DotWeaponTrajectory.through(fb, 0.1), 0.75, "a thin wall costs a quarter")
+	_close(DotWeaponTrajectory.through(fb, 0.5), 0.0, "a thick one stops it")
+	var pitch := DotWeaponTrajectory.solve_pitch(sniper, 300.0, 0.0)
+	_check(pitch > 0.0 and pitch < 0.02, "the solver raises the bore for drop", str(pitch))
+	var aim := DotWeaponTrajectory.lead(sniper, Vector3.ZERO, Vector3(0, 0, -300), Vector3(5, 0, 0))
+	_check(aim.x > 1.0 and aim.y > 0.0, "bots lead a mover and hold over for drop", str(aim))
+	_check(is_nan(DotWeaponTrajectory.solve_pitch(carbine, 100000.0)), "out of reach has no solution")
 	_done()

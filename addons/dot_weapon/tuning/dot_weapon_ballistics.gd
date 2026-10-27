@@ -89,6 +89,35 @@ extends DotWeaponTuning
 ## Seeds the sideways pattern; 0 derives it from the weapon id.
 @export var recoil_seed: int = 0
 
+@export_group("Ballistics")
+
+## Muzzle velocity in m/s. 0 keeps the weapon hitscan; above 0 a simulated bullet is used (see [DotWeaponTrajectory]).
+@export_range(0.0, 3000.0, 1.0, "or_greater") var muzzle_velocity: float = 0.0
+
+## Gravity multiplier on the bullet (1 = world gravity). Bullet drop.
+@export_range(0.0, 8.0, 0.05) var bullet_gravity: float = 1.0
+
+## Quadratic drag per metre: dv/dt = -drag * |v| * v. 0 = none; about 0.0005 is a rifle round.
+@export_range(0.0, 0.05, 0.00001) var drag: float = 0.0005
+
+## Metres at which damage starts to fall off; it reaches [member falloff_min] at [member max_range].
+@export_range(0.0, 100000.0, 1.0, "or_greater") var falloff_start: float = 0.0
+
+## Damage fraction at [member max_range] (1 = no falloff).
+@export_range(0.0, 1.0, 0.01) var falloff_min: float = 1.0
+
+## Metres of soft material the bullet can pass through, losing damage in proportion. 0 = stops at the first surface.
+@export_range(0.0, 10.0, 0.01) var penetration: float = 0.0
+
+## Chance (0..1) to ricochet off a hard surface at a shallow angle.
+@export_range(0.0, 1.0, 0.01) var ricochet_chance: float = 0.0
+
+## Every Nth bullet is a tracer. 0 = none.
+@export_range(0, 100, 1) var tracer_interval: int = 0
+
+## Bullet mass in kilograms, for knockback.
+@export_range(0.0, 10.0, 0.0001) var bullet_mass: float = 0.004
+
 @export_group("Splash")
 
 @export_range(0.0, 100.0, 0.1) var splash_radius: float = 0.0

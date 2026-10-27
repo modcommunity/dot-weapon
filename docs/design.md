@@ -102,3 +102,7 @@ A `DotWeaponDef` lists its `mounts`; a `DotWeaponAttachment` names one mount, wh
 ## Muzzle flash
 
 A profile may say `extra: {muzzle_flash: big|medium|small|very_small|none}` (it lands in `DotWeaponDef.params`; `none` is also what a suppressed weapon gets). `DotWeaponMuzzle.attach(parent, category, def, first_person)` builds dot-fx's `DotMuzzleFlash` under a muzzle point and `fire()` plays it per shot; with no dot-fx, no display or size none it returns null. The view-model and world-model muzzles live in zee-dot-weapons (`ZeeShotFx`), which calls this.
+
+## Ballistics
+
+`DotWeaponBallistics` carries the bullet fields (`muzzle_velocity`, `bullet_gravity`, `drag`, `falloff_start`, `falloff_min`, `penetration`, `ricochet_chance`, `tracer_interval`, `bullet_mass`); they reach profiles as `extra: tuning:` keys automatically. `muzzle_velocity` 0 stays hitscan. `DotWeaponTrajectory` (math/) is the pure maths: fixed 1/120 s sub-steps with a ray per step, `fly`, `drop_at`, `falloff`, `through`, and the bot solver `solve_pitch`/`lead`. The batched bullet node, lag compensation, tracers and cvars are not built yet.
