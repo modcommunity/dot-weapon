@@ -31,6 +31,7 @@ Also requires **dot-profile** (`DotProfileSet`, `DotProfile`, `DotProfileRuntime
 | `net/dot_weapon_net_sync.gd` | `DotWeaponNetSync`: slot, magazine, reserve specs (ammunition owner-only) |
 | `spawner/` | [docs/spawners.md](docs/spawners.md): `DotWeaponSpawner` (server: sites, seeded draws, timers, caps), `DotWeaponSpawnView` (client), `DotWeaponSpawnPool`, `DotWeaponSpawnSite`, `DotWeaponSpawnPoint` (marker), `DotWeaponSpawnerConfig` (layered `spawner.yml`, `MAP_KEYS` for dot-map); suite `examples/spawner_selftest.tscn` (API 9) |
 | `math/dot_weapon_recoil.gd` | `DotWeaponRecoil` |
+| `math/dot_weapon_spread_rules.gd` | `DotWeaponSpreadRules`: movement-dependent spread as `sv_spread_*` cvars (bind_cvars / follow_cvars), off by default; multiplies the gun's own spread; `arsenal.spread_rules` set on both sides, `arsenal.spread_now()` is the cone a crosshair draws (the shot's own); `DotWeaponCommand.BUTTON_AIM` is the aim input |
 | `bridge/` | `DotWeaponLoadoutBridge` (dot-loadout to arsenal), `DotWeaponInventoryBridge` (bag to reserve), `DotWeaponPlayerBridge` (player to context, view-model mount) |
 | `examples/weapon_selftest.tscn` | the suite; `fixtures/lightning_rod.gd` is the outside weapon it proves the extension point with |
 

@@ -126,6 +126,11 @@ func tick_needs_context() -> bool:
 	return _needs_context == 1
 
 
+## The spread cone half-angle this weapon would fire with at its last tick, in degrees, for a crosshair.
+func spread_now() -> float:
+	return 0.0
+
+
 ## The use button was released.
 ##
 ## Called for every fire mode, not only [constant DotWeaponDef.Fire.CHARGE], because a

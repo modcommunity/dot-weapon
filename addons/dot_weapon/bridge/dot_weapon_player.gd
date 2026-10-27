@@ -75,6 +75,7 @@ static func context_for(
 	ctx.speed = float(motion.get("speed", 0.0))
 	ctx.airborne = not bool(motion.get("on_floor", true))
 	ctx.crouched = bool(motion.get("crouched", false))
+	ctx.sliding = bool(motion.get("sliding", false))
 
 	return ctx
 

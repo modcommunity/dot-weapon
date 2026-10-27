@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 368
+const CHECKS := 386
 
 
 func _ready() -> void:
@@ -41,6 +41,7 @@ func _run() -> void:
 	_test_profiles()
 	_test_overlay()
 	_test_carry()
+	_test_spread_rules()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -862,4 +863,66 @@ func _test_carry() -> void:
 	_check(str(DotWeaponProfiles.schema()).contains("weight"), "and in the schema")
 	var t := a.take(2)
 	_check(t.ok and a.carried_weight() < 16.0, "take removes a weapon")
+	_done()
+
+
+func _test_spread_rules() -> void:
+	_section("movement-dependent spread")
+
+	var rules := DotWeaponSpreadRules.new()
+	var ctx := _ctx(1)
+	_check(is_equal_approx(rules.target_factor(ctx), 1.0), "off: every posture is factor 1")
+	rules.enabled = true
+	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_stand * rules.mult_hip), "still at the hip")
+	ctx.speed = 2.0
+	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_walk), "walking")
+	ctx.speed = 6.0
+	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_run), "running")
+	ctx.airborne = true
+	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_air), "in the air, speed ignored")
+	ctx.sliding = true
+	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_slide), "sliding")
+	ctx.airborne = false
+	ctx.sliding = false
+	ctx.speed = 0.0
+	ctx.crouched = true
+	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_crouch), "crouched tightens")
+	ctx.aiming = true
+	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_crouch * rules.mult_aim), "aimed and crouched tightest")
+	_check(is_equal_approx(rules.apply(5.0, 10.0), rules.max_spread), "the cap holds")
+	_check(rules.set_cvar("sv_spread_mult_run", "2.5") and is_equal_approx(rules.mult_run, 2.5), "a cvar sets a multiplier")
+	_check(rules.set_cvar("sv_spread_mult_run", "99") and is_equal_approx(rules.mult_run, 10.0), "and is clamped to its range")
+	_check(not rules.set_cvar("sv_nonsense", "1") and not rules.set_cvar("sv_spread_mult_run", "x"), "unknown names and values are refused")
+
+	var a := _arsenal()
+	a.give(&"rifle")
+	var tuning := a.current().def.tuning as DotWeaponBallistics
+	tuning.spread = 1.0
+	tuning.spread_moving = 1.0
+	tuning.spread_airborne = 1.0
+	a.spread_rules = rules
+	rules.mult_run = 3.0
+	rules.mult_hip = 1.0
+	rules.mult_crouch = 1.0
+	rules.recovery = 64.0
+	var moving := _ctx(2)
+	moving.speed = 6.0
+	var out := a.simulate_tick(_cmd(true), moving, null)
+	_check(out.used and is_equal_approx(out.shots[0].spread, 3.0), "a run triples the gun's own spread", str(out.shots[0].spread))
+	_check(is_equal_approx(a.spread_now(), 3.0), "and the crosshair reads the same cone")
+	var still := _ctx(3)
+	var _t := a.simulate_tick(_cmd(false), still, null)
+	_check(a.spread_now() > 1.0 and a.spread_now() < 3.0, "settles over ticks, not at once", str(a.spread_now()))
+	for i in range(80):
+		var _s := a.simulate_tick(_cmd(false), _ctx(4 + i), null)
+	_check(is_equal_approx(a.spread_now(), 1.0), "and recovers to the base", str(a.spread_now()))
+	var aimed := _ctx(100)
+	var aim_cmd := _cmd(false)
+	aim_cmd.set_button(DotWeaponCommand.BUTTON_AIM, true)
+	var _u := a.simulate_tick(aim_cmd, aimed, null)
+	_check(is_equal_approx(a.spread_now(), 0.5), "aiming halves it", str(a.spread_now()))
+	rules.enabled = false
+	var _v := a.simulate_tick(_cmd(false), _ctx(101), null)
+	_check(is_equal_approx(a.spread_now(), 1.0), "disabled, the gun keeps its own spread")
+	_drop(a)
 	_done()

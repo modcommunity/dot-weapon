@@ -71,6 +71,9 @@ var carry: DotWeaponCarry = null
 ## Backpack tier this carrier wears (0: none); see [method DotWeaponCarry.limit_for].
 var backpack_tier: int = 0
 
+## Movement-dependent spread (`sv_spread_*`); null or disabled leaves every gun's own spread.
+var spread_rules: DotWeaponSpreadRules = null
+
 @export_group("Rules")
 
 ## Switches away from a weapon that has run out entirely.
@@ -615,6 +618,7 @@ func simulate_tick(
 	ctx.tick = ctx.tick
 	ctx.replayed = _replaying
 	ctx.authority = authority
+	ctx.aiming = command.is_pressed(DotWeaponCommand.BUTTON_AIM)
 
 	if disabled:
 		return DotWeaponOutcome.nothing("The arsenal is disabled.")
@@ -653,6 +657,12 @@ func is_idle_for(command: DotWeaponCommand, previous: DotWeaponCommand) -> bool:
 
 	var slot := current()
 	return slot != null and not slot.behaviour.tick_needs_context()
+
+
+## The spread cone half-angle the weapon in hand would fire with now, for a crosshair; 0 with none.
+func spread_now() -> float:
+	var slot := current()
+	return slot.behaviour.spread_now() if slot != null else 0.0
 
 
 ## The tick [method is_idle_for] promised: what [method simulate_tick] does for it, with no context.

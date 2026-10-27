@@ -57,6 +57,12 @@ var airborne: bool = false
 ## Whether the carrier is crouched.
 var crouched: bool = false
 
+## Whether the carrier is sliding.
+var sliding: bool = false
+
+## Whether the carrier is aiming down sights (the command's [constant DotWeaponCommand.BUTTON_AIM]).
+var aiming: bool = false
+
 ## Set on a use produced by a replay rather than by a fresh command.
 ##
 ## [b]A predicted client re-runs its inputs after every correction[/b], and a replayed

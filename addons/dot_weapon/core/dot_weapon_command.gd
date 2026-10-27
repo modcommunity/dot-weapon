@@ -33,6 +33,9 @@ const BUTTON_DROP := 1 << 7
 ## Free for a game's own actions. Reserved here so a game adding one does not collide
 ## with a button dot-weapon adds later.
 const BUTTON_USER_0 := 1 << 8
+
+## Aim down sights: [constant BUTTON_USER_0], which spread rules read.
+const BUTTON_AIM := BUTTON_USER_0
 const BUTTON_USER_1 := 1 << 9
 const BUTTON_USER_2 := 1 << 10
 const BUTTON_USER_3 := 1 << 11

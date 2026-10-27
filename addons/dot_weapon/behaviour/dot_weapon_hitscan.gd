@@ -15,6 +15,10 @@ extends DotWeaponBehaviour
 ## and the only symptom is a weapon that is more accurate on one machine than the other.
 const _BLOOM := &"bloom"
 
+## The smoothed movement multiplier of [DotWeaponSpreadRules], and the cone last computed.
+const _FACTOR := &"spread_factor"
+const _NOW := &"spread_now"
+
 
 func _ballistics() -> DotWeaponBallistics:
 	if def != null and def.tuning is DotWeaponBallistics:
@@ -22,14 +26,57 @@ func _ballistics() -> DotWeaponBallistics:
 	return null
 
 
-func _tick(_ctx: DotWeaponContext) -> void:
+func _tick(ctx: DotWeaponContext) -> void:
 	var b := _ballistics()
-	if b == null or b.bloom <= 0.0:
+	if b == null:
 		return
 
-	var now := float(state.get(_BLOOM, 0.0))
-	if now > 0.0:
-		state[_BLOOM] = maxf(0.0, now - scaled_per_tick(b.bloom_recovery))
+	if b.bloom > 0.0:
+		var now := float(state.get(_BLOOM, 0.0))
+		if now > 0.0:
+			state[_BLOOM] = maxf(0.0, now - scaled_per_tick(b.bloom_recovery))
+
+	if ctx == null:
+		return
+
+	if _rules_object() == null:
+		return
+
+	var rules := _rules()
+	if rules != null:
+		var target := rules.target_factor(ctx)
+		var held := float(state.get(_FACTOR, 1.0))
+		state[_FACTOR] = target if target >= held else maxf(target, held - rules.recovery_per_tick(running_tick_rate()))
+
+	state[_NOW] = _spread_for(b, ctx)
+
+
+## A crosshair gets the cone the last tick computed, so it cannot disagree with the shot.
+func spread_now() -> float:
+	return float(state.get(_NOW, 0.0))
+
+
+## Needs a context whenever spread rules are attached, so the crosshair follows an idle player.
+func tick_needs_context() -> bool:
+	return _rules_object() != null or super.tick_needs_context()
+
+
+func _rules_object() -> DotWeaponSpreadRules:
+	return arsenal.get("spread_rules") as DotWeaponSpreadRules if arsenal != null else null
+
+
+func _rules() -> DotWeaponSpreadRules:
+	var rules := _rules_object()
+	return rules if rules != null and rules.enabled else null
+
+
+## The gun's own spread for this posture, scaled by the rules, plus bloom.
+func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
+	var out := b.spread_for(ctx.speed, ctx.airborne, ctx.crouched)
+	var rules := _rules()
+	if rules != null:
+		out = rules.apply(out, float(state.get(_FACTOR, 1.0)))
+	return out + minf(float(state.get(_BLOOM, 0.0)), b.bloom_max)
 
 
 func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
@@ -41,8 +88,7 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 
 	var spread := 0.0
 	if b != null:
-		spread = b.spread_for(ctx.speed, ctx.airborne, ctx.crouched)
-		spread += minf(float(state.get(_BLOOM, 0.0)), b.bloom_max)
+		spread = _spread_for(b, ctx)
 	else:
 		spread = tune_float(&"spread", 0.0)
 
