@@ -60,6 +60,12 @@ var crouched: bool = false
 ## Whether the carrier is sliding.
 var sliding: bool = false
 
+## Whether the carrier is sprinting.
+var sprinting: bool = false
+
+## Whether sprinting stops aiming and reloading (the controller's `sv_sprint_noaim`).
+var sprint_blocks_aim: bool = false
+
 ## Whether the carrier is aiming down sights (the command's [constant DotWeaponCommand.BUTTON_AIM]).
 var aiming: bool = false
 

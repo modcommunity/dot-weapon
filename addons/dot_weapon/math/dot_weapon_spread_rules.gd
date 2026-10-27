@@ -26,6 +26,7 @@ const FIELDS := {
 	&"mult_walk": [0.9, 0.0, 10.0, "Spread multiplier walking (slower than sv_spread_run_speed)"],
 	&"mult_run": [1.35, 0.0, 10.0, "Spread multiplier running"],
 	&"mult_air": [1.5, 0.0, 10.0, "Spread multiplier in the air"],
+	&"mult_sprint": [1.8, 0.0, 10.0, "Spread multiplier while sprinting"],
 	&"mult_slide": [1.6, 0.0, 10.0, "Spread multiplier while sliding"],
 	&"mult_crouch": [0.8, 0.0, 10.0, "Extra spread multiplier while crouched"],
 	&"walk_speed": [0.5, 0.0, 50.0, "Speed (m/s) above which the player counts as walking"],
@@ -41,6 +42,7 @@ var mult_stand: float = 1.0
 var mult_walk: float = 0.9
 var mult_run: float = 1.35
 var mult_air: float = 1.5
+var mult_sprint: float = 1.8
 var mult_slide: float = 1.6
 var mult_crouch: float = 0.8
 var walk_speed: float = 0.5
@@ -56,6 +58,8 @@ func target_factor(ctx: DotWeaponContext) -> float:
 	var f := mult_air if ctx.airborne else mult_stand
 	if ctx.sliding:
 		f = mult_slide
+	elif ctx.sprinting and not ctx.airborne:
+		f = mult_sprint
 	elif not ctx.airborne:
 		if ctx.speed >= run_speed:
 			f = mult_run

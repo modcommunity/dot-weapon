@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 410
+const CHECKS := 414
 
 
 func _ready() -> void:
@@ -885,6 +885,9 @@ func _test_spread_rules() -> void:
 	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_slide), "sliding")
 	ctx.airborne = false
 	ctx.sliding = false
+	ctx.sprinting = true
+	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_sprint), "sprinting")
+	ctx.sprinting = false
 	ctx.speed = 0.0
 	ctx.crouched = true
 	_check(is_equal_approx(rules.target_factor(ctx), rules.mult_crouch), "crouched tightens")
@@ -925,6 +928,19 @@ func _test_spread_rules() -> void:
 	rules.enabled = false
 	var _v := a.simulate_tick(_cmd(false), _ctx(101), null)
 	_check(is_equal_approx(a.spread_now(), 1.0), "disabled, the gun keeps its own spread")
+	var sprint_ctx := _ctx(200)
+	sprint_ctx.sprinting = true
+	sprint_ctx.sprint_blocks_aim = true
+	var _w := a.simulate_tick(aim_cmd, sprint_ctx, null)
+	_check(not sprint_ctx.aiming, "sprinting with sprint_blocks_aim drops the aim")
+	var reload_cmd := _cmd(false)
+	reload_cmd.set_button(DotWeaponCommand.BUTTON_RELOAD, true)
+	var _x := a.simulate_tick(reload_cmd, sprint_ctx, null)
+	_check(not a.is_reloading(), "and refuses a reload")
+	sprint_ctx.sprint_blocks_aim = false
+	sprint_ctx.tick = 201
+	var _y := a.simulate_tick(reload_cmd, sprint_ctx, null)
+	_check(a.is_reloading() and sprint_ctx.sprinting, "sprinting alone leaves the reload and the aim alone")
 	_drop(a)
 	_done()
 

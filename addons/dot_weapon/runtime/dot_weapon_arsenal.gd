@@ -621,7 +621,8 @@ func simulate_tick(
 	ctx.tick = ctx.tick
 	ctx.replayed = _replaying
 	ctx.authority = authority
-	ctx.aiming = command.is_pressed(DotWeaponCommand.BUTTON_AIM)
+	var sprint_blocked := ctx.sprinting and ctx.sprint_blocks_aim
+	ctx.aiming = command.is_pressed(DotWeaponCommand.BUTTON_AIM) and not sprint_blocked
 
 	if disabled:
 		return DotWeaponOutcome.nothing("The arsenal is disabled.")
@@ -639,7 +640,7 @@ func simulate_tick(
 	if is_switching():
 		return DotWeaponOutcome.nothing("Switching.")
 
-	if command.is_pressed(DotWeaponCommand.BUTTON_RELOAD):
+	if command.is_pressed(DotWeaponCommand.BUTTON_RELOAD) and not sprint_blocked:
 		begin_reload(ctx.tick)
 
 	return _advance_use(slot, command, ctx, previous)
@@ -848,7 +849,8 @@ func _try_use(slot: DotWeaponSlot, ctx: DotWeaponContext) -> DotWeaponOutcome:
 	if not _can_pay(slot):
 		dry_used.emit(_current)
 		if def.auto_reload and def.uses_magazine():
-			begin_reload(ctx.tick)
+			if not (ctx.sprinting and ctx.sprint_blocks_aim):
+				begin_reload(ctx.tick)
 		elif auto_switch_on_empty:
 			_switch_off_empty(ctx.tick)
 		return DotWeaponOutcome.nothing("Nothing to spend.")
