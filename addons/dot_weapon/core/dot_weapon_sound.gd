@@ -54,3 +54,67 @@ static func pick_class(sound_class: StringName, roll: int = 0) -> AudioStream:
 static func pick_far(sound_class: StringName, roll: int = 0) -> AudioStream:
 	var fire := String(FIRE.get(sound_class, ""))
 	return pick(StringName(fire.replace("_fire", "_far")), roll) if fire.ends_with("_fire") else null
+
+
+## Room reflections: indoors a shot is followed by the same class's distant recording, which
+## carries more air than the close one; outdoors there is none. A game with its own tails
+## assigns [member tail_picker] and gets asked instead.
+const TAIL_DELAY := 0.06
+const TAIL_GAIN_DB := -9.0
+
+## Optional override, [code]func(sound_class: StringName, indoors: bool, roll: int) -> AudioStream[/code].
+static var tail_picker: Callable = Callable()
+
+
+## The reverberant tail to play [constant TAIL_DELAY] after a report, or null (outdoors, or no
+## recording). [param indoors] comes from the game (dot-audio's [code]DotAmbienceRoof[/code]).
+static func pick_tail(sound_class: StringName, indoors: bool, roll: int = 0) -> AudioStream:
+	if tail_picker.is_valid():
+		return tail_picker.call(sound_class, indoors, roll) as AudioStream
+	return pick_far(sound_class, roll) if indoors else null
+
+
+## Problems with the stock as a game would hear it, empty when sound. Every class in [constant FIRE]
+## must resolve a stream that is not empty; with [param measure] and ffmpeg on the machine each
+## variant's peak must also stay under -0.5 dBFS (not clipped) and over -40 (not silent). A game
+## without dot-audio linked reports one problem and nothing else.
+static func check_stock(measure: bool = true) -> PackedStringArray:
+	var out := PackedStringArray()
+	if count(&"light_fire") == 0:
+		out.append("dot-audio stock weapons are not linked")
+		return out
+	var seen := {}
+	for sound_class: StringName in FIRE:
+		var sound: StringName = FIRE[sound_class]
+		if seen.has(sound):
+			continue
+		seen[sound] = true
+		var n := count(sound)
+		if n == 0:
+			out.append("%s (%s): no variants" % [sound_class, sound])
+			continue
+		for i in n:
+			var path := "%s%s_%d.ogg" % [DIR, sound, i]
+			var stream := load(path) as AudioStream
+			if stream == null or stream.get_length() <= 0.02:
+				out.append("%s: empty or unloadable" % path)
+			elif measure:
+				var peak := _peak_db(ProjectSettings.globalize_path(path))
+				if peak > -0.5:
+					out.append("%s: clipped (peak %.1f dBFS)" % [path, peak])
+				elif peak < -40.0:
+					out.append("%s: silent (peak %.1f dBFS)" % [path, peak])
+	return out
+
+
+## Peak in dBFS through ffmpeg's volumedetect, or -20 (a pass) when ffmpeg is not there.
+static func _peak_db(file: String) -> float:
+	var lines: Array = []
+	var code := OS.execute("ffmpeg", ["-hide_banner", "-nostats", "-i", file, "-af", "volumedetect", "-f", "null", "-"], lines, true)
+	if code != 0 or lines.is_empty():
+		return -20.0
+	var text := String(lines[0])
+	var at := text.find("max_volume:")
+	if at < 0:
+		return -20.0
+	return float(text.substr(at + 11).strip_edges().split(" ")[0])
