@@ -669,6 +669,14 @@ func spread_now() -> float:
 	return slot.behaviour.spread_now() if slot != null else 0.0
 
 
+## The crosshair gap scale of the weapon in hand (see [member DotWeaponBallistics.crosshair_scale]); 1 with none.
+func crosshair_scale() -> float:
+	var slot := current()
+	if slot == null or slot.def == null or not (slot.def.tuning is DotWeaponBallistics):
+		return 1.0
+	return (slot.def.tuning as DotWeaponBallistics).crosshair_scale_for(slot.def.tags)
+
+
 ## The tick [method is_idle_for] promised: what [method simulate_tick] does for it, with no context.
 func idle_tick() -> DotWeaponOutcome:
 	_held_ticks = 0

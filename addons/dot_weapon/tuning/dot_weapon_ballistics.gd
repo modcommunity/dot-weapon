@@ -55,6 +55,10 @@ extends DotWeaponTuning
 ## Multiplies the spread while crouched.
 @export_range(0.0, 2.0, 0.01) var spread_crouched: float = 0.5
 
+## Multiplies the crosshair's gap, spread growth included. 0 takes the class default from
+## [method class_crosshair_scale]; a profile sets it under `extra: tuning: crosshair_scale`.
+@export_range(0.0, 4.0, 0.01) var crosshair_scale: float = 0.0
+
 ## Degrees added per use, and shed while not using.
 @export_range(0.0, 10.0, 0.01) var bloom: float = 0.0
 
@@ -136,15 +140,32 @@ func validate() -> DotResult:
 	return DotResult.success(null)
 
 
+## The class default gap scale from a weapon's tags: scoped guns sit a little open, automatics a little tight.
+static func class_crosshair_scale(tags: Array) -> float:
+	if tags.has(&"sniper") or tags.has(&"scoped"):
+		return 1.25
+	for tag: StringName in [&"smg", &"ar", &"lmg", &"automatic"]:
+		if tags.has(tag):
+			return 0.85
+	return 1.0
+
+
+## The gap scale for a weapon with these tags: the explicit [member crosshair_scale], else the class default.
+func crosshair_scale_for(tags: Array) -> float:
+	return crosshair_scale if crosshair_scale > 0.0 else class_crosshair_scale(tags)
+
+
 ## The cone half-angle for a carrier in this posture, before bloom.
 func spread_for(speed_now: float, airborne: bool, crouched: bool) -> float:
+	# Moving and airborne never beat standing still: a shotgun authored with a tighter
+	# spread_moving would otherwise shrink the crosshair as the player runs; crouching never widens.
 	if airborne:
-		return spread_airborne
+		return maxf(spread_airborne, maxf(spread, spread_moving))
 
 	var moving := clampf(speed_now / maxf(0.001, spread_speed_ref), 0.0, 1.0)
-	var base := lerpf(spread, spread_moving, moving)
+	var base := lerpf(spread, maxf(spread, spread_moving), moving)
 
-	return base * spread_crouched if crouched else base
+	return base * minf(spread_crouched, 1.0) if crouched else base
 
 
 ## Damage at [param charge], between [member min_charge_damage] and full.

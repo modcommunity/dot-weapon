@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 414
+const CHECKS := 422
 
 
 func _ready() -> void:
@@ -42,6 +42,7 @@ func _run() -> void:
 	_test_overlay()
 	_test_carry()
 	_test_spread_rules()
+	_test_spread_ladder()
 	_test_recoil_rules()
 
 	print("")
@@ -942,6 +943,51 @@ func _test_spread_rules() -> void:
 	var _y := a.simulate_tick(reload_cmd, sprint_ctx, null)
 	_check(a.is_reloading() and sprint_ctx.sprinting, "sprinting alone leaves the reload and the aim alone")
 	_drop(a)
+	_done()
+
+
+## Standing < walking < running < sprinting and airborne; crouched and aimed tighter. Through the
+## arsenal's spread_now, with the data a shotgun ships (spread_moving below spread, crouched 1+).
+func _test_spread_ladder() -> void:
+	_section("spread ladder: still < walk < run < air")
+	for shotgun in [false, true]:
+		var rules := DotWeaponSpreadRules.new()
+		rules.enabled = true
+		rules.recovery = 0.0
+		var a := _arsenal()
+		a.give(&"rifle")
+		var t := a.current().def.tuning as DotWeaponBallistics
+		t.spread = 4.0 if shotgun else 0.5
+		t.spread_moving = 0.5 if shotgun else 2.0
+		t.spread_airborne = 1.0 if shotgun else 4.0
+		t.spread_crouched = 4.0 if shotgun else 0.5
+		a.spread_rules = rules
+		var tick := 10
+		var got := {}
+		for key: String in ["still", "walk", "run", "sprint", "air", "crouch", "aim"]:
+			var c := _ctx(tick)
+			tick += 1
+			c.speed = {"walk": 2.0, "run": 6.0, "sprint": 7.0}.get(key, 0.0)
+			c.sprinting = key == "sprint"
+			c.airborne = key == "air"
+			c.crouched = key == "crouch"
+			var cmd := _cmd(false)
+			if key == "aim":
+				cmd.set_button(DotWeaponCommand.BUTTON_AIM, true)
+			var _o := a.simulate_tick(cmd, c, null)
+			got[key] = a.spread_now()
+		var tag := " (shotgun data)" if shotgun else ""
+		_check(got["still"] < got["walk"] and got["walk"] < got["run"], "still < walk < run" + tag, str(got))
+		_check(got["run"] < got["sprint"] and got["run"] < got["air"], "run < sprint and air" + tag, str(got))
+		_check(got["crouch"] < got["still"] and got["aim"] < got["still"], "crouched and aimed are tighter" + tag, str(got))
+		_drop(a)
+	var bal := DotWeaponBallistics.new()
+	var sniper := bal.crosshair_scale_for([&"primary", &"scoped"])
+	var smg := bal.crosshair_scale_for([&"primary", &"automatic"])
+	var plain := bal.crosshair_scale_for([&"primary"])
+	_check(sniper > plain and plain > smg, "gap scale: sniper > usual gun > automatic", "%s %s %s" % [sniper, plain, smg])
+	bal.crosshair_scale = 2.0
+	_check(is_equal_approx(bal.crosshair_scale_for([&"automatic"]), 2.0), "an explicit crosshair_scale beats the class default")
 	_done()
 
 

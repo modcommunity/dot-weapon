@@ -23,7 +23,7 @@ const FIELDS := {
 	&"mult_hip": [1.0, 0.0, 10.0, "Spread multiplier when not aiming down sights"],
 	&"mult_aim": [0.5, 0.0, 10.0, "Spread multiplier while aiming down sights"],
 	&"mult_stand": [1.0, 0.0, 10.0, "Spread multiplier standing still"],
-	&"mult_walk": [0.9, 0.0, 10.0, "Spread multiplier walking (slower than sv_spread_run_speed)"],
+	&"mult_walk": [1.15, 0.0, 10.0, "Spread multiplier walking (slower than sv_spread_run_speed)"],
 	&"mult_run": [1.35, 0.0, 10.0, "Spread multiplier running"],
 	&"mult_air": [1.5, 0.0, 10.0, "Spread multiplier in the air"],
 	&"mult_sprint": [1.8, 0.0, 10.0, "Spread multiplier while sprinting"],
@@ -39,7 +39,7 @@ var enabled: bool = false
 var mult_hip: float = 1.0
 var mult_aim: float = 0.5
 var mult_stand: float = 1.0
-var mult_walk: float = 0.9
+var mult_walk: float = 1.15
 var mult_run: float = 1.35
 var mult_air: float = 1.5
 var mult_sprint: float = 1.8
