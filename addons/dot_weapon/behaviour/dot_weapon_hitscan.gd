@@ -121,6 +121,9 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 	# records its endpoint. Off (the default) this line never runs and the shot is unchanged.
 	if DotWeaponBallisticsRules.simulates(arsenal.get("ballistics_rules") as DotWeaponBallisticsRules if arsenal != null else null, b):
 		shot.deferred = true
+		var round_id: StringName = arsenal.call("ammo_of", def.id) if arsenal.has_method("ammo_of") else &""
+		if round_id != &"":
+			shot.set_meta(&"ammo", round_id)
 
 	shot.scatter()
 	out.add_shot(shot)

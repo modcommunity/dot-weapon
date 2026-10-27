@@ -14,7 +14,13 @@ signal rewinding(owner_id: int)
 
 var combat: DotCombatManager = null
 var bullets: DotWeaponBullets = null
+## Optional: rounds by id (shot meta `ammo`, set from the arsenal's loaded round). Null changes nothing.
+var ammo_types: DotWeaponAmmoTypes = null
+## Optional: armour per hit zone. Null changes nothing.
+var hitzones: DotWeaponHitzones = null
 var _shots: Dictionary = {}
+var _ammo: Dictionary = {}
+var _flight: Dictionary = {}
 var _ids_by_shot: Dictionary = {}
 
 
@@ -30,7 +36,9 @@ func setup(manager: DotCombatManager, rules: DotWeaponBallisticsRules, tick_rate
 	bullets.restore_fn = _restore
 	bullets.hit.connect(_on_hit)
 	bullets.rewinding.connect(func(o: int) -> void: rewinding.emit(o))
-	bullets.expired.connect(func(id: int) -> void: _shots.erase(id))
+	bullets.expired.connect(func(id: int) -> void:
+		_shots.erase(id)
+		_ammo.erase(id))
 	add_child(bullets)
 
 
@@ -40,10 +48,14 @@ func resolve_shot(shot: DotShot, tuning: DotWeaponBallistics, view_tick: float =
 	if bullets == null or not shot.deferred or not DotWeaponBallisticsRules.simulates(bullets.rules, tuning):
 		return res
 	var lag := maxf(float(shot.tick) - view_tick, 0.0) if view_tick >= 0.0 else 0.0
+	var ammo: DotWeaponAmmoType = ammo_types.get_type(shot.get_meta(&"ammo", &"")) if ammo_types != null else null
+	var flown := _flown(tuning, ammo)
 	for dir in shot.pellets:
-		var id := bullets.spawn(shot.attacker, shot.origin, dir, tuning, lag)
+		var id := bullets.spawn(shot.attacker, shot.origin, dir, flown, lag)
 		if id > 0:
 			_shots[id] = shot
+			if ammo != null:
+				_ammo[id] = ammo
 	return res
 
 
@@ -51,6 +63,16 @@ func resolve_shot(shot: DotShot, tuning: DotWeaponBallistics, view_tick: float =
 func tick(now_tick: float) -> void:
 	if bullets != null:
 		bullets.step(now_tick)
+
+
+## The tuning a round flies with; one copy per (tuning, round) so the bullet node's cache holds.
+func _flown(tuning: DotWeaponBallistics, ammo: DotWeaponAmmoType) -> DotWeaponBallistics:
+	if ammo == null or not ammo.alters_flight():
+		return tuning
+	var key := [tuning.get_instance_id(), ammo.get_instance_id()]
+	if not _flight.has(key):
+		_flight[key] = [tuning, ammo, ammo.apply_to(tuning)]
+	return _flight[key][2]
 
 
 func _cast(from: Vector3, to: Vector3, owner_id: int) -> Dictionary:
@@ -78,7 +100,9 @@ func _restore() -> void:
 
 func _on_hit(id: int, owner_id: int, info: Dictionary, distance: float, mult: float, _tuning: DotWeaponBallistics) -> void:
 	var shot: DotShot = _shots.get(id)
+	var ammo: DotWeaponAmmoType = _ammo.get(id)
 	_shots.erase(id)
+	_ammo.erase(id)
 	var hit: Variant = info.get("trace")
 	if shot == null or hit == null or hit.blocked or hit.entity == null:
 		return
@@ -86,7 +110,10 @@ func _on_hit(id: int, owner_id: int, info: Dictionary, distance: float, mult: fl
 	if victim == 0:
 		return
 	var type := shot.damage_type if shot.damage_type != null else combat.damage_type(&"")
-	var damage := DotDamage.make(owner_id, victim, shot.damage * mult * combat.config.damage_scale, type)
+	var scale := mult * (ammo.damage if ammo != null else 1.0)
+	if hitzones != null:
+		scale *= hitzones.multiplier(hit.group, hit.entity, ammo.armour_pierce if ammo != null else 0.0)
+	var damage := DotDamage.make(owner_id, victim, shot.damage * scale * combat.config.damage_scale, type)
 	damage.hit_group = hit.group
 	damage.limb = hit.limb
 	damage.context["entity"] = hit.entity

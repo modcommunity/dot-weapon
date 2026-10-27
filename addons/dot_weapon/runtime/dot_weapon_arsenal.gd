@@ -83,6 +83,9 @@ var recoil_rules: DotWeaponRecoilRules = null
 ## Global ballistics switch (`sv_ballistics`); null or off keeps every gun hitscan. Set on both sides.
 var ballistics_rules: DotWeaponBallisticsRules = null
 
+## Loaded round per weapon id (see [DotWeaponAmmoTypes]); server side only, not in snapshots.
+var loaded_ammo: Dictionary = {}
+
 @export_group("Rules")
 
 ## Switches away from a weapon that has run out entirely.
@@ -173,6 +176,19 @@ func setup() -> DotResult:
 
 func is_ready() -> bool:
 	return _ready_for_use
+
+
+## Loads round [param ammo] into weapon [param weapon_id]; an empty id goes back to the weapon's own.
+func load_ammo(weapon_id: StringName, ammo: StringName) -> void:
+	if ammo == &"":
+		loaded_ammo.erase(weapon_id)
+	else:
+		loaded_ammo[weapon_id] = ammo
+
+
+## The round loaded in [param weapon_id], or empty.
+func ammo_of(weapon_id: StringName) -> StringName:
+	return loaded_ammo.get(weapon_id, &"")
 
 
 ## Gives the carrier a weapon, in the slot its definition names.

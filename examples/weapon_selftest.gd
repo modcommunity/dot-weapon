@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 499
+const CHECKS := 517
 
 
 func _ready() -> void:
@@ -50,6 +50,7 @@ func _run() -> void:
 	_test_bullets()
 	_test_hitscan_unchanged()
 	_test_bullet_bridge()
+	_test_ammo_hitzones()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -1441,4 +1442,103 @@ func _test_bullet_bridge() -> void:
 	var flying := bridge.bullets.count()
 	var _plain := bridge.resolve_shot(hitscan, b, -1.0)
 	_check(bridge.bullets.count() == flying and health.health == 80.0, "switched off, the bridge is plain hitscan", str(health.health))
+	_done()
+
+
+func _test_ammo_hitzones() -> void:
+	_section("ammo types and hit-zone armour")
+	var types := DotWeaponAmmoTypes.new()
+	var ap := DotWeaponAmmoType.from_flat(&"ap", {"damage": 1.5, "velocity": 0.5, "armour_pierce": 2.0})
+	types.add(ap)
+	types.add(DotWeaponAmmoType.from_flat(&"ball", {}))
+	_check(ap.armour_pierce == 1.0 and types.ids() == [&"ap", &"ball"], "pierce clamps, ids sorted")
+	_check(DotWeaponAmmoTypes.schema().size() == 5 and DotWeaponAmmoTypes.profile_schemas().has("ammo"), "ammo is a profile kind")
+	_check(types.get_type(&"nope") == null, "an unknown round is null")
+	var base := DotWeaponBallistics.new()
+	base.muzzle_velocity = 600.0
+	base.drag = 0.001
+	_check(types.get_type(&"ball").apply_to(base) == base, "a neutral round flies the weapon's own tuning")
+	var slow := ap.apply_to(base)
+	_check(slow != base and slow.muzzle_velocity == 300.0 and base.muzzle_velocity == 600.0, "a round scales a copy, never the weapon")
+	var zones := DotWeaponHitzones.from_flat({"head": 0.5, "chest": 0.4})
+	_check(is_equal_approx(zones.multiplier(DotHitGroup.HEAD, null), 0.5) and zones.multiplier(DotHitGroup.LEG, null) == 1.0, "armour only on listed zones")
+	_check(is_equal_approx(zones.multiplier(DotHitGroup.HEAD, null, 1.0), 1.0) and is_equal_approx(zones.multiplier(DotHitGroup.HEAD, null, 0.5), 0.75), "piercing ignores armour")
+	zones.presence_fn = func(_e: Node) -> float: return 0.0
+	_check(zones.multiplier(DotHitGroup.HEAD, null) == 1.0, "a victim with no armour on takes full damage")
+	zones.presence_fn = Callable()
+
+	var a := _arsenal()
+	a.give(&"rifle")
+	var rifle_id: StringName = a.current().def.id
+	_check(a.ammo_of(rifle_id) == &"", "no round loaded by default")
+	a.load_ammo(rifle_id, &"ap")
+	_check(a.ammo_of(rifle_id) == &"ap", "load_ammo selects the round")
+	var on := DotWeaponBallisticsRules.new()
+	on.enabled = true
+	a.ballistics_rules = on
+	((a.catalogue.get_def(&"rifle") as DotWeaponDef).tuning as DotWeaponBallistics).muzzle_velocity = 800.0
+	var o := a.simulate_tick(_cmd(true), _ctx(10), null)
+	var fired: DotShot = o.shots[0]
+	_check(fired.deferred and fired.get_meta(&"ammo", &"") == &"ap", "a simulated shot carries the loaded round")
+	_drop(a)
+	var off := _arsenal()
+	off.give(&"rifle")
+	off.load_ammo(&"rifle", &"ap")
+	var o2 := off.simulate_tick(_cmd(true), _ctx(10), null)
+	_check(not (o2.shots[0] as DotShot).has_meta(&"ammo"), "ballistics off: the shot is untouched by ammo")
+	_drop(off)
+
+	var manager := DotCombatManager.new()
+	manager.register_service = false
+	manager.trace = DotTraceFlat.with_floor(0.0)
+	manager.rules = DotDamageRules.new()
+	manager.config = DotCombatConfig.new()
+	manager.config.tick_rate = 64
+	add_child(manager)
+	var victim := _bridge_target(-30.0)
+	var set_node: DotHitboxSet = null
+	var health: DotHealth = null
+	for c in victim.get_children():
+		if c is DotHitboxSet:
+			set_node = c
+		if c is DotHealth:
+			health = c
+	set_node.register_with(manager, 2)
+	manager.register_health(2, health)
+	var rules := DotWeaponBallisticsRules.new()
+	rules.enabled = true
+	var b := DotWeaponBallistics.new()
+	b.muzzle_velocity = 600.0
+	b.bullet_gravity = 0.0
+	b.drag = 0.0
+	var bridge := DotWeaponBulletBridge.new()
+	add_child(bridge)
+	bridge.setup(manager, rules, 64)
+	var fly := func(tick: int, round_id: StringName) -> int:
+		var s := _bridge_shot(tick, 1)
+		if round_id != &"":
+			s.set_meta(&"ammo", round_id)
+		var _r := bridge.resolve_shot(s, b, -1.0)
+		var n := 0
+		while bridge.bullets.count() > 0 and n < 60:
+			n += 1
+			bridge.tick(float(tick + n))
+		return n
+	var _plain: int = fly.call(100, &"")
+	_check(health.health == 80.0, "no ammo or zones configured: unchanged damage", str(health.health))
+	health.health = 100.0
+	bridge.ammo_types = types
+	bridge.hitzones = DotWeaponHitzones.from_flat({"chest": 0.5})
+	var _n0: int = fly.call(200, &"")
+	_check(is_equal_approx(health.health, 90.0), "chest armour halves the damage", str(health.health))
+	health.health = 100.0
+	var fast_ticks: int = fly.call(300, &"ball")
+	_check(is_equal_approx(health.health, 90.0), "a neutral round changes nothing", str(health.health))
+	health.health = 100.0
+	var slow_ticks: int = fly.call(400, &"ap")
+	_check(is_equal_approx(health.health, 100.0 - 20.0 * 1.5), "armour-piercing: damage x1.5, armour ignored", str(health.health))
+	_check(slow_ticks > fast_ticks, "and the slower round takes longer to arrive", "%d vs %d" % [slow_ticks, fast_ticks])
+	health.health = 100.0
+	var _unknown: int = fly.call(500, &"mystery")
+	_check(is_equal_approx(health.health, 90.0), "an unknown round id changes nothing", str(health.health))
 	_done()

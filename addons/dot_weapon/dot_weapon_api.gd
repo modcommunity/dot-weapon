@@ -51,5 +51,9 @@ extends RefCounted
 
 ## 12: [DotWeaponMuzzle] and the `muzzle_flash` key under `extra:`. OLDEST stays 1.
 
-const LEVEL := 12
+## 13: ammo types and hit-zone armour for simulated bullets: [DotWeaponAmmoType], [DotWeaponAmmoTypes] (`ammo`
+## profile kind), [DotWeaponHitzones], `DotWeaponBulletBridge.ammo_types`/`hitzones`, `arsenal.load_ammo`/`ammo_of`.
+## Inert unless `sv_ballistics` is on and a game sets them. OLDEST stays 1.
+
+const LEVEL := 13
 const OLDEST := 1
