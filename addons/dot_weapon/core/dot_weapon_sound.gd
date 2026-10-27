@@ -17,7 +17,8 @@ const FIRE := {
 	&"heavy": &"heavy_fire", &"sniper": &"sniper_fire", &"shotgun": &"shotgun_fire",
 	&"minigun": &"minigun_fire", &"launcher": &"launcher_fire", &"beam": &"beam_fire",
 	&"charge": &"charge_fire", &"swing": &"swing", &"bash": &"bash", &"throw": &"throw",
-	&"impact": &"impact", &"reload_out": &"reload_out", &"reload_in": &"reload_in",
+	&"impact": &"impact", &"suppressed": &"suppressed_fire", &"dry": &"dry", &"equip": &"equip",
+	&"casing": &"casing", &"reload_shell": &"reload_shell", &"reload_out": &"reload_out", &"reload_in": &"reload_in",
 }
 
 ## Variant counts found on disk, kept because probing is a file lookup per variant.
