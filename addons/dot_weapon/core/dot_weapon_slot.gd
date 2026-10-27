@@ -24,6 +24,9 @@ var magazine: int = 0
 ## Ticks of reloading already done, for a reload that survives a holster.
 var reload_progress: int = 0
 
+## Index into [method DotWeaponDef.allowed_fire_modes] the player selected on this gun.
+var fire_mode_index: int = 0
+
 ## What is fitted, or null when nothing is. [member def] is already the applied copy.
 var fitting: DotWeaponFitting = null
 
@@ -38,6 +41,12 @@ static func make(p_def: DotWeaponDef, p_behaviour: DotWeaponBehaviour) -> DotWea
 
 func id() -> StringName:
 	return def.id if def != null else &""
+
+
+## The fire mode in effect: the selected one among the definition's allowed modes.
+func fire_mode() -> DotWeaponDef.Fire:
+	var modes := def.allowed_fire_modes()
+	return modes[clampi(fire_mode_index, 0, modes.size() - 1)]
 
 
 ## Whether the magazine cannot pay for another use.
@@ -66,6 +75,8 @@ func snapshot() -> Dictionary:
 		"reload": reload_progress,
 		"behaviour": behaviour.state.duplicate(true) if behaviour != null else {},
 	}
+	if fire_mode_index != 0:
+		out["fm"] = fire_mode_index
 	if fitting != null and not fitting.is_empty():
 		out["fit"] = fitting.to_dictionary()
 	return out
@@ -74,6 +85,7 @@ func snapshot() -> Dictionary:
 func restore(d: Dictionary) -> void:
 	magazine = int(d.get("mag", magazine))
 	reload_progress = int(d.get("reload", 0))
+	fire_mode_index = int(d.get("fm", 0))
 	if behaviour != null:
 		var bs: Variant = d.get("behaviour", {})
 		behaviour.state = (bs as Dictionary).duplicate(true) if bs is Dictionary else {}

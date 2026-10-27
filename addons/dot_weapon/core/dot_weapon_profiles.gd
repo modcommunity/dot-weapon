@@ -24,6 +24,7 @@ static func schema() -> Array:
 		f.call("holster_ticks", "int", 13, {"min": 0, "max": 10000}),
 		f.call("fire_mode", "string", "semi", {"enum": FIRE_MODES}),
 		f.call("use_interval_ticks", "int", 7, {"min": 0, "max": 100000}),
+		f.call("fire_modes", "list", []),
 		f.call("burst_count", "int", 3, {"min": 1, "max": 64}),
 		f.call("burst_interval_ticks", "int", 3, {"min": 0, "max": 100000}),
 		f.call("charge_ticks", "int", 64, {"min": 1, "max": 100000}),
@@ -119,6 +120,12 @@ static func apply_common(d: DotWeaponDef, c: Dictionary) -> void:
 		var i := FIRE_MODES.find(str(c["fire_mode"]))
 		if i >= 0:
 			d.fire_mode = i as DotWeaponDef.Fire
+	if c.has("fire_modes"):
+		var modes := PackedStringArray()
+		for m in c["fire_modes"]:
+			if DotWeaponDef.fire_mode_named(str(m)) >= 0:
+				modes.append(str(m).to_lower())
+		d.fire_modes = modes
 	for k in ["slot", "authored_tick_rate", "deploy_ticks", "holster_ticks", "use_interval_ticks", "burst_count",
 			"burst_interval_ticks", "charge_ticks", "magazine", "reserve", "reserve_max", "cost_per_use",
 			"reload_ticks", "reload_start_ticks"]:
@@ -320,7 +327,7 @@ static func flat_of(def: DotWeaponDef) -> Dictionary:
 		"tags": Array(def.tags).map(func(t: StringName) -> String: return String(t)),
 		"behaviour": def.behaviour_path, "slot": def.slot, "authored_tick_rate": def.authored_tick_rate,
 		"deploy_ticks": def.deploy_ticks, "holster_ticks": def.holster_ticks,
-		"fire_mode": FIRE_MODES[def.fire_mode],
+		"fire_mode": FIRE_MODES[def.fire_mode], "fire_modes": Array(def.fire_modes),
 		"use_interval_ticks": def.use_interval_ticks, "burst_count": def.burst_count,
 		"burst_interval_ticks": def.burst_interval_ticks, "charge_ticks": def.charge_ticks,
 		"charge_requires_min": def.charge_requires_min, "min_charge": def.min_charge,

@@ -154,6 +154,10 @@ enum Fire {
 ## Ticks between uses. Zero means once per tick.
 @export_range(0, 100000, 1) var use_interval_ticks: int = 7
 
+## Fire modes the player may cycle between with the fire-mode button: "auto", "semi", "burst". Empty means
+## only [member fire_mode]; otherwise the first entry is the one the gun starts in.
+@export var fire_modes: PackedStringArray = PackedStringArray()
+
 ## Uses per press under [constant Fire.BURST].
 @export_range(1, 64, 1) var burst_count: int = 3
 
@@ -238,6 +242,30 @@ func reserve_cap() -> int:
 ## Whether the arsenal should accumulate a charge for this weapon.
 func is_charged() -> bool:
 	return fire_mode == Fire.CHARGE
+
+
+## The modes the player can select on this gun, in cycling order; the first is the default.
+func allowed_fire_modes() -> Array[Fire]:
+	var out: Array[Fire] = []
+	for n in fire_modes:
+		var m := fire_mode_named(n)
+		if m >= 0 and not out.has(m as Fire):
+			out.append(m as Fire)
+	if out.is_empty():
+		out.append(fire_mode)
+	return out
+
+
+## [constant Fire] for "auto", "semi" or "burst"; -1 for anything else.
+static func fire_mode_named(n: String) -> int:
+	match n.to_lower():
+		"auto":
+			return Fire.AUTO
+		"semi":
+			return Fire.SEMI
+		"burst":
+			return Fire.BURST
+	return -1
 
 
 ## Whether a held button keeps producing uses.
@@ -383,6 +411,7 @@ func describe() -> Dictionary:
 		"name": name_or_id(),
 		"slot": slot,
 		"fire_mode": Fire.keys()[fire_mode],
+		"fire_modes": Array(fire_modes),
 		"behaviour": behaviour_path,
 		"ammo": String(ammo_type),
 		"magazine": magazine,

@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 422
+const CHECKS := 436
 
 
 func _ready() -> void:
@@ -44,6 +44,7 @@ func _run() -> void:
 	_test_spread_rules()
 	_test_spread_ladder()
 	_test_recoil_rules()
+	_test_fire_modes()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -1080,4 +1081,61 @@ func _test_recoil_rules() -> void:
 	_check(rules.set_cvar("sv_recoil_scale", "0.5") and is_equal_approx(rules.scale, 0.5), "a cvar sets a multiplier")
 	_check(rules.set_cvar("sv_recoil_punch", "9") and is_equal_approx(rules.punch, 1.0), "and is clamped")
 	_check(rules.set_cvar("sv_recoil", "0") and not rules.enabled and DotWeaponRecoilRules.of(null) == null, "sv_recoil switches it off")
+	_done()
+
+
+func _test_fire_modes() -> void:
+	_section("fire modes")
+
+	var cat := _catalogue()
+	var rifle := cat.get_def(&"rifle")
+	rifle.fire_modes = PackedStringArray(["auto", "semi", "burst"])
+	rifle.burst_count = 3
+	rifle.burst_interval_ticks = 2
+	var a := _arsenal(cat)
+	a.give(&"rifle")
+	a.give(&"pistol")
+	var seen: Array[int] = []
+	a.fire_mode_changed.connect(func(_s: int, m: int) -> void: seen.append(m))
+
+	_check(a.fire_mode() == DotWeaponDef.Fire.AUTO, "the first listed mode is the default")
+	var auto_shots := _drive(a, 0, 60, true).size()
+	_check(auto_shots == 10, "auto fires on every interval while held", str(auto_shots))
+
+	_check(a.cycle_fire_mode() and a.fire_mode() == DotWeaponDef.Fire.SEMI, "cycling goes auto to semi")
+	var semi_shots := _drive(a, 100, 60, true).size()
+	_check(semi_shots == 1, "semi fires once per press however long it is held", str(semi_shots))
+
+	_check(a.cycle_fire_mode() and a.fire_mode() == DotWeaponDef.Fire.BURST, "then semi to burst")
+	var burst_shots := _drive(a, 200, 40, true)
+	_check(burst_shots.size() == 3, "burst fires exactly three shots per press", str(burst_shots.size()))
+	_check(a.cycle_fire_mode() and a.fire_mode() == DotWeaponDef.Fire.AUTO, "burst wraps back to auto")
+	_check(seen == [DotWeaponDef.Fire.SEMI, DotWeaponDef.Fire.BURST, DotWeaponDef.Fire.AUTO], "fire_mode_changed announces each change", str(seen))
+
+	_check(not a.set_fire_mode(DotWeaponDef.Fire.CHARGE), "a mode the gun does not list is refused")
+	_check(a.fire_mode() == DotWeaponDef.Fire.AUTO, "and the mode is unchanged")
+
+	# The button is a rising edge: held over many ticks it cycles once.
+	var before := a.fire_mode()
+	var prev: DotWeaponCommand = null
+	for i in range(5):
+		var c := DotWeaponCommand.new()
+		c.set_button(DotWeaponCommand.BUTTON_FIRE_MODE, true)
+		var _o := a.simulate_tick(c, _ctx(300 + i), prev)
+		prev = c
+	_check(a.fire_mode() != before and a.fire_mode() == DotWeaponDef.Fire.SEMI, "the fire-mode button cycles once per press")
+
+	# A pistol without a list has no choice and refuses.
+	_check(a.select(2, 400), "switch to the pistol")
+	var _d := _drive(a, 401, 2, false)
+	_check(a.fire_modes_available().size() == 1 and not a.cycle_fire_mode(), "a gun with one mode refuses to cycle")
+
+	# Selection belongs to the weapon instance and survives a switch and a snapshot.
+	var _s := a.select(1, 500)
+	var snap := a.snapshot()
+	var b := _arsenal(cat)
+	var res := b.restore(snap)
+	_check(res.ok and b.fire_mode() == DotWeaponDef.Fire.SEMI, "the selection survives a weapon switch and a snapshot")
+	_drop(a)
+	_drop(b)
 	_done()

@@ -26,6 +26,9 @@ const RESERVE_BITS := 11
 ## [method DotWeaponAttachments.code_bits] exceed this does not replicate its fitting.
 const FITTED_BITS := 16
 
+## Bits of [code]net_fire_mode[/code]: the index into the held gun's allowed fire modes.
+const FIRE_MODE_BITS := 2
+
 
 static func specs() -> Array[Dictionary]:
 	return [
@@ -69,6 +72,21 @@ static func fitting_specs() -> Array[Dictionary]:
 	]
 
 
+## The fire-mode half, separate for the same reason as [method fitting_specs]: a game that wants the
+## selection replicated adds a `net_fire_mode` property and registers this. Owner-only: only the
+## shooter's own HUD shows it.
+static func fire_mode_specs() -> Array[Dictionary]:
+	return [
+		{
+			"property": &"net_fire_mode",
+			"type": "UINT",
+			"bits": FIRE_MODE_BITS,
+			"owner_only": true,
+			"interpolated": false,
+		},
+	]
+
+
 static func properties() -> Array[StringName]:
 	var out: Array[StringName] = []
 	for spec in specs():
@@ -92,6 +110,9 @@ static func pull(arsenal: DotWeaponArsenal, target: Object) -> void:
 			if base != null and arsenal.attachments.code_bits(base) <= FITTED_BITS:
 				code = arsenal.attachments.encode(base, slot.fitting)
 		target.set(&"net_fitted", code)
+
+	if &"net_fire_mode" in target:
+		target.set(&"net_fire_mode", clampi(slot.fire_mode_index, 0, (1 << FIRE_MODE_BITS) - 1) if slot != null else 0)
 
 	if slot == null:
 		target.set(&"net_magazine", 0)
@@ -122,6 +143,11 @@ static func push(source: Object, arsenal: DotWeaponArsenal) -> void:
 
 	if slot > 0 and slot != arsenal.current_slot() and arsenal.has_slot(slot):
 		arsenal.select(slot, 0)
+
+	if &"net_fire_mode" in source and arsenal.current() != null:
+		var held := arsenal.current()
+		var modes := held.def.allowed_fire_modes()
+		held.fire_mode_index = clampi(int(source.get(&"net_fire_mode")), 0, modes.size() - 1)
 
 	if not (&"net_fitted" in source) or arsenal.attachments == null:
 		return

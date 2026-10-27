@@ -40,7 +40,10 @@ const BUTTON_USER_1 := 1 << 9
 const BUTTON_USER_2 := 1 << 10
 const BUTTON_USER_3 := 1 << 11
 
-const BUTTON_BITS := 12
+## Cycle the held gun's fire mode (auto, semi, burst), on the rising edge.
+const BUTTON_FIRE_MODE := 1 << 12
+
+const BUTTON_BITS := 13
 
 ## Slot the player selected directly, 1-based. Zero means "no change" — not slot
 ## zero, which is why slots are 1-based on the wire and in this field.
@@ -167,6 +170,7 @@ static func button_names(mask: int) -> PackedStringArray:
 		BUTTON_PREVIOUS: "previous",
 		BUTTON_LAST: "last",
 		BUTTON_DROP: "drop",
+		BUTTON_FIRE_MODE: "fire_mode",
 	}
 	for bit in table.keys():
 		if (mask & int(bit)) != 0:

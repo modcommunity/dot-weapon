@@ -33,6 +33,9 @@ signal reload_finished(slot: int, rounds: int)
 signal charge_full(slot: int)
 
 signal switched(from: int, to: int)
+
+## The held gun's fire mode changed; [param mode] is a [enum DotWeaponDef.Fire].
+signal fire_mode_changed(slot: int, mode: int)
 signal ammo_changed(pool: StringName, amount: int)
 signal carried_changed()
 
@@ -444,6 +447,47 @@ func is_switching() -> bool:
 ## [b]Asking again for the slot already being switched to is not a new switch.[/b] A command
 ## carries its slot every tick, and a switch restarted on each would push the holster
 ## deadline back for ever.
+## The fire mode in hand ([enum DotWeaponDef.Fire]), or -1 with nothing held.
+func fire_mode() -> int:
+	var s := current()
+	return s.fire_mode() if s != null else -1
+
+
+## The modes the held gun lets the player choose between; one entry when it has no choice.
+func fire_modes_available() -> Array[DotWeaponDef.Fire]:
+	var s := current()
+	var out: Array[DotWeaponDef.Fire] = []
+	if s != null:
+		out.append_array(s.def.allowed_fire_modes())
+	return out
+
+
+## Selects [param mode] on the held gun; false when the gun does not support it or is mid-burst.
+func set_fire_mode(mode: DotWeaponDef.Fire) -> bool:
+	var s := current()
+	if s == null or _burst_left > 0 or _charge_started >= 0:
+		return false
+	var i := s.def.allowed_fire_modes().find(mode)
+	if i < 0:
+		return false
+	if i != s.fire_mode_index:
+		s.fire_mode_index = i
+		fire_mode_changed.emit(_current, mode)
+	return true
+
+
+## Moves the held gun to its next allowed fire mode; false (nothing changes) when it has only one.
+func cycle_fire_mode() -> bool:
+	var s := current()
+	if s == null:
+		return false
+	var modes := s.def.allowed_fire_modes()
+	if modes.size() < 2:
+		return false
+	var next := modes[(clampi(s.fire_mode_index, 0, modes.size() - 1) + 1) % modes.size()]
+	return set_fire_mode(next)
+
+
 func select(slot: int, tick: int) -> bool:
 	if disabled or slot == _current or not _slots.has(slot):
 		return false
@@ -635,6 +679,9 @@ func simulate_tick(
 		return DotWeaponOutcome.nothing("Nothing in hand.")
 
 	_apply_slot_request(command, ctx.tick)
+	var wants_mode := command.is_pressed(DotWeaponCommand.BUTTON_FIRE_MODE)
+	if wants_mode and not (previous != null and previous.is_pressed(DotWeaponCommand.BUTTON_FIRE_MODE)):
+		var _changed := cycle_fire_mode()
 	_run_behaviour_tick(slot, ctx)
 
 	if is_switching():
@@ -756,7 +803,7 @@ func _advance_use(
 	else:
 		_held_ticks = 0
 
-	match def.fire_mode:
+	match slot.fire_mode():
 		DotWeaponDef.Fire.CHARGE:
 			return _advance_charge(slot, ctx, down, was_down)
 		DotWeaponDef.Fire.BURST:
