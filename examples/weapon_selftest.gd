@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 460
+const CHECKS := 478
 
 
 func _ready() -> void:
@@ -47,6 +47,7 @@ func _run() -> void:
 	_test_fire_modes()
 	_test_muzzle()
 	_test_ballistics()
+	_test_bullets()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -1208,4 +1209,72 @@ func _test_ballistics() -> void:
 	var aim := DotWeaponTrajectory.lead(sniper, Vector3.ZERO, Vector3(0, 0, -300), Vector3(5, 0, 0))
 	_check(aim.x > 1.0 and aim.y > 0.0, "bots lead a mover and hold over for drop", str(aim))
 	_check(is_nan(DotWeaponTrajectory.solve_pitch(carbine, 100000.0)), "out of reach has no solution")
+	_done()
+
+
+func _test_bullets() -> void:
+	_section("ballistic bullets and rules")
+	var rules := DotWeaponBallisticsRules.new()
+	_check(not rules.enabled, "ballistics default OFF")
+	var b := DotWeaponBallistics.new()
+	b.muzzle_velocity = 600.0
+	b.max_range = 500.0
+	b.tracer_interval = 2
+	b.falloff_start = 0.0
+	b.falloff_min = 0.5
+	var bullets := DotWeaponBullets.new()
+	bullets.rules = rules
+	bullets.tick_rate = 60
+	add_child(bullets)
+	_check(bullets.spawn(1, Vector3.ZERO, Vector3(0, 0, -1), b) == 0, "off: spawn refuses, weapon stays hitscan")
+	_check(rules.set_cvar("sv_ballistics", "1") and rules.enabled, "sv_ballistics switches it on")
+	_check(not rules.set_cvar("sv_nonsense", "1"), "unknown cvar refused")
+	_check(rules.set_cvar("sv_ballistics_max_bullets", "3") and rules.max_bullets == 3.0, "cap is a cvar")
+	var hitscan := DotWeaponBallistics.new()
+	_check(bullets.spawn(1, Vector3.ZERO, Vector3(0, 0, -1), hitscan) == 0, "velocity 0 stays hitscan when on")
+	var log := {"hits": [], "rewinds": [], "restores": 0, "tracers": 0}
+	bullets.cast_fn = func(from: Vector3, to: Vector3, _o: int) -> Dictionary:
+		if from.z > -100.0 and to.z <= -100.0:
+			return {"position": Vector3(from.x, from.y, -100.0)}
+		return {}
+	bullets.rewind_fn = func(t: float) -> void: log.rewinds.append(t)
+	bullets.restore_fn = func() -> void: log.restores += 1
+	bullets.hit.connect(func(id: int, _o: int, _i: Dictionary, d: float, m: float, _b: DotWeaponBallistics) -> void: log.hits.append([id, d, m]))
+	bullets.tracer.connect(func(_id: int, _f: Vector3, _t: Vector3) -> void: log.tracers += 1)
+	var id1 := bullets.spawn(1, Vector3.ZERO, Vector3(0, 0, -1), b, 6.0)
+	var id2 := bullets.spawn(1, Vector3.ZERO, Vector3(0, 0, -1), b, 0.0)
+	var id3 := bullets.spawn(2, Vector3.ZERO, Vector3(0, 0, -1), b)
+	_check(id1 > 0 and id2 > id1 and id3 > id2 and bullets.count() == 3, "three bullets in flight")
+	_check(bullets.spawn(2, Vector3.ZERO, Vector3(0, 0, -1), b) == 0, "the cap holds")
+	bullets.step(100.0)
+	_check(log.hits.is_empty(), "600 m/s takes more than one tick to cross 100 m")
+	for t in range(1, 12):
+		bullets.step(100.0 + t)
+	_check(log.hits.size() == 3 and bullets.count() == 0, "all three hit the wall and are gone", str(log.hits.size()))
+	_check(log.hits[0][1] > 99.0 and log.hits[0][1] < 101.0, "at 100 m")
+	_check(log.hits[0][2] < 1.0 and log.hits[0][2] > 0.5, "with the falloff multiplier", str(log.hits[0][2]))
+	_check(log.rewinds.size() > 0 and is_equal_approx(log.rewinds[0], 94.0), "the lagged bullet rewound to now minus its lag", str(log.rewinds))
+	_check(log.restores == log.rewinds.size(), "every rewind restored")
+	_check(log.tracers > 0, "every second bullet of an owner is a tracer")
+	rules.set_cvar("sv_ballistics_max_bullets", "512")
+	rules.set_cvar("sv_ballistics_velocity", "2")
+	var fast := bullets.spawn(1, Vector3.ZERO, Vector3(0, 0, -1), b)
+	var before: int = log.hits.size()
+	bullets.step(200.0)
+	bullets.step(201.0)
+	_check(log.hits.size() > before or bullets.count() == 1, "the velocity multiplier applies", str(fast))
+	var expired := {"n": 0}
+	bullets.expired.connect(func(_id: int) -> void: expired.n += 1)
+	bullets.cast_fn = Callable()
+	for t in range(0, 40):
+		bullets.step(300.0 + t)
+	_check(expired.n >= 1 and bullets.count() == 0, "past max range it expires")
+	var many := 0
+	rules.set_cvar("sv_ballistics_velocity", "1")
+	for i in 400:
+		many += 1 if bullets.spawn(i % 20, Vector3.ZERO, Vector3(0, 0, -1), b) > 0 else 0
+	var t0 := Time.get_ticks_usec()
+	bullets.step(400.0)
+	var us := Time.get_ticks_usec() - t0
+	_check(many == 400 and us < 100000, "400 bullets step in one node, cheaply", "%d us" % us)
 	_done()
