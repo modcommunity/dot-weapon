@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 386
+const CHECKS := 410
 
 
 func _ready() -> void:
@@ -42,6 +42,7 @@ func _run() -> void:
 	_test_overlay()
 	_test_carry()
 	_test_spread_rules()
+	_test_recoil_rules()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -925,4 +926,96 @@ func _test_spread_rules() -> void:
 	var _v := a.simulate_tick(_cmd(false), _ctx(101), null)
 	_check(is_equal_approx(a.spread_now(), 1.0), "disabled, the gun keeps its own spread")
 	_drop(a)
+	_done()
+
+
+func _burst(rules: DotWeaponRecoilRules, shots: int, start_tick: int) -> Array:
+	var a := _arsenal()
+	a.give(&"rifle")
+	a.recoil_rules = rules
+	var out: Array = []
+	for i in range(shots):
+		var o := a.simulate_tick(_cmd(true), _ctx(start_tick + i * 6), null)
+		out.append(o)
+		var _r := a.simulate_tick(_cmd(false), _ctx(start_tick + i * 6 + 1), null)
+	_drop(a)
+	return out
+
+
+func _test_recoil_rules() -> void:
+	_section("per-weapon recoil patterns")
+
+	var rules := DotWeaponRecoilRules.new()
+	_check(DotWeaponRecoilRules.of(null) == null, "no arsenal, no rules")
+	var off := _burst(rules, 3, 10)
+	_check(off[0].recoil == Vector2(0.5, 0.2) and not off[0].recoil_signed, "off: the flat kick")
+	rules.enabled = true
+	rules.horizontal = 1.0
+	var tuning := _rifle().tuning as DotWeaponBallistics
+	_check(tuning.recoil_build > 0.0, "ballistics carry a build")
+
+	var run1 := _burst(rules, 6, 10)
+	var run2 := _burst(rules, 6, 10)
+	var same := true
+	for i in range(6):
+		same = same and run1[i].recoil == run2[i].recoil
+	_check(same, "the pattern repeats exactly from the same seed")
+	_check(run1[0].recoil_signed and run1[0].recoil_recovery > 0.0, "the outcome carries a signed kick and its recovery")
+	_check(run1[0].recoil.x > 0.0 and is_equal_approx(run1[0].recoil.x, 0.5), "first shot is the base kick", str(run1[0].recoil))
+	_check(run1[5].recoil.x > run1[0].recoil.x, "sustained fire builds", str(run1[5].recoil.x))
+	_check(run1[5].recoil.x <= 0.5 * (1.0 + tuning.recoil_build_max) + 0.001, "and is capped")
+	var yaws := {}
+	for i in range(6):
+		yaws[snappedf(run1[i].recoil.y, 0.0001)] = true
+	_check(yaws.size() > 2, "sideways drift varies shot to shot")
+	_check(is_equal_approx(DotWeaponRecoilRules.drift(7, 3), DotWeaponRecoilRules.drift(7, 3)) and DotWeaponRecoilRules.drift(7, 3) != DotWeaponRecoilRules.drift(8, 3), "drift is a pure function of seed and index")
+	_check(DotWeaponRecoilRules.seed_for(null, &"ak") == DotWeaponRecoilRules.seed_for(null, &"ak") and DotWeaponRecoilRules.seed_for(null, &"ak") != DotWeaponRecoilRules.seed_for(null, &"m4"), "an id seeds stably")
+
+	var gap := _burst(rules, 2, 10)
+	_check(is_equal_approx(gap[1].recoil.x, 0.5 * (1.0 + tuning.recoil_build)), "the second shot of a burst is built up")
+
+	var a := _arsenal()
+	a.give(&"rifle")
+	a.recoil_rules = rules
+	var first := a.simulate_tick(_cmd(true), _ctx(10), null)
+	var _r := a.simulate_tick(_cmd(false), _ctx(11), null)
+	var later := a.simulate_tick(_cmd(true), _ctx(10 + 64 * 3), null)
+	_check(is_equal_approx(later.recoil.x, first.recoil.x) and is_equal_approx(later.recoil.y, first.recoil.y), "released long enough, the pattern starts over")
+	_drop(a)
+
+	var ctx := _ctx(1)
+	var base := rules.posture(ctx)
+	ctx.aiming = true
+	var aimed := rules.posture(ctx)
+	ctx.crouched = true
+	_check(aimed < base and rules.posture(ctx) < aimed, "aim and crouch tighten it")
+	ctx = _ctx(1)
+	ctx.speed = 6.0
+	var moving := rules.posture(ctx)
+	ctx.airborne = true
+	_check(moving > base and rules.posture(ctx) > moving, "moving and air widen it")
+
+	rules.scale = 2.0
+	var doubled := _burst(rules, 1, 10)
+	_check(is_equal_approx(doubled[0].recoil.x, 1.0), "the master scale multiplies")
+	rules.scale = 1.0
+	rules.punch = 0.0
+	var split := _burst(rules, 1, 10)
+	_check(split[0].recoil == Vector2.ZERO and split[0].shots[0].direction != Vector3.FORWARD, "punch 0 leaves the view alone and offsets the bullet")
+	var again := _burst(rules, 1, 10)
+	_check(split[0].shots[0].direction.is_equal_approx(again[0].shots[0].direction), "the bullet offset repeats too")
+	rules.punch = 1.0
+	_check(_burst(rules, 1, 10)[0].shots[0].direction.is_equal_approx(Vector3.FORWARD), "punch 1 keeps the bullet on the view")
+
+	var view := DotWeaponRecoil.new()
+	for o: DotWeaponOutcome in run1:
+		view.kick_outcome(o)
+	var peak := view.offset().x
+	_check(peak > 2.0, "the view climbs over a burst", str(peak))
+	view.advance(1.0)
+	_check(view.offset().x < peak * 0.1, "and settles on release", str(view.offset().x))
+
+	_check(rules.set_cvar("sv_recoil_scale", "0.5") and is_equal_approx(rules.scale, 0.5), "a cvar sets a multiplier")
+	_check(rules.set_cvar("sv_recoil_punch", "9") and is_equal_approx(rules.punch, 1.0), "and is clamped")
+	_check(rules.set_cvar("sv_recoil", "0") and not rules.enabled and DotWeaponRecoilRules.of(null) == null, "sv_recoil switches it off")
 	_done()

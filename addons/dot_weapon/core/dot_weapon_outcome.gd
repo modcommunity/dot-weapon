@@ -72,6 +72,12 @@ var cooldown_ticks: int = -1
 ## same shape for the same reason.
 var recoil: Vector2 = Vector2.ZERO
 
+## Fraction of the kick shed per second, or -1 for the view's own default.
+var recoil_recovery: float = -1.0
+
+## Whether [member recoil]'s yaw already carries its sign (a recoil pattern), so the view must not alternate it.
+var recoil_signed: bool = false
+
 
 static func nothing(reason: String = "") -> DotWeaponOutcome:
 	var o := DotWeaponOutcome.new()

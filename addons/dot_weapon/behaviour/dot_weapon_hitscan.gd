@@ -111,11 +111,18 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 		shot.splash_type = b.splash_type
 		shot.splash_hurts_owner = b.splash_hurts_owner
 
+	var rr := DotWeaponRecoilRules.of(arsenal)
+	var bullet_offset := Vector2.ZERO
+	if b != null and rr != null:
+		bullet_offset = rr.apply(out, b, state, ctx, def.id, running_tick_rate())
+		shot.direction = DotWeaponRecoilRules.offset_direction(shot.direction, bullet_offset)
+
 	shot.scatter()
 	out.add_shot(shot)
 
 	if b != null:
-		out.recoil = Vector2(b.recoil_pitch, b.recoil_yaw)
+		if rr == null:
+			out.recoil = Vector2(b.recoil_pitch, b.recoil_yaw)
 		if b.bloom > 0.0:
 			state[_BLOOM] = minf(
 				float(state.get(_BLOOM, 0.0)) + b.bloom, b.bloom_max

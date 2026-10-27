@@ -45,7 +45,11 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 		spawn.life_ticks = scaled_ticks(b.life_ticks)
 		spawn.splash_radius = b.splash_radius
 		spawn.splash_damage = b.splash_damage
-		out.recoil = Vector2(b.recoil_pitch, b.recoil_yaw)
+		var rr := DotWeaponRecoilRules.of(arsenal)
+		if rr != null:
+			spawn.velocity = DotWeaponRecoilRules.offset_direction(ctx.direction, rr.apply(out, b, state, ctx, def.id, running_tick_rate())) * speed
+		else:
+			out.recoil = Vector2(b.recoil_pitch, b.recoil_yaw)
 
 	spawn.meta["charge"] = ctx.charge
 	out.add_spawn(spawn)

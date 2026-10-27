@@ -73,6 +73,18 @@ extends DotWeaponTuning
 ## Degrees of sideways kick per use. Alternates side to side.
 @export_range(0.0, 20.0, 0.01) var recoil_yaw: float = 0.15
 
+## Extra share of the kick added per consecutive shot of a burst (see [DotWeaponRecoilRules]).
+@export_range(0.0, 1.0, 0.01) var recoil_build: float = 0.06
+
+## Most the burst may add, as a share of the base kick.
+@export_range(0.0, 4.0, 0.05) var recoil_build_max: float = 0.8
+
+## Fraction of the accumulated kick shed per second once the trigger is released.
+@export_range(0.0, 30.0, 0.1) var recoil_recovery: float = 6.0
+
+## Seeds the sideways pattern; 0 derives it from the weapon id.
+@export var recoil_seed: int = 0
+
 @export_group("Splash")
 
 @export_range(0.0, 100.0, 0.1) var splash_radius: float = 0.0

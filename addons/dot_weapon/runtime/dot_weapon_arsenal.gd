@@ -74,6 +74,9 @@ var backpack_tier: int = 0
 ## Movement-dependent spread (`sv_spread_*`); null or disabled leaves every gun's own spread.
 var spread_rules: DotWeaponSpreadRules = null
 
+## Per-weapon recoil patterns (`sv_recoil_*`); null or disabled leaves every gun's flat kick.
+var recoil_rules: DotWeaponRecoilRules = null
+
 @export_group("Rules")
 
 ## Switches away from a weapon that has run out entirely.

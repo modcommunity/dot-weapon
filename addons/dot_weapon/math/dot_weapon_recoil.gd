@@ -53,7 +53,14 @@ func kick(pitch: float, yaw: float, recovery: float = -1.0) -> void:
 func kick_outcome(outcome: DotWeaponOutcome, recovery: float = -1.0) -> void:
 	if outcome == null or outcome.recoil == Vector2.ZERO:
 		return
-	kick(outcome.recoil.x, outcome.recoil.y, recovery)
+	var rec := outcome.recoil_recovery if outcome.recoil_recovery >= 0.0 else recovery
+	if outcome.recoil_signed:
+		_offset.x = minf(_offset.x + outcome.recoil.x, max_pitch)
+		_offset.y += outcome.recoil.y
+		if rec >= 0.0:
+			_recovery = rec
+	else:
+		kick(outcome.recoil.x, outcome.recoil.y, rec)
 
 
 ## Sheds recoil.
