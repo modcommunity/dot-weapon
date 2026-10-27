@@ -1,5 +1,5 @@
 class_name DotWeaponRecoilRules
-extends RefCounted
+extends DotWeaponCvarRules
 
 ## Per-weapon recoil pattern as server cvars (`sv_recoil_*`, replicated), shared by every game.
 ##
@@ -12,8 +12,6 @@ extends RefCounted
 ## game.recoil_rules.follow_cvars(link)                                                        # client
 ## arsenal.recoil_rules = rules  # every arsenal, both sides
 ## [/codeblock]
-
-signal changed
 
 const CHANNEL := "weapon.recoil"
 
@@ -132,69 +130,9 @@ static func offset_direction(dir: Vector3, offset: Vector2) -> Vector3:
 	return dir.rotated(right, deg_to_rad(offset.x)).rotated(Vector3.UP, deg_to_rad(offset.y)).normalized()
 
 
-func cvar_name(property: StringName) -> String:
-	return "sv_recoil_" + String(property) if property != &"enabled" else "sv_recoil"
+func fields() -> Dictionary:
+	return FIELDS
 
 
-func set_cvar(cvar: String, value: String) -> bool:
-	var text := value.strip_edges()
-	if not text.is_valid_float():
-		return false
-	for property: StringName in FIELDS:
-		if cvar_name(property) != cvar:
-			continue
-		var spec: Array = FIELDS[property]
-		var number := clampf(text.to_float(), float(spec[1]), float(spec[2]))
-		var old: Variant = get(property)
-		var next: Variant = number > 0.5 if property == &"enabled" else number
-		if old != next:
-			set(property, next)
-			changed.emit()
-		return true
-	return false
-
-
-func bind_cvars(add: Callable, flags: int = 0) -> Array:
-	var made: Array = []
-	for property: StringName in FIELDS:
-		var spec: Array = FIELDS[property]
-		var held: Variant = get(property)
-		var shown := ("1" if held else "0") if property == &"enabled" else str(held)
-		var cv: Variant = add.call(cvar_name(property), shown, String(spec[3]), flags)
-		if not (cv is Object):
-			continue
-		var obj := cv as Object
-		if obj.has_method(&"with_range"):
-			obj.call(&"with_range", float(spec[1]), float(spec[2]))
-		if obj.has_signal(&"changed"):
-			obj.connect(&"changed", func(_old: Variant, new_value: Variant) -> void: set_cvar(cvar_name(property), str(new_value)))
-		if obj.has_method(&"get_string"):
-			var _applied := set_cvar(cvar_name(property), String(obj.call(&"get_string")))
-		made.append(obj)
-	return made
-
-
-## Follows the server's values through a link with `replicated_cvar` / `replicated_cvar_changed`.
-func follow_cvars(source: Object) -> bool:
-	if source == null or not is_instance_valid(source):
-		return false
-	if not source.has_method(&"replicated_cvar") or not source.has_signal(&"replicated_cvar_changed"):
-		return false
-	for property: StringName in FIELDS:
-		var held := String(source.call(&"replicated_cvar", cvar_name(property), ""))
-		if held != "":
-			var _applied := set_cvar(cvar_name(property), held)
-	if not source.is_connected(&"replicated_cvar_changed", _on_replicated):
-		source.connect(&"replicated_cvar_changed", _on_replicated)
-	return true
-
-
-func _on_replicated(cvar: String, value: String) -> void:
-	var _applied := set_cvar(cvar, value)
-
-
-func describe() -> Dictionary:
-	var out := {}
-	for property: StringName in FIELDS:
-		out[String(property)] = get(property)
-	return out
+func prefix() -> String:
+	return "sv_recoil"

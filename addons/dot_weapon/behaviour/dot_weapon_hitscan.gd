@@ -117,6 +117,11 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 		bullet_offset = rr.apply(out, b, state, ctx, def.id, running_tick_rate())
 		shot.direction = DotWeaponRecoilRules.offset_direction(shot.direction, bullet_offset)
 
+	# A simulated bullet is flown by DotWeaponBulletBridge; the shot is deferred so dot-combat only
+	# records its endpoint. Off (the default) this line never runs and the shot is unchanged.
+	if DotWeaponBallisticsRules.simulates(arsenal.get("ballistics_rules") as DotWeaponBallisticsRules if arsenal != null else null, b):
+		shot.deferred = true
+
 	shot.scatter()
 	out.add_shot(shot)
 

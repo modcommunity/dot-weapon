@@ -80,6 +80,9 @@ var spread_rules: DotWeaponSpreadRules = null
 ## Per-weapon recoil patterns (`sv_recoil_*`); null or disabled leaves every gun's flat kick.
 var recoil_rules: DotWeaponRecoilRules = null
 
+## Global ballistics switch (`sv_ballistics`); null or off keeps every gun hitscan. Set on both sides.
+var ballistics_rules: DotWeaponBallisticsRules = null
+
 @export_group("Rules")
 
 ## Switches away from a weapon that has run out entirely.

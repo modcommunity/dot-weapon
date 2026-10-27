@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 478
+const CHECKS := 486
 
 
 func _ready() -> void:
@@ -48,6 +48,7 @@ func _run() -> void:
 	_test_muzzle()
 	_test_ballistics()
 	_test_bullets()
+	_test_hitscan_unchanged()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [
@@ -1277,4 +1278,37 @@ func _test_bullets() -> void:
 	bullets.step(400.0)
 	var us := Time.get_ticks_usec() - t0
 	_check(many == 400 and us < 100000, "400 bullets step in one node, cheaply", "%d us" % us)
+	_done()
+
+
+## The shot an arsenal makes, as text, with the given ballistics rules and muzzle velocity.
+func _shot_text(rules: DotWeaponBallisticsRules, velocity: float) -> Array:
+	var a := _arsenal()
+	a.give(&"rifle")
+	a.ballistics_rules = rules
+	((a.catalogue.get_def(&"rifle") as DotWeaponDef).tuning as DotWeaponBallistics).muzzle_velocity = velocity
+	var o := a.simulate_tick(_cmd(true), _ctx(10), null)
+	var shot: DotShot = o.shots[0]
+	var text := "%s|%s|%s|%s|%s|%s|%s|%s" % [shot.origin, shot.direction, shot.spread, shot.pellets, shot.damage, shot.max_range, o.recoil, shot.pellet_count]
+	var deferred := shot.deferred
+	_drop(a)
+	return [text, deferred]
+
+
+func _test_hitscan_unchanged() -> void:
+	_section("hitscan is unchanged with ballistics off")
+	var base := _shot_text(null, 0.0)
+	var off := DotWeaponBallisticsRules.new()
+	_check(_shot_text(off, 0.0) == base, "rules present but off: identical shot")
+	_check(_shot_text(off, 800.0) == base, "rules off, weapon has a velocity: identical shot")
+	var on := DotWeaponBallisticsRules.new()
+	on.enabled = true
+	_check(_shot_text(on, 0.0) == base, "rules on, no velocity: identical shot")
+	var fast := _shot_text(on, 800.0)
+	_check(fast[1] and not base[1], "rules on and a velocity: the shot is deferred to a bullet")
+	_check(fast[0] == base[0], "and is otherwise the same shot")
+	var recoil := DotWeaponRecoilRules.new()
+	_check(recoil is DotWeaponCvarRules and recoil.cvar_name(&"enabled") == "sv_recoil" and recoil.cvar_name(&"scale") == "sv_recoil_scale", "recoil rules keep their cvar names on the shared base")
+	_check(recoil.set_cvar("sv_recoil_scale", "2") and recoil.scale == 2.0, "and still set from cvars")
+	_check(recoil.describe().has("scale"), "and describe")
 	_done()
