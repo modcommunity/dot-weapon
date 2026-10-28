@@ -15,8 +15,6 @@ extends RefCounted
 
 signal changed
 
-const CHANNEL := "weapon.spread"
-
 ## property: [default, min, max, description]
 const FIELDS := {
 	&"enabled": [0.0, 0.0, 1.0, "1 turns on movement-dependent weapon spread"],

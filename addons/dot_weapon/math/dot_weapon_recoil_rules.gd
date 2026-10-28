@@ -13,8 +13,6 @@ extends DotWeaponCvarRules
 ## arsenal.recoil_rules = rules  # every arsenal, both sides
 ## [/codeblock]
 
-const CHANNEL := "weapon.recoil"
-
 const _N := &"recoil_n"
 const _TICK := &"recoil_tick"
 const _ACC_X := &"recoil_ax"
