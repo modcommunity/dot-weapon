@@ -817,6 +817,8 @@ func _advance_use(
 ) -> DotWeaponOutcome:
 	var def := slot.def
 	var down := command.is_pressed(DotWeaponCommand.BUTTON_ATTACK)
+	if ctx.sprinting and ctx.sprint_blocks_fire:
+		down = false
 	var was_down := previous != null and previous.is_pressed(
 		DotWeaponCommand.BUTTON_ATTACK
 	)

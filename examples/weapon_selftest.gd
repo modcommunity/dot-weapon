@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 520
+const CHECKS := 522
 
 
 func _ready() -> void:
@@ -949,6 +949,17 @@ func _test_spread_rules() -> void:
 	sprint_ctx.tick = 201
 	var _y := a.simulate_tick(reload_cmd, sprint_ctx, null)
 	_check(a.is_reloading() and sprint_ctx.sprinting, "sprinting alone leaves the reload and the aim alone")
+	var fired := _arsenal()
+	fired.give(&"rifle")
+	var fire_ctx := _ctx(300)
+	fire_ctx.sprinting = true
+	fire_ctx.sprint_blocks_fire = true
+	var blocked := fired.simulate_tick(_cmd(true), fire_ctx, null)
+	_check(not blocked.used, "sv_sprint_shoot 0 refuses the trigger while sprinting")
+	fire_ctx.sprint_blocks_fire = false
+	fire_ctx.tick = 301
+	_check(fired.simulate_tick(_cmd(true), fire_ctx, null).used, "and sprinting may shoot when it is allowed")
+	_drop(fired)
 	_drop(a)
 	_done()
 

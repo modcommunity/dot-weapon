@@ -66,6 +66,12 @@ var sprinting: bool = false
 ## Whether sprinting stops aiming and reloading (the controller's `sv_sprint_noaim`).
 var sprint_blocks_aim: bool = false
 
+## Whether sprinting blocks the trigger (the controller's `sv_sprint_shoot 0`).
+var sprint_blocks_fire: bool = false
+
+## Whether a sprinting shot leaves along the lowered barrel (the controller's `sv_sprint_barrel`); the weapon rig turns [member direction].
+var sprint_shot_follows_barrel: bool = false
+
 ## Whether the carrier is aiming down sights (the command's [constant DotWeaponCommand.BUTTON_AIM]).
 var aiming: bool = false
 

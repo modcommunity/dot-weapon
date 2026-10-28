@@ -78,6 +78,8 @@ static func context_for(
 	ctx.sliding = bool(motion.get("sliding", false))
 	ctx.sprinting = bool(motion.get("sprinting", false))
 	ctx.sprint_blocks_aim = bool(motion.get("sprint_blocks_aim", false))
+	ctx.sprint_blocks_fire = bool(motion.get("sprint_blocks_fire", false))
+	ctx.sprint_shot_follows_barrel = bool(motion.get("sprint_shot_follows_barrel", false))
 
 	return ctx
 
