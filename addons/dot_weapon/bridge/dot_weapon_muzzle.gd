@@ -34,9 +34,12 @@ static func attach(
 	if size == 0:
 		return null
 	var key := _key(size, first_person)
-	var flash: Node3D = _spares.get(key)
+	var spare: Variant = _spares.get(key)
 	_spares.erase(key)
-	if flash != null and is_instance_valid(flash):
+	var flash: Node3D = null
+	if spare != null and is_instance_valid(spare):
+		# A spare outlives its host (static), so a scene change frees it: typing it before the check errors.
+		flash = spare
 		# Warmed under the node it is attached to: moving a built flash re-enters its whole subtree, which costs as much as building it.
 		flash.process_mode = Node.PROCESS_MODE_INHERIT
 		if flash.get_parent() == parent:
