@@ -19,6 +19,29 @@ func _wentry(id: String, extra: Dictionary = {}) -> Dictionary:
 	return d
 
 
+func _follow_sessions(index: DotContentIndex, c: DotWeaponCatalogue, base: int, added: Array[String], changes: Array) -> void:
+	# Sessions.
+	var other_changes: int = changes[0]
+	index.set_session(DotContentIndex.SESSION_ONLINE)
+	_check(c.size() == base, "online, every solo weapon is gone", str(c.size()))
+	_check(not c.has(&"flare_gun") and c.listing(&"ember_blade") == null, "queries agree")
+	_check(changes[0] > other_changes, "the switch is announced")
+	var n_added := added.size()
+	index.set_session(DotContentIndex.SESSION_SOLO)
+	_check(c.has(&"flare_gun") and c.has(&"ember_blade"), "back in solo they return")
+	_check(added.size() == n_added + 2, "and are announced again")
+
+	# Reuse by a server: tagged online as well.
+	index.tag_pack(&"tmc/fixture-arms", "1.0.0", DotContentIndex.SESSION_ONLINE)
+	index.set_session(DotContentIndex.SESSION_ONLINE)
+	_check(c.has(&"flare_gun") and not c.has(&"ember_blade"), "a pack also tagged online shows online")
+	index.set_session(DotContentIndex.SESSION_SOLO)
+
+	var lines := c.describe_lines()
+	_check(lines.size() >= base + 2 and "\n".join(lines).contains("tmc/fixture-arms"), "describe_lines names the pack")
+	_check(c.describe()["delivered"] == 2, "describe counts delivered")
+
+
 func _test_content_follow() -> void:
 	_section("delivered weapons")
 
@@ -74,26 +97,7 @@ func _test_content_follow() -> void:
 	_check(c.listings("fixture").size() == 2, "listings filter by category")
 	_check(c.listings()[0].is_delivered() == false, "code weapons list first")
 
-	# Sessions.
-	var other_changes: int = changes[0]
-	index.set_session(DotContentIndex.SESSION_ONLINE)
-	_check(c.size() == base, "online, every solo weapon is gone", str(c.size()))
-	_check(not c.has(&"flare_gun") and c.listing(&"ember_blade") == null, "queries agree")
-	_check(changes[0] > other_changes, "the switch is announced")
-	var n_added := added.size()
-	index.set_session(DotContentIndex.SESSION_SOLO)
-	_check(c.has(&"flare_gun") and c.has(&"ember_blade"), "back in solo they return")
-	_check(added.size() == n_added + 2, "and are announced again")
-
-	# Reuse by a server: tagged online as well.
-	index.tag_pack(&"tmc/fixture-arms", "1.0.0", DotContentIndex.SESSION_ONLINE)
-	index.set_session(DotContentIndex.SESSION_ONLINE)
-	_check(c.has(&"flare_gun") and not c.has(&"ember_blade"), "a pack also tagged online shows online")
-	index.set_session(DotContentIndex.SESSION_SOLO)
-
-	var lines := c.describe_lines()
-	_check(lines.size() >= base + 2 and "\n".join(lines).contains("tmc/fixture-arms"), "describe_lines names the pack")
-	_check(c.describe()["delivered"] == 2, "describe counts delivered")
+	_follow_sessions(index, c, base, added, changes)
 
 	c.unfollow_content()
 	_check(c.size() == base and not c.has(&"flare_gun"), "unfollowing forgets delivered weapons")
@@ -148,6 +152,107 @@ func _attachment_catalogue() -> DotWeaponAttachments:
 		if not res.ok:
 			push_error(res.error.message)
 	return c
+
+
+func _attachments_refusals(c: DotWeaponAttachments, rifle: DotWeaponDef, f: DotWeaponFitting) -> void:
+	# Refusals, by code.
+	var unknown := DotWeaponFitting.make(&"rifle")
+	unknown.fit(&"muzzle", &"nothing")
+	_check(c.validate_fitting(rifle, unknown).code() == DotError.CODE_INVALID, "an unknown id: invalid")
+	var wrong_mount := DotWeaponFitting.make(&"rifle")
+	wrong_mount.fit(&"optic", &"suppressor")
+	_check(c.validate_fitting(rifle, wrong_mount).code() == DotError.CODE_CONFLICT, "the wrong mount: conflict")
+	var no_fit := DotWeaponFitting.make(&"rifle")
+	no_fit.fit(&"optic", &"dot_sight")
+	_check(c.validate_fitting(rifle, no_fit).code() == DotError.CODE_FORBIDDEN, "does not fit: forbidden")
+	var other := DotWeaponFitting.make(&"pistol")
+	_check(c.validate_fitting(rifle, other).code() == DotError.CODE_STATE, "another weapon's fitting: state")
+	_check(c.validate_fitting(rifle, f).ok, "and a legal one passes")
+
+	var mixed := DotWeaponFitting.make(&"rifle")
+	mixed.fit(&"muzzle", &"suppressor")
+	mixed.fit(&"optic", &"dot_sight")
+	mixed.fit(&"side", &"brake")
+	var kept := c.conform(rifle, mixed)
+	_check(kept.key() == "muzzle=suppressor", "conform drops what is illegal and keeps the rest", kept.key())
+
+
+func _attachments_value_type(c: DotWeaponAttachments, rifle: DotWeaponDef, f: DotWeaponFitting, choices: Dictionary) -> void:
+	# Fitting value type.
+	_check(f.key() == "magazine=drum,muzzle=suppressor,optic=scope", "a key is in mount text order", f.key())
+	_check(f.mounts() == [&"magazine", &"muzzle", &"optic"] and f.ids() == [&"drum", &"scope", &"suppressor"], "mounts and ids are sorted by text")
+	var round_trip := DotWeaponFitting.from_dictionary(f.to_dictionary())
+	_check(round_trip.ok and (round_trip.value as DotWeaponFitting).key() == f.key(), "a fitting round-trips a dictionary")
+	_check(not DotWeaponFitting.from_dictionary({"weapon": "rifle", "mounts": {"muzzle": 5}}).ok, "a non-string id is refused, not coerced")
+	var copy := f.duplicate_fitting()
+	copy.remove(&"muzzle")
+	_check(f.attachment_on(&"muzzle") == &"suppressor" and copy.attachment_on(&"muzzle") == &"", "a duplicate is independent")
+
+	# Every combination of the three mounts survives the wire encoding.
+	var combos := 0
+	var wrong := 0
+	var optics: Array = [&""] + choices[&"optic"]
+	var muzzles: Array = [&""] + choices[&"muzzle"]
+	var mags: Array = [&""] + choices[&"magazine"]
+	for o: StringName in optics:
+		for m: StringName in muzzles:
+			for g: StringName in mags:
+				var combo := DotWeaponFitting.make(&"rifle")
+				for pair in [[&"optic", o], [&"muzzle", m], [&"magazine", g]]:
+					if pair[1] != &"":
+						combo.fit(pair[0], pair[1])
+				combos += 1
+				var code := c.encode(rifle, combo)
+				if c.decode(rifle, code).key() != combo.key() or code >= (1 << c.code_bits(rifle)):
+					wrong += 1
+	_check(combos == 2 * 3 * 3 and wrong == 0, "every combination round-trips through encode and decode", "%d wrong of %d" % [wrong, combos])
+	_check(c.code_bits(rifle) == 1 + 2 + 2, "with just enough bits per mount", str(c.code_bits(rifle)))
+	_check(c.decode(rifle, 0).is_empty() and c.decode(rifle, 3).is_empty(), "code 0 and an index past the choices decode as none")
+
+
+func _attachments_arsenal(c: DotWeaponAttachments, rifle: DotWeaponDef, f: DotWeaponFitting, mixed: DotWeaponFitting) -> void:
+	# The arsenal.
+	var cat := DotWeaponCatalogue.new()
+	cat.add(_modular_rifle())
+	var a := _arsenal(cat)
+	_check(not a.fit(1, f).ok and a.fit(1, f).code() == DotError.CODE_STATE, "an arsenal with no attachments cannot fit")
+	a.attachments = c
+	_check(a.give(&"rifle").ok, "an arsenal carries the rifle")
+	_check(a.fitting_at(1).is_empty() and a.fitting_at(7).is_empty(), "fresh, nothing is fitted, and fitting_at is never null")
+	_check(not a.fit(5, f).ok, "an empty slot cannot be fitted")
+	var before := a.current().magazine
+	_check(before == 30, "the magazine starts full")
+	_check(a.fit(1, f).ok, "fit succeeds")
+	_check(a.current_def().magazine == 60 and a.slot_at(1).def != cat.get_def(&"rifle"), "the slot uses the applied def")
+	_check(cat.get_def(&"rifle").magazine == 30, "the catalogue's is untouched")
+	_check(a.fitting_at(1).key() == f.key(), "fitting_at reports it")
+	f.remove(&"optic")
+	_check(a.fitting_at(1).key() != f.key(), "the arsenal stored a copy")
+
+	var shrink := DotWeaponFitting.make(&"rifle")
+	shrink.fit(&"magazine", &"tiny_mag")
+	a.slot_at(1).magazine = 30
+	a.fit(1, shrink)
+	_check(a.slot_at(1).magazine == 1, "a magazine above the new capacity is clamped", str(a.slot_at(1).magazine))
+
+	# Snapshot and restore on another machine.
+	a.fit(1, c.conform(rifle, mixed))
+	var snap := a.snapshot()
+	_check(snap["slots"][1].has("fit"), "the snapshot carries the fitting")
+	var b := _arsenal(cat)
+	var no_att := b.restore(snap)
+	_check(not no_att.ok and no_att.code() == DotError.CODE_STATE, "restoring a fitting without a catalogue is a state error")
+	b.attachments = c
+	_check(b.restore(snap).ok, "with one it restores")
+	_check(b.fitting_at(1).key() == "muzzle=suppressor", "and keeps the fitting", b.fitting_at(1).key())
+	_check(b.current_def().has_tag(&"quiet"), "so the second arsenal uses the applied def")
+	a.fit(1, DotWeaponFitting.make(&"rifle"))
+	_check(a.current_def() == cat.get_def(&"rifle"), "an empty fitting restores the base def")
+	_check(not a.snapshot()["slots"][1].has("fit"), "and the snapshot carries nothing")
+	b.restore(a.snapshot())
+	_check(b.fitting_at(1).is_empty() and b.current_def() == cat.get_def(&"rifle"), "restoring that unfits the second arsenal")
+	_drop(a)
+	_drop(b)
 
 
 func _test_attachments() -> void:
@@ -224,101 +329,9 @@ func _test_attachments() -> void:
 	var floor_def: DotWeaponDef = c.apply(rifle, tm).value
 	_check(floor_def.magazine == 1, "a magazine that held rounds keeps at least one", str(floor_def.magazine))
 
-	# Refusals, by code.
-	var unknown := DotWeaponFitting.make(&"rifle")
-	unknown.fit(&"muzzle", &"nothing")
-	_check(c.validate_fitting(rifle, unknown).code() == DotError.CODE_INVALID, "an unknown id: invalid")
-	var wrong_mount := DotWeaponFitting.make(&"rifle")
-	wrong_mount.fit(&"optic", &"suppressor")
-	_check(c.validate_fitting(rifle, wrong_mount).code() == DotError.CODE_CONFLICT, "the wrong mount: conflict")
-	var no_fit := DotWeaponFitting.make(&"rifle")
-	no_fit.fit(&"optic", &"dot_sight")
-	_check(c.validate_fitting(rifle, no_fit).code() == DotError.CODE_FORBIDDEN, "does not fit: forbidden")
-	var other := DotWeaponFitting.make(&"pistol")
-	_check(c.validate_fitting(rifle, other).code() == DotError.CODE_STATE, "another weapon's fitting: state")
-	_check(c.validate_fitting(rifle, f).ok, "and a legal one passes")
-
-	var mixed := DotWeaponFitting.make(&"rifle")
-	mixed.fit(&"muzzle", &"suppressor")
-	mixed.fit(&"optic", &"dot_sight")
-	mixed.fit(&"side", &"brake")
-	var kept := c.conform(rifle, mixed)
-	_check(kept.key() == "muzzle=suppressor", "conform drops what is illegal and keeps the rest", kept.key())
-
-	# Fitting value type.
-	_check(f.key() == "magazine=drum,muzzle=suppressor,optic=scope", "a key is in mount text order", f.key())
-	_check(f.mounts() == [&"magazine", &"muzzle", &"optic"] and f.ids() == [&"drum", &"scope", &"suppressor"], "mounts and ids are sorted by text")
-	var round_trip := DotWeaponFitting.from_dictionary(f.to_dictionary())
-	_check(round_trip.ok and (round_trip.value as DotWeaponFitting).key() == f.key(), "a fitting round-trips a dictionary")
-	_check(not DotWeaponFitting.from_dictionary({"weapon": "rifle", "mounts": {"muzzle": 5}}).ok, "a non-string id is refused, not coerced")
-	var copy := f.duplicate_fitting()
-	copy.remove(&"muzzle")
-	_check(f.attachment_on(&"muzzle") == &"suppressor" and copy.attachment_on(&"muzzle") == &"", "a duplicate is independent")
-
-	# Every combination of the three mounts survives the wire encoding.
-	var combos := 0
-	var wrong := 0
-	var optics: Array = [&""] + choices[&"optic"]
-	var muzzles: Array = [&""] + choices[&"muzzle"]
-	var mags: Array = [&""] + choices[&"magazine"]
-	for o: StringName in optics:
-		for m: StringName in muzzles:
-			for g: StringName in mags:
-				var combo := DotWeaponFitting.make(&"rifle")
-				for pair in [[&"optic", o], [&"muzzle", m], [&"magazine", g]]:
-					if pair[1] != &"":
-						combo.fit(pair[0], pair[1])
-				combos += 1
-				var code := c.encode(rifle, combo)
-				if c.decode(rifle, code).key() != combo.key() or code >= (1 << c.code_bits(rifle)):
-					wrong += 1
-	_check(combos == 2 * 3 * 3 and wrong == 0, "every combination round-trips through encode and decode", "%d wrong of %d" % [wrong, combos])
-	_check(c.code_bits(rifle) == 1 + 2 + 2, "with just enough bits per mount", str(c.code_bits(rifle)))
-	_check(c.decode(rifle, 0).is_empty() and c.decode(rifle, 3).is_empty(), "code 0 and an index past the choices decode as none")
-
-	# The arsenal.
-	var cat := DotWeaponCatalogue.new()
-	cat.add(_modular_rifle())
-	var a := _arsenal(cat)
-	_check(not a.fit(1, f).ok and a.fit(1, f).code() == DotError.CODE_STATE, "an arsenal with no attachments cannot fit")
-	a.attachments = c
-	_check(a.give(&"rifle").ok, "an arsenal carries the rifle")
-	_check(a.fitting_at(1).is_empty() and a.fitting_at(7).is_empty(), "fresh, nothing is fitted, and fitting_at is never null")
-	_check(not a.fit(5, f).ok, "an empty slot cannot be fitted")
-	var before := a.current().magazine
-	_check(before == 30, "the magazine starts full")
-	_check(a.fit(1, f).ok, "fit succeeds")
-	_check(a.current_def().magazine == 60 and a.slot_at(1).def != cat.get_def(&"rifle"), "the slot uses the applied def")
-	_check(cat.get_def(&"rifle").magazine == 30, "the catalogue's is untouched")
-	_check(a.fitting_at(1).key() == f.key(), "fitting_at reports it")
-	f.remove(&"optic")
-	_check(a.fitting_at(1).key() != f.key(), "the arsenal stored a copy")
-
-	var shrink := DotWeaponFitting.make(&"rifle")
-	shrink.fit(&"magazine", &"tiny_mag")
-	a.slot_at(1).magazine = 30
-	a.fit(1, shrink)
-	_check(a.slot_at(1).magazine == 1, "a magazine above the new capacity is clamped", str(a.slot_at(1).magazine))
-
-	# Snapshot and restore on another machine.
-	a.fit(1, c.conform(rifle, mixed))
-	var snap := a.snapshot()
-	_check(snap["slots"][1].has("fit"), "the snapshot carries the fitting")
-	var b := _arsenal(cat)
-	var no_att := b.restore(snap)
-	_check(not no_att.ok and no_att.code() == DotError.CODE_STATE, "restoring a fitting without a catalogue is a state error")
-	b.attachments = c
-	_check(b.restore(snap).ok, "with one it restores")
-	_check(b.fitting_at(1).key() == "muzzle=suppressor", "and keeps the fitting", b.fitting_at(1).key())
-	_check(b.current_def().has_tag(&"quiet"), "so the second arsenal uses the applied def")
-	a.fit(1, DotWeaponFitting.make(&"rifle"))
-	_check(a.current_def() == cat.get_def(&"rifle"), "an empty fitting restores the base def")
-	_check(not a.snapshot()["slots"][1].has("fit"), "and the snapshot carries nothing")
-	b.restore(a.snapshot())
-	_check(b.fitting_at(1).is_empty() and b.current_def() == cat.get_def(&"rifle"), "restoring that unfits the second arsenal")
-
-	_drop(a)
-	_drop(b)
+	_attachments_refusals(c, rifle, f)
+	_attachments_value_type(c, rifle, f, choices)
+	_attachments_arsenal(c, rifle, f, mixed)
 	_done()
 
 

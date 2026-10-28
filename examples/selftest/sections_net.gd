@@ -37,6 +37,51 @@ func _arsenal_at(catalogue: DotWeaponCatalogue, rate: int) -> DotWeaponArsenal:
 	return a
 
 
+func _tick_rate_spans(cat: DotWeaponCatalogue) -> Array[Node]:
+	# Reload, in seconds rather than ticks.
+	var r64 := _arsenal_at(cat, 64)
+	var r128 := _arsenal_at(cat, 128)
+	r64.give(&"rifle", false)
+	r128.give(&"rifle", false)
+	r64.add_ammo(&"rifle_rounds", 90)
+	r128.add_ammo(&"rifle_rounds", 90)
+	var reload64 := _reload_span(r64, 0)
+	var reload128 := _reload_span(r128, 0)
+	_check(reload64 == 120, "a reload takes its 120 ticks at 64 Hz", str(reload64))
+	_check(reload128 == 240, "and the same 1.875 s (240 ticks) at 128 Hz", str(reload128))
+
+	# Holster plus deploy.
+	var sw_cat := _authored_catalogue(64)
+	for id: StringName in [&"rifle", &"pistol"]:
+		sw_cat.get_def(id).holster_ticks = 8
+		sw_cat.get_def(id).deploy_ticks = 16
+	var s64 := _arsenal_at(sw_cat, 64)
+	var s128 := _arsenal_at(sw_cat, 128)
+	for a: DotWeaponArsenal in [s64, s128]:
+		a.give(&"pistol")
+		a.give(&"rifle")
+	var switch64 := _switch_span(s64, 1, 0)
+	var switch128 := _switch_span(s128, 1, 0)
+	_check(switch64 == 24 and switch128 == 48, "a switch takes the same wall-clock time", "%d vs %d" % [switch128, switch64])
+	return [r64, r128, s64, s128]
+
+
+func _tick_rate_fuse(cat: DotWeaponCatalogue) -> Array[Node]:
+	# A thrown spawn's fuse leaves in RUNNING ticks, so a game flies it as given. Pin out
+	# on one tick, released on the next: one tick of cook at either rate.
+	var g64 := _arsenal_at(cat, 64)
+	var g128 := _arsenal_at(cat, 128)
+	var fuses: Array[int] = []
+	for a: DotWeaponArsenal in [g64, g128]:
+		a.give(&"grenade")
+		a.simulate_tick(_cmd(true), _ctx(0), _cmd(false))
+		var out := a.simulate_tick(_cmd(false), _ctx(1), _cmd(true))
+		fuses.append(out.spawns[0].fuse_ticks if out.used and not out.spawns.is_empty() else -1)
+	_check(fuses[0] == 191, "a three-second fuse cooked one tick leaves 191 at 64 Hz", str(fuses[0]))
+	_check(fuses[1] == 383, "and 383 at 128 Hz, the same three seconds", str(fuses[1]))
+	return [g64, g128]
+
+
 func _test_tick_rate() -> void:
 	_section("a weapon written at 64 Hz keeps its wall-clock timing at 128")
 
@@ -70,31 +115,7 @@ func _test_tick_rate() -> void:
 	var raw_shots := _drive(raw, 0, 128, true).size()
 	_check(raw_shots == 22, "a row naming no rate still fires on its raw count", str(raw_shots))
 
-	# Reload, in seconds rather than ticks.
-	var r64 := _arsenal_at(cat, 64)
-	var r128 := _arsenal_at(cat, 128)
-	r64.give(&"rifle", false)
-	r128.give(&"rifle", false)
-	r64.add_ammo(&"rifle_rounds", 90)
-	r128.add_ammo(&"rifle_rounds", 90)
-	var reload64 := _reload_span(r64, 0)
-	var reload128 := _reload_span(r128, 0)
-	_check(reload64 == 120, "a reload takes its 120 ticks at 64 Hz", str(reload64))
-	_check(reload128 == 240, "and the same 1.875 s (240 ticks) at 128 Hz", str(reload128))
-
-	# Holster plus deploy.
-	var sw_cat := _authored_catalogue(64)
-	for id: StringName in [&"rifle", &"pistol"]:
-		sw_cat.get_def(id).holster_ticks = 8
-		sw_cat.get_def(id).deploy_ticks = 16
-	var s64 := _arsenal_at(sw_cat, 64)
-	var s128 := _arsenal_at(sw_cat, 128)
-	for a: DotWeaponArsenal in [s64, s128]:
-		a.give(&"pistol")
-		a.give(&"rifle")
-	var switch64 := _switch_span(s64, 1, 0)
-	var switch128 := _switch_span(s128, 1, 0)
-	_check(switch64 == 24 and switch128 == 48, "a switch takes the same wall-clock time", "%d vs %d" % [switch128, switch64])
+	var spans := _tick_rate_spans(cat)
 
 	# A charge fills in the same time, and so does what a behaviour reads per tick.
 	var bow: DotWeaponDef = cat.get_def(&"bow")
@@ -103,18 +124,7 @@ func _test_tick_rate() -> void:
 	var behaviour := at128.slot_at(1).behaviour
 	_close(behaviour.scaled_per_tick(0.15), 0.075, "bloom recovers half as much per tick at 128 Hz", 0.00001)
 
-	# A thrown spawn's fuse leaves in RUNNING ticks, so a game flies it as given. Pin out
-	# on one tick, released on the next: one tick of cook at either rate.
-	var g64 := _arsenal_at(cat, 64)
-	var g128 := _arsenal_at(cat, 128)
-	var fuses: Array[int] = []
-	for a: DotWeaponArsenal in [g64, g128]:
-		a.give(&"grenade")
-		a.simulate_tick(_cmd(true), _ctx(0), _cmd(false))
-		var out := a.simulate_tick(_cmd(false), _ctx(1), _cmd(true))
-		fuses.append(out.spawns[0].fuse_ticks if out.used and not out.spawns.is_empty() else -1)
-	_check(fuses[0] == 191, "a three-second fuse cooked one tick leaves 191 at 64 Hz", str(fuses[0]))
-	_check(fuses[1] == 383, "and 383 at 128 Hz, the same three seconds", str(fuses[1]))
+	spans.append_array(_tick_rate_fuse(cat))
 
 	# Prediction: a client restored from the server's snapshot mid-reload, at the same
 	# rate, finishes on the same tick as the server.
@@ -140,7 +150,7 @@ func _test_tick_rate() -> void:
 			client_done = t
 	_check(server_done == 1240 and client_done == server_done, "and both finish on tick 1240", "%d / %d" % [server_done, client_done])
 
-	for a: Node in [at64, at128, raw, r64, r128, s64, s128, g64, g128, server, client]:
+	for a: Node in [at64, at128, raw, server, client] + spans:
 		_drop(a)
 
 	_done()

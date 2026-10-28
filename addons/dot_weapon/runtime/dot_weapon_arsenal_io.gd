@@ -87,6 +87,16 @@ static func restore(a: Node, d: Dictionary) -> DotResult:
 		if not wanted.has(key):
 			a._slots.erase(key)
 
+	var shelved := _restore_shelf(a, d)
+	if not shelved.ok:
+		return shelved
+	a.backpack_tier = int(d.get("pack", 0))
+	_restore_scalars(a, d)
+
+	return DotResult.success(null)
+
+
+static func _restore_shelf(a: Node, d: Dictionary) -> DotResult:
 	var rebuilt: Dictionary = {}
 	var stowed: Dictionary = d.get("shelf", {})
 	for key: Variant in stowed.keys():
@@ -107,9 +117,12 @@ static func restore(a: Node, d: Dictionary) -> DotResult:
 			piece.restore(row)
 			list.append(piece)
 		rebuilt[int(key)] = list
-	a._shelf = rebuilt
-	a.backpack_tier = int(d.get("pack", 0))
 
+	a._shelf = rebuilt
+	return DotResult.success(null)
+
+
+static func _restore_scalars(a: Node, d: Dictionary) -> void:
 	a._ammo.restore(d.get("ammo", {}))
 	a._current = int(d.get("current", 0))
 	a._previous = int(d.get("previous", 0))
@@ -123,8 +136,6 @@ static func restore(a: Node, d: Dictionary) -> DotResult:
 	a._charge_started = int(d.get("charge_started", -1))
 	a._held_ticks = int(d.get("held", 0))
 	a._use_index = int(d.get("use_index", 0))
-
-	return DotResult.success(null)
 
 
 static func describe(a: Node) -> Dictionary:
