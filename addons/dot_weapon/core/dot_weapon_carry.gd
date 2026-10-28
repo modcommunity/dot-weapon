@@ -1,13 +1,9 @@
 class_name DotWeaponCarry
 extends RefCounted
 
-## What a carrier may carry: a weight limit, how many weapons share a slot, backpacks, and the
-## modifiers a game hangs on both. One instance is shared by every arsenal of a game, so a rule
-## change reaches everybody at once; an arsenal with no carry (the default) has no limit at all.
-##
-## Weights live on [member DotWeaponDef.weight]. A modifier is a named source (a box, a map rule, a
-## difficulty) that scales every weight and/or the limit: the game calls [method set_modifier] when it
-## starts and [method clear_modifier] when it ends, and nothing here knows what a source is.
+## What a carrier may carry: a weight limit, weapons per slot, backpacks, and the modifiers a game hangs
+## on them. One instance is shared by every arsenal; none (the default) means no limit.
+## Weights live on [member DotWeaponDef.weight]; a modifier is a named source set with [method set_modifier].
 
 enum OverLimit {
 	## Over the limit the carrier is slowed ([method speed_scale]); nothing is taken.

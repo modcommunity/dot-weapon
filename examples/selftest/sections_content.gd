@@ -331,6 +331,10 @@ func _test_attachments() -> void:
 
 	_attachments_refusals(c, rifle, f)
 	_attachments_value_type(c, rifle, f, choices)
+	var mixed := DotWeaponFitting.make(&"rifle")
+	mixed.fit(&"muzzle", &"suppressor")
+	mixed.fit(&"optic", &"dot_sight")
+	mixed.fit(&"side", &"brake")
 	_attachments_arsenal(c, rifle, f, mixed)
 	_done()
 
@@ -405,10 +409,9 @@ func _test_attachments_wire() -> void:
 func _test_extension_point() -> void:
 	_section("a weapon the addon knows nothing about")
 
-	# The point of the whole design: this weapon chains to several targets, costs more
-	# the further it chains, sets its own cadence, refuses to fire indoors and keeps a
-	# charge counter. None of those ideas exist anywhere in dot-weapon, and adding it
-	# edited no file in the addon.
+	# The point of the design: this weapon chains to several targets, costs more the further it chains, sets its own
+	# cadence, refuses to fire indoors and keeps a charge counter, and none of those ideas exist in dot-weapon;
+	# adding it edited no file in the addon.
 	var a := _arsenal()
 	a.give(&"rod")
 	a.select(7, 0)

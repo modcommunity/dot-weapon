@@ -27,18 +27,9 @@ const _Io := preload("dot_weapon_arsenal_io.gd")
 
 @export_group("Simulation")
 
-## Ticks per second the simulation runs at, as the caller declares it.
-##
-## [b]A definition that names its [member DotWeaponDef.authored_tick_rate] is scaled to
-## this[/b], through [method ticks_for]: a pack written at 64 Hz deploys, fires, reloads
-## and charges in the same wall-clock time at 128. A definition that names none (zero) is
-## used exactly as written, whatever this says, which is every definition written before
-## the field existed.
-##
-## [b]Set it to the same number on the client and the server.[/b] Every deadline below is
-## an absolute tick computed from this, and it travels in [method snapshot] as a tick, not
-## as a duration; two ends at two rates predict two different reload ends. A game sets it
-## from the rate its world runs at, which both ends already agree on.
+## Ticks per second the simulation runs at. A definition with an [member DotWeaponDef.authored_tick_rate] is scaled to
+## this through [method ticks_for]; one with none is used as written. Set it identically on client and server:
+## deadlines are absolute ticks and travel in [method snapshot] as ticks, so two rates predict different reload ends.
 @export_range(1, 240, 1) var tick_rate: int = 64
 
 @export_range(1, 16, 1) var max_slots: int = 8
@@ -78,10 +69,8 @@ var loaded_ammo: Dictionary = {}
 ## Refuses everything. For a dead player, a cutscene, a freeze time.
 @export var disabled: bool = false
 
-## True on the machine that decides. Handed to every [DotWeaponContext].
-##
-## A behaviour must not apply anything when this is false, and dot-combat must not
-## resolve damage. A client still runs everything, for prediction.
+## True on the machine that decides; handed to every [DotWeaponContext]. A behaviour applies nothing when false
+## and dot-combat resolves no damage; a client still runs everything, for prediction.
 @export var authority: bool = false
 
 var _slots: Dictionary = {}          ## int -> DotWeaponSlot (the one in hand of that slot)
@@ -121,11 +110,8 @@ var _replaying: bool = false
 var _ready_for_use: bool = false
 
 
-## [param authored_ticks], a count off [param def], as a count at [member tick_rate].
-##
-## The one place a definition's durations meet the running rate. Public so a layer over
-## the arsenal (a rig's presentation, an alt-fire it runs itself) times its own half by
-## the same numbers instead of reading the raw field and drifting at another rate.
+## [param authored_ticks] off [param def] as a count at [member tick_rate]. Public so a layer over the arsenal
+## times its own half by the same numbers instead of reading the raw field and drifting at another rate.
 func ticks_for(def: DotWeaponDef, authored_ticks: int) -> int:
 	if def == null:
 		return authored_ticks

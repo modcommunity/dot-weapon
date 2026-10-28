@@ -1,12 +1,9 @@
 class_name DotWeaponHitzones
 extends RefCounted
 
-## Armour per hit zone (a [DotHitGroup] name), applied by [DotWeaponBulletBridge] when a simulated bullet
-## lands. dot-combat's own group multipliers (a head counts more) still apply in `apply_damage`; this is the
-## protection: a helmet is `{"head": 0.5}`, a vest `{"chest": 0.4, "stomach": 0.4}`.
-##
-## [member presence_fn] (`func(entity: Node) -> float`, 0..1) says how much of that table the victim wears;
-## unset, every victim wears all of it. Unlisted zones carry no armour.
+## Armour per hit zone ([DotHitGroup] name), applied by [DotWeaponBulletBridge]; dot-combat's group multipliers still apply.
+## A helmet is `{"head": 0.5}`. [member presence_fn] (`func(entity) -> float`, 0..1) says how much the victim wears;
+## unset means all of it. Unlisted zones carry no armour.
 
 var armour: Dictionary = {}
 var presence_fn: Callable = Callable()

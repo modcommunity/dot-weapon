@@ -26,9 +26,8 @@ static func step(pos: Vector3, vel: Vector3, b: DotWeaponBallistics, dt: float =
 	return [pos + vel * dt, vel]
 
 
-## Flies a bullet from [param origin] along [param dir] until it hits, runs out of range or lives past
-## [param max_time]. [param cast] is `func(from: Vector3, to: Vector3) -> Dictionary` (empty = clear; a
-## hit carries `position`), called once per sub-step over the whole segment so nothing is skipped.
+## Flies a bullet from [param origin] along [param dir] until it hits, runs out of range or outlives [param max_time].
+## [param cast] is `func(from, to) -> Dictionary` (empty = clear), called once per sub-step over the whole segment.
 ## Returns `{hit, position, time, distance, speed, path_end}`.
 static func fly(origin: Vector3, dir: Vector3, b: DotWeaponBallistics, cast: Callable, max_time: float = 10.0) -> Dictionary:
 	var pos := origin

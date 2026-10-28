@@ -1,17 +1,9 @@
 class_name DotWeaponSpreadRules
 extends RefCounted
 
-## Movement-dependent accuracy as server cvars (`sv_spread_*`, replicated), shared by every game.
-##
-## Multiplies a gun's own spread (its `spread_for` already widens with speed, air and crouch), so a
-## weapon that ships its own numbers keeps them as the base. Off by default; a game turns [member enabled] on.
-## The server's shot and the client's crosshair both ask [method target_factor] of the same context, so they agree.
-##
-## [codeblock]
-## world.spread_rules.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)  # server
-## game.spread_rules.follow_cvars(link)                                                       # client
-## arsenal.spread_rules = rules  # every arsenal, both sides
-## [/codeblock]
+## Movement-dependent accuracy as replicated `sv_spread_*` cvars; multiplies a gun's own spread, so its numbers stay
+## the base. Off by default. Server shot and client crosshair ask [method target_factor] of the same context.
+## Wire with `bind_cvars` / `follow_cvars`, then `arsenal.spread_rules = rules` on both sides.
 
 signal changed
 

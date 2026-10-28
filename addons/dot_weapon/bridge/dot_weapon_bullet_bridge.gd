@@ -2,11 +2,8 @@ class_name DotWeaponBulletBridge
 extends Node
 
 ## Flies simulated bullets for dot-combat: a drop-in for `combat.resolve_shot(shot, view_tick)`.
-##
-## With the rules off, or a weapon with no muzzle velocity, [method resolve_shot] is exactly
-## `combat.resolve_shot`. With them on, the hitscan behaviour has marked the shot deferred, so dot-combat
-## records only endpoints, and this launches one bullet per pellet. Rays, hitboxes, rewind and damage are
-## dot-combat's own ([member DotCombatManager.trace], `rewind_fn`, `apply_damage`), so a game writes none.
+## Rules off or no muzzle velocity: exactly `combat.resolve_shot`. On: one bullet per pellet, and
+## rays, hitboxes, rewind and damage stay dot-combat's own, so a game writes none.
 
 signal bullet_hit(id: int, damage: DotDamage)
 ## Before the world is rewound for a bullet of [param owner_id] (a game keeps the shooter in place).

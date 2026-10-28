@@ -1,12 +1,9 @@
 class_name DotWeaponBullets
 extends Node
 
-## Every simulated bullet in one node (no node per bullet), stepped once per game tick. Server
-## authority: [signal hit] is what applies damage; clients only draw [signal tracer] segments.
-##
-## Lag compensation matches dot-combat: [member rewind_fn] puts targets where the shooter saw them at a
-## tick, [member restore_fn] undoes it. A bullet remembers how many ticks behind its shooter was, so each
-## sub-step is cast against the world as of `now - lag`, and the world is restored before returning.
+## Every simulated bullet in one node (no node per bullet), stepped once per game tick. Server authority: [signal hit]
+## applies damage; clients only draw [signal tracer]. Lag compensation as dot-combat: each sub-step is cast against
+## the world as of `now - lag` via [member rewind_fn], then [member restore_fn] undoes it.
 
 ## Bullet [param id] hit [param info] (the cast result) after [param distance] metres.
 ## [param damage_mult] is the falloff multiplier at that distance.

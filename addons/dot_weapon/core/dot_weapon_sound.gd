@@ -1,13 +1,9 @@
 class_name DotWeaponSound
 extends RefCounted
 
-## The family's stock weapon sounds, read by path from dot-audio's [code]stock/weapons/[/code]
-## when a game links that addon, and null when it does not.
-##
-## [b]By path, not by [code]DotAudioStock[/code][/b], so no weapon pack gains a dependency on
-## dot-audio: a pack falls back to its own stand-in (or silence) when [method pick] is null.
-## Names are the files' (dot-audio docs/weapons.md): [code]light_fire[/code],
-## [code]shotgun_far[/code], [code]reload_out[/code], [code]swing_heavy[/code] and so on.
+## The family's stock weapon sounds, read by path from dot-audio's [code]stock/weapons/[/code], null when not linked.
+## By path, not by [code]DotAudioStock[/code], so no pack gains a dependency on dot-audio; a pack falls back to its own
+## stand-in when [method pick] is null. Names are the files' (dot-audio docs/weapons.md).
 
 const DIR := "res://addons/dot_audio/stock/weapons/"
 
@@ -74,10 +70,9 @@ static func pick_tail(sound_class: StringName, indoors: bool, roll: int = 0) -> 
 	return pick_far(sound_class, roll) if indoors else null
 
 
-## Problems with the stock as a game would hear it, empty when sound. Every class in [constant FIRE]
-## must resolve a stream that is not empty; with [param measure] and ffmpeg on the machine each
-## variant's peak must also stay under -0.5 dBFS (not clipped) and over -40 (not silent). A game
-## without dot-audio linked reports one problem and nothing else.
+## Problems with the stock as a game would hear it, empty when sound: every [constant FIRE] class must resolve
+## a stream, and with [param measure] and ffmpeg each variant's peak stays within -40..-0.5 dBFS.
+## A game without dot-audio linked reports one problem.
 static func check_stock(measure: bool = true) -> PackedStringArray:
 	var out := PackedStringArray()
 	if count(&"light_fire") == 0:

@@ -1,11 +1,8 @@
 extends Node
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
-##
-## Two numbers are printed at the end and both matter: sections entered against
-## sections that ran to their last line, and a total number of checks. A script error
-## aborts the section it is in and the section counter is satisfied, because the
-## section had already announced itself.
+## Printed at the end: sections entered against sections that ran to their last line, and a total of checks;
+## a script error aborts its section after it announced itself, so the entered count alone proves nothing.
 
 var _passed: int = 0
 var _failed: int = 0

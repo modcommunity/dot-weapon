@@ -1,17 +1,9 @@
 class_name DotWeaponRecoilRules
 extends DotWeaponCvarRules
 
-## Per-weapon recoil pattern as server cvars (`sv_recoil_*`, replicated), shared by every game.
-##
-## The pattern is a pure function of the shot's index in a burst and the weapon's seed, so the server's
-## bullet and the client's view kick agree with no extra data on the wire. Off by default: a weapon then
-## keeps its flat alternating kick. [member punch] splits each kick between the view and the bullet.
-##
-## [codeblock]
-## world.recoil_rules.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)  # server
-## game.recoil_rules.follow_cvars(link)                                                        # client
-## arsenal.recoil_rules = rules  # every arsenal, both sides
-## [/codeblock]
+## Per-weapon recoil pattern as replicated `sv_recoil_*` cvars. A pure function of burst index and weapon seed, so
+## server bullet and client kick agree with nothing extra on the wire. Off by default (flat alternating kick).
+## Wire with `bind_cvars` / `follow_cvars`, then `arsenal.recoil_rules = rules` on both sides.
 
 const _N := &"recoil_n"
 const _TICK := &"recoil_tick"

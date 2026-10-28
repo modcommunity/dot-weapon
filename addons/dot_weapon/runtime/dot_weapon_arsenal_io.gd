@@ -2,9 +2,8 @@ extends RefCounted
 ## Snapshot, restore and reporting for [DotWeaponArsenal], kept apart so the state machine stays small.
 
 ## Everything that has to travel and everything a rollback has to restore.
-##
-## [b]The behaviours' own state is in here[/b], because a snapshot that carried the
-## magazine and not the bow's draw reconciles a correction by silently un-drawing it.
+## The behaviours' own state is in here: a snapshot with the magazine but not the bow's draw
+## would reconcile a correction by silently un-drawing it.
 static func snapshot(a: Node) -> Dictionary:
 	var carried: Dictionary = {}
 	for key: int in a._slots.keys():

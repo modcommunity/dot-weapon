@@ -1,14 +1,9 @@
 class_name DotWeaponBallisticsRules
 extends DotWeaponCvarRules
 
-## Global ballistics switch and multipliers as `sv_ballistics*` cvars. Off by default: every weapon then
-## stays hitscan whatever its `muzzle_velocity`, so no game changes behaviour until it opts in.
-##
-## [codeblock]
-## rules.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)  # server
-## rules.follow_cvars(link)                                                       # client
-## bullets.rules = rules
-## [/codeblock]
+## Global ballistics switch and multipliers as `sv_ballistics*` cvars. Off by default: every weapon stays hitscan
+## whatever its `muzzle_velocity`. Wire with `bind_cvars` (server) and `follow_cvars` (client), then
+## `bullets.rules = rules`.
 
 const FIELD_SPECS := {
 	&"enabled": [0.0, 0.0, 1.0, "1 turns on simulated bullets (velocity, drop, drag)"],
