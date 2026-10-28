@@ -255,11 +255,7 @@ func _attachments_arsenal(c: DotWeaponAttachments, rifle: DotWeaponDef, f: DotWe
 	_drop(b)
 
 
-func _test_attachments() -> void:
-	_section("attachments")
-
-	var c := _attachment_catalogue()
-	var rifle := _modular_rifle()
+func _attachments_fit_rules(c: DotWeaponAttachments, rifle: DotWeaponDef) -> void:
 	var fits_scope := c.get_attachment(&"scope").fits(rifle)
 	_check(fits_scope, "an optic fits a weapon that has the mount and the tag")
 	_check(not c.get_attachment(&"dot_sight").fits(rifle), "a list of weapon ids refuses another weapon")
@@ -280,6 +276,14 @@ func _test_attachments() -> void:
 		c.ids() == [&"brake", &"dot_sight", &"drum", &"scope", &"suppressor", &"tiny_mag"],
 		"ids are in text order"
 	)
+
+
+func _test_attachments() -> void:
+	_section("attachments")
+
+	var c := _attachment_catalogue()
+	var rifle := _modular_rifle()
+	_attachments_fit_rules(c, rifle)
 	var choices := c.choices_for(rifle)
 	_check(choices.size() == 3, "choices cover every mount of the weapon")
 	_check(choices[&"muzzle"] == [&"brake", &"suppressor"], "in text order", str(choices[&"muzzle"]))
