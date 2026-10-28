@@ -41,6 +41,7 @@ static func schema() -> Array:
 		f.call("reload_start_ticks", "int", 22, {"min": 0, "max": 100000}),
 		f.call("auto_reload", "bool", true),
 		f.call("weight", "float", 0.0, {"min": 0.0, "max": 1000.0}),
+		f.call("crosshair_scale", "float", 0.0, {"min": 0.0, "max": 4.0}),
 		f.call("mounts", "list", []),
 		f.call("enabled", "bool", true),
 		f.call("menu", "dict", {}),
@@ -138,6 +139,8 @@ static func apply_common(d: DotWeaponDef, c: Dictionary) -> void:
 		d.min_charge = float(c["min_charge"])
 	if c.has("weight"):
 		d.weight = float(c["weight"])
+	if c.has("crosshair_scale"):
+		d.crosshair_scale = float(c["crosshair_scale"])
 
 
 ## Loads one profile into a [DotWeaponDef] of the common fields, with [member DotWeaponDef.params] taken from `extra:`.
@@ -335,7 +338,7 @@ static func flat_of(def: DotWeaponDef) -> Dictionary:
 		"reserve_max": def.reserve_max, "cost_per_use": def.cost_per_use,
 		"infinite_reserve": def.infinite_reserve, "reload_ticks": def.reload_ticks,
 		"reload_per_round": def.reload_per_round, "reload_start_ticks": def.reload_start_ticks,
-		"auto_reload": def.auto_reload, "weight": def.weight,
+		"auto_reload": def.auto_reload, "weight": def.weight, "crosshair_scale": def.crosshair_scale,
 		"mounts": Array(def.mounts).map(func(m: StringName) -> String: return String(m)),
 	}
 	if def.tuning != null:

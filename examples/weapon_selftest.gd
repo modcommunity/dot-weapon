@@ -2,7 +2,7 @@ extends "selftest/sections_content.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 517
+const CHECKS := 520
 
 
 func _ready() -> void:
@@ -995,6 +995,18 @@ func _test_spread_ladder() -> void:
 	_check(sniper > plain and plain > smg, "gap scale: sniper > usual gun > automatic", "%s %s %s" % [sniper, plain, smg])
 	bal.crosshair_scale = 2.0
 	_check(is_equal_approx(bal.crosshair_scale_for([&"automatic"]), 2.0), "an explicit crosshair_scale beats the class default")
+	var xs := DotWeaponDef.new()
+	DotWeaponProfiles.apply_common(xs, {"crosshair_scale": 3.0})
+	_check(is_equal_approx(xs.crosshair_scale, 3.0) and str(DotWeaponProfiles.schema()).contains("crosshair_scale"), "crosshair_scale is a schema field the def takes")
+	var xa := _arsenal()
+	xa.give(&"rifle")
+	var xdef := xa.current().def
+	xdef.crosshair_scale = 0.0
+	(xdef.tuning as DotWeaponBallistics).crosshair_scale = 1.5
+	_check(is_equal_approx(xa.crosshair_scale(), 1.5), "def field 0 falls back to extra.tuning crosshair_scale")
+	xdef.crosshair_scale = 0.5
+	_check(is_equal_approx(xa.crosshair_scale(), 0.5), "the def field beats the tuning path")
+	_drop(xa)
 	_done()
 
 

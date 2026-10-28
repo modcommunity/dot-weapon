@@ -738,7 +738,11 @@ func spread_now() -> float:
 ## The crosshair gap scale of the weapon in hand (see [member DotWeaponBallistics.crosshair_scale]); 1 with none.
 func crosshair_scale() -> float:
 	var slot := current()
-	if slot == null or slot.def == null or not (slot.def.tuning is DotWeaponBallistics):
+	if slot == null or slot.def == null:
+		return 1.0
+	if slot.def.crosshair_scale > 0.0:
+		return slot.def.crosshair_scale
+	if not (slot.def.tuning is DotWeaponBallistics):
 		return 1.0
 	return (slot.def.tuning as DotWeaponBallistics).crosshair_scale_for(slot.def.tags)
 

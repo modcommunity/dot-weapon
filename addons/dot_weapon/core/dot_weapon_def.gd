@@ -95,6 +95,9 @@ enum Fire {
 ## own fields; [member params] stays available for a pack that cannot register a class.
 @export var tuning: DotWeaponTuning = null
 
+## Multiplies the crosshair's gap. 0 falls back to `extra: tuning: crosshair_scale`, then the class default.
+@export_range(0.0, 4.0, 0.01) var crosshair_scale: float = 0.0
+
 @export_group("Attachments")
 
 ## The mount points this weapon has ("optic", "muzzle"...). An attachment fits only a
