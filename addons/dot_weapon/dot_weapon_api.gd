@@ -53,5 +53,7 @@ extends RefCounted
 ## profile kind), [DotWeaponHitzones], `DotWeaponBulletBridge.ammo_types`/`hitzones`, `arsenal.load_ammo`/`ammo_of`.
 ## Inert unless `sv_ballistics` is on and a game sets them. OLDEST stays 1.
 
-const LEVEL := 13
+## 14: [method DotWeaponArsenal.equip], a hand-out that holds a slot at once even while the arsenal is disabled. OLDEST stays 1.
+
+const LEVEL := 14
 const OLDEST := 1

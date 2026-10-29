@@ -2,7 +2,7 @@ extends "selftest/sections_ballistics.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 522
+const CHECKS := 527
 
 
 func _ready() -> void:
@@ -330,6 +330,15 @@ func _test_carrying_and_switching() -> void:
 
 	_drive(b, 111, 21, false)
 	_check(not b.is_switching(), "until the deploy finishes")
+
+	# A hand-out holds a slot at once, even while disabled (a round's freeze), where select refuses.
+	var eq := _arsenal()
+	eq.give(&"rifle")
+	eq.give(&"pistol")
+	eq.disabled = true
+	_check(not eq.select(2, 5), "select refuses while disabled")
+	_check(eq.equip(2) and eq.current_slot() == 2 and not eq.is_switching(), "equip holds the slot at once while disabled")
+	_check(not eq.equip(9), "equip refuses a slot not carried")
 
 	# Using during a deploy must do nothing, or a switch is free.
 	var c := _arsenal(slow)

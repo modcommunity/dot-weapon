@@ -261,6 +261,15 @@ func cycle_fire_mode() -> bool:
 	return set_fire_mode(next)
 
 
+## Puts [param slot] in the hand at once, for a hand-out (spawn loadout). Unlike [method select] it works
+## while [member disabled] (a round's freeze), so a spawn is not left holding the first weapon given.
+func equip(slot: int) -> bool:
+	if slot == _current or not _slots.has(slot):
+		return false
+	_force_select(slot)
+	return true
+
+
 func select(slot: int, tick: int) -> bool:
 	if disabled or slot == _current or not _slots.has(slot):
 		return false
