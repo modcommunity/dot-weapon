@@ -18,6 +18,7 @@ const FIELDS := {
 	&"horizontal": [1.0, 0.0, 10.0, "Multiplier on the sideways drift"],
 	&"recovery": [1.0, 0.0, 20.0, "Multiplier on how fast recoil settles after the trigger is released"],
 	&"punch": [1.0, 0.0, 1.0, "Share of each kick that turns the view; the rest offsets the bullet only"],
+	&"follow": [1.0, 0.0, 1.0, "Share of the view punch left over from earlier shots that the bullet follows"],
 	&"build": [1.0, 0.0, 10.0, "Multiplier on how much sustained fire builds the kick"],
 	&"reset": [0.4, 0.05, 5.0, "Seconds without a shot after which the pattern starts over"],
 	&"mult_aim": [0.6, 0.0, 10.0, "Recoil multiplier while aiming down sights"],
@@ -32,6 +33,7 @@ var vertical: float = 1.0
 var horizontal: float = 1.0
 var recovery: float = 1.0
 var punch: float = 1.0
+var follow: float = 1.0
 var build: float = 1.0
 var reset: float = 0.4
 var mult_aim: float = 0.6
@@ -96,6 +98,7 @@ func apply(out: DotWeaponOutcome, b: DotWeaponBallistics, state: Dictionary, ctx
 		b.recoil_pitch * vertical * grow * f,
 		b.recoil_yaw * horizontal * grow * f * drift(seed_for(b, id), n),
 	)
+	var residual := acc
 	acc += kick
 
 	state[_N] = n + 1
@@ -106,7 +109,8 @@ func apply(out: DotWeaponOutcome, b: DotWeaponBallistics, state: Dictionary, ctx
 	out.recoil = kick * punch
 	out.recoil_recovery = rec
 	out.recoil_signed = true
-	return acc * (1.0 - punch)
+	# The bullet leaves where the kicked view points (the residue of earlier shots), not the unkicked aim.
+	return acc * (1.0 - punch) + residual * punch * follow
 
 
 ## Turns [param dir] by [param offset] degrees (pitch up, yaw), about the view's own axes.

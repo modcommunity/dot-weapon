@@ -444,6 +444,11 @@ func _test_recoil_rules() -> void:
 	_check(split[0].shots[0].direction.is_equal_approx(again[0].shots[0].direction), "the bullet offset repeats too")
 	rules.punch = 1.0
 	_check(_burst(rules, 1, 10)[0].shots[0].direction.is_equal_approx(Vector3.FORWARD), "punch 1 keeps the bullet on the view")
+	var follows := _burst(rules, 2, 10)
+	_check(not follows[1].shots[0].direction.is_equal_approx(Vector3.FORWARD), "the second bullet follows the view punch left by the first")
+	rules.follow = 0.0
+	_check(_burst(rules, 2, 10)[1].shots[0].direction.is_equal_approx(Vector3.FORWARD), "follow 0 keeps the bullet on the unkicked aim")
+	rules.follow = 1.0
 
 	var view := DotWeaponRecoil.new()
 	for o: DotWeaponOutcome in run1:
