@@ -179,6 +179,57 @@ func enforce_limit() -> Array[StringName]:
 	return dropped
 
 
+## Drops the weapon in hand for a world pickup: removes it, cancels any reload, switches to the next
+## weapon and returns `{id, magazine, reserve}` (empty when nothing may be dropped). Slots in
+## [param keep_slots] (a permanent melee weapon) are never dropped. The reserve goes with it only when
+## no other carried weapon draws on the same pool.
+func drop_current(keep_slots: Array[int] = []) -> Dictionary:
+	var held := current()
+	if held == null or keep_slots.has(_current) or disabled:
+		return {}
+	var state := {"id": held.id(), "magazine": held.magazine, "reserve": 0}
+	var slot_number := _current
+	_cancel_transient()
+	if _shelf_of(slot_number).is_empty():
+		var _taken := take(slot_number)
+	else:
+		_slots[slot_number] = _shelf_of(slot_number).pop_front()
+		if _shelf_of(slot_number).is_empty():
+			_shelf.erase(slot_number)
+		var to := current()
+		_switch_to = slot_number
+		_holstering = false
+		_switch_done_tick = -1
+		if to != null:
+			switched.emit(slot_number, slot_number)
+		carried_changed.emit()
+	var pool := held.def.ammo_type
+	if pool != &"" and not held.def.infinite_reserve:
+		var shared := false
+		for s: int in _slots:
+			for w in weapons_in(s):
+				if w.def.ammo_type == pool:
+					shared = true
+		if not shared:
+			state["reserve"] = _ammo.take(pool, _ammo.count(pool))
+			ammo_changed.emit(pool, _ammo.count(pool))
+	return state
+
+
+## Puts the ammunition of a [method drop_current] state back on the weapon [param state] names, which
+## must already be carried (given with `full = false`).
+func apply_dropped(state: Dictionary) -> void:
+	var def := catalogue.get_def(StringName(state.get("id", &"")))
+	if def == null:
+		return
+	for w in weapons_in(def.slot):
+		if w.id() == def.id:
+			w.magazine = clampi(int(state.get("magazine", 0)), 0, maxi(def.magazine, 0))
+	if def.ammo_type != &"" and int(state.get("reserve", 0)) > 0:
+		var _added := add_ammo(def.ammo_type, int(state["reserve"]))
+	carried_changed.emit()
+
+
 ## Brings the next weapon of the current slot into hand (pressing the slot key again). False when
 ## the slot holds one weapon.
 func cycle_slot(tick: int) -> bool:
