@@ -102,6 +102,69 @@ static func check_stock(measure: bool = true) -> PackedStringArray:
 	return out
 
 
+## Length bounds in seconds of every fire variant per class: a rifle report under 0.15 s is a click, over 1.5 s a tail that stacks.
+const BOUNDS := {
+	&"light": Vector2(0.3, 1.2), &"magnum": Vector2(0.5, 1.5), &"smg": Vector2(0.15, 0.6), &"rifle": Vector2(0.15, 1.5),
+	&"heavy": Vector2(0.15, 1.5), &"sniper": Vector2(0.8, 2.5), &"shotgun": Vector2(0.6, 1.6),
+	&"minigun": Vector2(0.08, 0.4), &"launcher": Vector2(0.25, 1.2), &"beam": Vector2(0.15, 0.6),
+	&"charge": Vector2(0.25, 0.8), &"suppressed": Vector2(0.1, 0.5), &"swing": Vector2(0.2, 1.0),
+	&"bash": Vector2(0.15, 0.5), &"throw": Vector2(0.3, 1.0),
+}
+
+## Classes that are reloaded (the rest are melee, thrown or energy).
+const RELOADED := [&"light", &"magnum", &"smg", &"rifle", &"heavy", &"sniper", &"shotgun", &"suppressed"]
+
+
+## Problems with a pack's weapon -> sound class map ([param classes], id -> class): each id's class must be known, have fire
+## variants inside [constant BOUNDS], and a gun class needs a reload and a dry click. Empty when sound or dot-audio is not linked.
+static func check_classes(classes: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	if count(&"light_fire") == 0:
+		return out
+	var bad := {}
+	for id: StringName in classes:
+		var sound_class: StringName = classes[id]
+		if not FIRE.has(sound_class):
+			out.append("%s: unknown sound class %s" % [id, sound_class])
+			continue
+		if bad.has(sound_class):
+			continue
+		var sound: StringName = FIRE[sound_class]
+		if count(sound) == 0:
+			bad[sound_class] = true
+			out.append("%s: class %s has no fire files" % [id, sound_class])
+			continue
+		if BOUNDS.has(sound_class):
+			for i in count(sound):
+				var len_s := ((load("%s%s_%d.ogg" % [DIR, sound, i]) as AudioStream).get_length())
+				var b: Vector2 = BOUNDS[sound_class]
+				if len_s < b.x or len_s > b.y:
+					bad[sound_class] = true
+					out.append("%s: %s_%d is %.2f s, outside %s %.2f-%.2f" % [id, sound, i, len_s, sound_class, b.x, b.y])
+		if sound_class in RELOADED:
+			var reload: StringName = &"reload_shell" if sound_class == &"shotgun" else &"reload_out"
+			if count(reload) == 0 or count(&"dry") == 0:
+				bad[sound_class] = true
+				out.append("%s: class %s has no %s or dry sound" % [id, sound_class, reload])
+	return out
+
+
+## Problems of the stock as a whole: two different classes (or a fire and a far recording) sharing one file's bytes.
+static func check_unique() -> PackedStringArray:
+	var out := PackedStringArray()
+	var owner := {}
+	for sound_class: StringName in FIRE:
+		var base := String(FIRE[sound_class]).trim_suffix("_fire")
+		for stem: String in [String(FIRE[sound_class]), base + "_far"]:
+			for i in count(StringName(stem)):
+				var path := "%s%s_%d.ogg" % [DIR, stem, i]
+				var md5 := FileAccess.get_md5(path)
+				if owner.has(md5) and owner[md5] != stem:
+					out.append("%s and %s are the same recording" % [owner[md5], path])
+				owner[md5] = stem
+	return out
+
+
 ## Peak in dBFS through ffmpeg's volumedetect, or -20 (a pass) when ffmpeg is not there.
 static func _peak_db(file: String) -> float:
 	var lines: Array = []
