@@ -32,6 +32,10 @@ const _Io := preload("dot_weapon_arsenal_io.gd")
 ## deadlines are absolute ticks and travel in [method snapshot] as ticks, so two rates predict different reload ends.
 @export_range(1, 240, 1) var tick_rate: int = 64
 
+## Seconds a semi-auto press made during the cooldown stays queued (`sv_fire_buffer`). 0 drops it, negative keeps it
+## until the cooldown ends. A weapon's own [member DotWeaponDef.fire_buffer_seconds] overrides this.
+@export var fire_buffer_seconds: float = 0.15
+
 @export_range(1, 16, 1) var max_slots: int = 8
 
 @export_group("Content")
@@ -78,6 +82,9 @@ var _shelf: Dictionary = {}          ## int -> Array[DotWeaponSlot], stowed behi
 var _ammo := DotWeaponAmmo.new()
 var _current: int = 0
 var _previous: int = 0
+
+## Last tick a press made during the cooldown still fires on. -1: none pending.
+var _buffer_until: int = -1
 
 ## Tick the current weapon may next be used on.
 var _next_use_tick: int = 0

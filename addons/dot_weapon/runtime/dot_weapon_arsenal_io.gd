@@ -33,6 +33,7 @@ static func snapshot(a: Node) -> Dictionary:
 		"burst_left": a._burst_left,
 		"charge_started": a._charge_started,
 		"held": a._held_ticks,
+		"buffer": a._buffer_until,
 		"use_index": a._use_index,
 	}
 
@@ -134,6 +135,7 @@ static func _restore_scalars(a: Node, d: Dictionary) -> void:
 	a._burst_left = int(d.get("burst_left", 0))
 	a._charge_started = int(d.get("charge_started", -1))
 	a._held_ticks = int(d.get("held", 0))
+	a._buffer_until = int(d.get("buffer", -1))
 	a._use_index = int(d.get("use_index", 0))
 
 

@@ -157,6 +157,10 @@ enum Fire {
 ## Ticks between uses. Zero means once per tick.
 @export_range(0, 100000, 1) var use_interval_ticks: int = 7
 
+## Seconds a press during the cooldown stays queued (semi-auto). 0: dropped; negative: until the cooldown ends;
+## -2: use the arsenal's [member DotWeaponArsenal.fire_buffer_seconds].
+@export var fire_buffer_seconds: float = -2.0
+
 ## Fire modes the player may cycle between with the fire-mode button: "auto", "semi", "burst". Empty means
 ## only [member fire_mode]; otherwise the first entry is the one the gun starts in.
 @export var fire_modes: PackedStringArray = PackedStringArray()

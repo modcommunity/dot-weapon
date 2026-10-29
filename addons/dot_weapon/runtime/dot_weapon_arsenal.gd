@@ -328,6 +328,7 @@ func _cancel_transient() -> void:
 	_charge_started = -1
 	_charge_announced = false
 	_held_ticks = 0
+	_buffer_until = -1
 
 
 func is_reloading() -> bool:
@@ -476,7 +477,7 @@ func is_idle_for(command: DotWeaponCommand, previous: DotWeaponCommand) -> bool:
 	if previous != null and previous.buttons != 0:
 		return false
 
-	if _switch_done_tick >= 0 or _reloading or _burst_left > 0 or _charge_started >= 0:
+	if _switch_done_tick >= 0 or _reloading or _burst_left > 0 or _charge_started >= 0 or _buffer_until >= 0:
 		return false
 
 	var slot := current()
@@ -582,6 +583,9 @@ func _advance_use(
 	else:
 		_held_ticks = 0
 
+	if _buffer_until >= 0 and ctx.tick > _buffer_until:
+		_buffer_until = -1
+
 	match slot.fire_mode():
 		DotWeaponDef.Fire.CHARGE:
 			return _advance_charge(slot, ctx, down, was_down)
@@ -595,10 +599,25 @@ func _advance_use(
 			return DotWeaponOutcome.nothing("")
 		_:
 			if down and not was_down:
+				if ctx.tick < _next_use_tick and _arm_buffer(def, ctx.tick):
+					return DotWeaponOutcome.nothing("")
+				_buffer_until = -1
+				return _try_use(slot, ctx)
+			if _buffer_until >= ctx.tick and ctx.tick >= _next_use_tick:
+				_buffer_until = -1
 				return _try_use(slot, ctx)
 			if was_down and not down:
 				return slot.behaviour.release(ctx)
 			return DotWeaponOutcome.nothing("")
+
+
+## Remembers a press made inside the cooldown so it fires when the cooldown ends, if that is inside the window.
+func _arm_buffer(def: DotWeaponDef, tick: int) -> bool:
+	var seconds := def.fire_buffer_seconds if def.fire_buffer_seconds > -2.0 else fire_buffer_seconds
+	if seconds == 0.0:
+		return false
+	_buffer_until = 0x7fffffff if seconds < 0.0 else tick + ceili(seconds * tick_rate)
+	return true
 
 
 func _advance_charge(
