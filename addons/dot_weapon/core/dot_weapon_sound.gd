@@ -17,6 +17,12 @@ const FIRE := {
 	&"casing": &"casing", &"reload_shell": &"reload_shell", &"reload_out": &"reload_out", &"reload_in": &"reload_in",
 }
 
+## Sound class -> the class whose reload files it uses (a silenced pistol reloads like a pistol).
+const RELOAD_CLASS := {
+	&"light": &"light", &"suppressed": &"light", &"magnum": &"magnum", &"smg": &"smg", &"rifle": &"rifle",
+	&"heavy": &"heavy", &"sniper": &"sniper",
+}
+
 ## Variant counts found on disk, kept because probing is a file lookup per variant.
 static var _counts: Dictionary = {}
 
@@ -44,6 +50,20 @@ static func pick(sound: StringName, roll: int = 0) -> AudioStream:
 ## The report for a pack's sound class, or null.
 static func pick_class(sound_class: StringName, roll: int = 0) -> AudioStream:
 	return pick(FIRE.get(sound_class, &""), roll) if FIRE.has(sound_class) else null
+
+
+## The stock name of [param stage] (&"out" or &"in") of [param sound_class]'s reload: the class's own set, else the generic
+## `reload_out`/`reload_in`, else &"reload_shell" for a shotgun (a tube is loaded round by round).
+static func reload_name(sound_class: StringName, stage: StringName) -> StringName:
+	if sound_class == &"shotgun":
+		return &"reload_shell"
+	var own := StringName("reload_%s_%s" % [stage, RELOAD_CLASS.get(sound_class, &"")])
+	return own if RELOAD_CLASS.has(sound_class) and count(own) > 0 else StringName("reload_" + String(stage))
+
+
+## One variant of [param sound_class]'s reload [param stage], or null when dot-audio is not linked.
+static func pick_reload(sound_class: StringName, stage: StringName = &"out", roll: int = 0) -> AudioStream:
+	return pick(reload_name(sound_class, stage), roll)
 
 
 ## The same class heard from a distance (a different recording, more air), or null.
@@ -142,17 +162,27 @@ static func check_classes(classes: Dictionary) -> PackedStringArray:
 					bad[sound_class] = true
 					out.append("%s: %s_%d is %.2f s, outside %s %.2f-%.2f" % [id, sound, i, len_s, sound_class, b.x, b.y])
 		if sound_class in RELOADED:
-			var reload: StringName = &"reload_shell" if sound_class == &"shotgun" else &"reload_out"
-			if count(reload) == 0 or count(&"dry") == 0:
+			var reload := reload_name(sound_class, &"out")
+			if count(reload) == 0 or count(reload_name(sound_class, &"in")) == 0 or count(&"dry") == 0:
 				bad[sound_class] = true
 				out.append("%s: class %s has no %s or dry sound" % [id, sound_class, reload])
 	return out
 
 
-## Problems of the stock as a whole: two different classes (or a fire and a far recording) sharing one file's bytes.
+## Problems of the stock as a whole: two different classes (or a fire and a far recording) sharing one file's bytes, and
+## two classes' reload sets sharing one (the generic reload_out/in are a fallback and may overlap).
 static func check_unique() -> PackedStringArray:
 	var out := PackedStringArray()
 	var owner := {}
+	for rc: StringName in RELOAD_CLASS.values():
+		for stage in [&"out", &"in"]:
+			var stem := "reload_%s_%s" % [stage, rc]
+			for i in count(StringName(stem)):
+				var rpath := "%s%s_%d.ogg" % [DIR, stem, i]
+				var rmd5 := FileAccess.get_md5(rpath)
+				if owner.has(rmd5) and owner[rmd5] != stem:
+					out.append("%s and %s are the same recording" % [owner[rmd5], rpath])
+				owner[rmd5] = stem
 	for sound_class: StringName in FIRE:
 		var base := String(FIRE[sound_class]).trim_suffix("_fire")
 		for stem: String in [String(FIRE[sound_class]), base + "_far"]:
