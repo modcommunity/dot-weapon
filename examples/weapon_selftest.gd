@@ -20,6 +20,7 @@ func _run() -> void:
 	_test_content_follow()
 	_test_behaviour_resolution()
 	_test_carrying_and_switching()
+	_test_equip_and_slot_requests()
 	_test_cadence()
 	_test_ammunition()
 	_test_reloading()
@@ -44,6 +45,7 @@ func _run() -> void:
 	_test_spread_rules()
 	_test_spread_ladder()
 	_test_recoil_rules()
+	_test_recoil_view_and_cvars()
 	_test_fire_modes()
 	_test_muzzle()
 	_test_ballistics()
@@ -331,14 +333,6 @@ func _test_carrying_and_switching() -> void:
 	_drive(b, 111, 21, false)
 	_check(not b.is_switching(), "until the deploy finishes")
 
-	# A hand-out holds a slot at once, even while disabled (a round's freeze), where select refuses.
-	var eq := _arsenal()
-	eq.give(&"rifle")
-	eq.give(&"pistol")
-	eq.disabled = true
-	_check(not eq.select(2, 5), "select refuses while disabled")
-	_check(eq.equip(2) and eq.current_slot() == 2 and not eq.is_switching(), "equip holds the slot at once while disabled")
-	_check(not eq.equip(9), "equip refuses a slot not carried")
 
 	# Using during a deploy must do nothing, or a switch is free.
 	var c := _arsenal(slow)
@@ -356,6 +350,33 @@ func _test_carrying_and_switching() -> void:
 	var after := _drive(c, 30, 10, true)
 	_check(not after.is_empty(), "and can be used once it has arrived")
 
+
+	_check(a.take(1).ok, "a weapon can be taken away")
+	_check(not a.carries(&"rifle"), "and is gone")
+	_check(a.current_slot() == 2, "and the hand falls back to another slot")
+
+	_drop(a)
+	_drop(b)
+	_drop(c)
+	_done()
+
+
+func _test_equip_and_slot_requests() -> void:
+	_section("equip and slot requests")
+
+	var slow := _catalogue()
+	slow.get_def(&"rifle").holster_ticks = 10
+	slow.get_def(&"pistol").deploy_ticks = 20
+
+	# A hand-out holds a slot at once, even while disabled (a round's freeze), where select refuses.
+	var eq := _arsenal()
+	eq.give(&"rifle")
+	eq.give(&"pistol")
+	eq.disabled = true
+	_check(not eq.select(2, 5), "select refuses while disabled")
+	_check(eq.equip(2) and eq.current_slot() == 2 and not eq.is_switching(), "equip holds the slot at once while disabled")
+	_check(not eq.equip(9), "equip refuses a slot not carried")
+
 	# [b]A slot asked for on every tick still arrives.[/b] A networked command carries the
 	# slot it wants each tick; a switch restarted by every one of them never finished.
 	var held := _arsenal(slow)
@@ -370,13 +391,7 @@ func _test_carrying_and_switching() -> void:
 		"slot %d, switching %s" % [held.current_slot(), str(held.is_switching())])
 	_drop(held)
 
-	_check(a.take(1).ok, "a weapon can be taken away")
-	_check(not a.carries(&"rifle"), "and is gone")
-	_check(a.current_slot() == 2, "and the hand falls back to another slot")
-
-	_drop(a)
-	_drop(b)
-	_drop(c)
+	_drop(eq)
 	_done()
 
 

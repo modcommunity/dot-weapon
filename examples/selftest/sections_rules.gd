@@ -450,6 +450,16 @@ func _test_recoil_rules() -> void:
 	_check(_burst(rules, 2, 10)[1].shots[0].direction.is_equal_approx(Vector3.FORWARD), "follow 0 keeps the bullet on the unkicked aim")
 	rules.follow = 1.0
 
+	_done()
+
+
+func _test_recoil_view_and_cvars() -> void:
+	_section("recoil view and cvars")
+
+	var rules := DotWeaponRecoilRules.new()
+	rules.enabled = true
+	rules.horizontal = 1.0
+	var run1 := _burst(rules, 6, 10)
 	var view := DotWeaponRecoil.new()
 	for o: DotWeaponOutcome in run1:
 		view.kick_outcome(o)
