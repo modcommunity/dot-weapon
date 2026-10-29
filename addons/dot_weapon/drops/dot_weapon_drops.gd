@@ -122,6 +122,12 @@ func take_for(arsenal: Object, position: Vector3, taker_id: int, source: Object 
 	return best
 
 
+## Removes every drop (a new round); each says it is gone.
+func clear() -> void:
+	for id: int in _entries.keys():
+		_remove(id, 0)
+
+
 ## Ages, settles and expires the drops. Call every physics frame (the node does when added to a tree).
 func tick(delta: float) -> void:
 	for id: int in _entries.keys():
