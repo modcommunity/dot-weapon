@@ -61,6 +61,7 @@ func _ballistics(damage: float) -> DotWeaponBallistics:
 	b.bloom = 0.0
 	b.recoil_pitch = 0.5
 	b.recoil_yaw = 0.2
+	b.accuracy_class = "none"
 	return b
 
 

@@ -10,6 +10,7 @@ signal changed
 ## property: [default, min, max, description]
 const FIELDS := {
 	&"enabled": [0.0, 0.0, 1.0, "1 turns on movement-dependent weapon spread"],
+	&"scale": [1.0, 0.0, 10.0, "Master multiplier on every weapon's spread, on or off (0 fires dead straight)"],
 	&"mult_hip": [1.0, 0.0, 10.0, "Spread multiplier when not aiming down sights"],
 	&"mult_aim": [0.5, 0.0, 10.0, "Spread multiplier while aiming down sights"],
 	&"mult_stand": [1.0, 0.0, 10.0, "Spread multiplier standing still"],
@@ -26,6 +27,7 @@ const FIELDS := {
 }
 
 var enabled: bool = false
+var scale: float = 1.0
 var mult_hip: float = 1.0
 var mult_aim: float = 0.5
 var mult_stand: float = 1.0

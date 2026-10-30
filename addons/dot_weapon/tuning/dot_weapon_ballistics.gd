@@ -69,6 +69,37 @@ extends DotWeaponTuning
 ## definition names one (the hitscan behaviour scales it to the running rate).
 @export_range(0.0, 10.0, 0.001) var bloom_recovery: float = 0.15
 
+@export_group("Accuracy model")
+
+## The class whose defaults fill every -1 below: rifle, smg, lmg, sniper, shotgun, pistol; "" infers it
+## from tags and id ([DotWeaponAccuracyClass]).
+@export var accuracy_class: String = ""
+
+## Ticks after a shot before bloom starts to shed; never less than the gun's own use interval, so
+## sustained fire builds bloom. -1 takes the class default.
+@export_range(-1, 1000, 1) var bloom_delay_ticks: int = -1
+
+## Multiplies the spread and bloom while aiming down sights. -1 takes the class default.
+@export_range(-1.0, 4.0, 0.01) var spread_aim: float = -1.0
+
+## Degrees added at the hip (not aiming); a scoped rifle is loose unscoped. -1 takes the class default.
+@export_range(-1.0, 45.0, 0.01) var spread_hip: float = -1.0
+
+## Multiplies the spread while sprinting. -1 takes the class default.
+@export_range(-1.0, 10.0, 0.01) var spread_sprint: float = -1.0
+
+## Multiplies the spread while sliding or wall-running. -1 takes the class default.
+@export_range(-1.0, 10.0, 0.01) var spread_slide: float = -1.0
+
+## Ticks the moving spread takes to settle to the still spread after stopping. -1 takes the class default.
+@export_range(-1, 1000, 1) var settle_ticks: int = -1
+
+## Degrees a hit taken adds, shed over [constant DotWeaponAccuracyClass.FLINCH_SEC]. -1 takes the class default.
+@export_range(-1.0, 45.0, 0.01) var spread_flinch: float = -1.0
+
+## Multiplies bloom while crouched. -1 takes the class default.
+@export_range(-1.0, 4.0, 0.01) var bloom_crouch: float = -1.0
+
 @export_group("Recoil")
 
 ## Degrees of upward kick per use.
@@ -88,6 +119,18 @@ extends DotWeaponTuning
 
 ## Seeds the sideways pattern; 0 derives it from the weapon id.
 @export var recoil_seed: int = 0
+
+## Multiplies the kick while aiming down sights. -1 takes the class default.
+@export_range(-1.0, 4.0, 0.01) var recoil_aim: float = -1.0
+
+## Multiplies the kick while crouched. -1 takes the class default.
+@export_range(-1.0, 4.0, 0.01) var recoil_crouch: float = -1.0
+
+## Multiplies the kick while moving or in the air. -1 takes the class default.
+@export_range(-1.0, 4.0, 0.01) var recoil_move: float = -1.0
+
+## Share of each kick that turns the camera; the rest moves the bullet only. -1 keeps `sv_recoil_punch`.
+@export_range(-1.0, 1.0, 0.01) var recoil_camera: float = -1.0
 
 @export_group("Ballistics")
 
@@ -182,6 +225,19 @@ static func class_crosshair_scale(tags: Array) -> float:
 ## The gap scale for a weapon with these tags: the explicit [member crosshair_scale], else the class default.
 func crosshair_scale_for(tags: Array) -> float:
 	return crosshair_scale if crosshair_scale > 0.0 else class_crosshair_scale(tags)
+
+
+## Multiplier or degrees field [param key], else the preset of class [param klass].
+func accuracy(key: String, klass: String) -> float:
+	var own: Variant = get(key)
+	if own != null and float(own) >= 0.0:
+		return float(own)
+	return DotWeaponAccuracyClass.preset(klass, key)
+
+
+## The cone half-angle while moving at a smoothed [param motion] (0 still, 1 at the reference speed).
+func spread_for_motion(motion: float, airborne: bool, crouched: bool) -> float:
+	return spread_for(clampf(motion, 0.0, 1.0) * spread_speed_ref, airborne, crouched)
 
 
 ## The cone half-angle for a carrier in this posture, before bloom.

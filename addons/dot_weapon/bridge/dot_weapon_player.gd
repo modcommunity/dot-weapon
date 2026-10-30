@@ -76,6 +76,7 @@ static func context_for(
 	ctx.airborne = not bool(motion.get("on_floor", true))
 	ctx.crouched = bool(motion.get("crouched", false))
 	ctx.sliding = bool(motion.get("sliding", false))
+	ctx.wall_running = bool(motion.get("wall_running", false))
 	ctx.sprinting = bool(motion.get("sprinting", false))
 	ctx.sprint_blocks_aim = bool(motion.get("sprint_blocks_aim", false))
 	ctx.sprint_blocks_fire = bool(motion.get("sprint_blocks_fire", false))

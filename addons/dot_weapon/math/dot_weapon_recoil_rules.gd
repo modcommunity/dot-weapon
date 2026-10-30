@@ -83,7 +83,8 @@ func posture(ctx: DotWeaponContext, walk_speed: float = 0.5) -> float:
 
 ## Kick for the use at [param ctx]: sets the outcome's view kick and recovery, advances the burst in
 ## [param state], and returns the degrees (pitch, yaw) the bullet itself is offset by.
-func apply(out: DotWeaponOutcome, b: DotWeaponBallistics, state: Dictionary, ctx: DotWeaponContext, id: StringName, tick_rate: int) -> Vector2:
+## [param weapon] is the weapon's own posture multiplier; its `recoil_camera` overrides [member punch] when set.
+func apply(out: DotWeaponOutcome, b: DotWeaponBallistics, state: Dictionary, ctx: DotWeaponContext, id: StringName, tick_rate: int, weapon: float = 1.0) -> Vector2:
 	var rate := float(maxi(tick_rate, 1))
 	var last := int(state.get(_TICK, -1000000))
 	var elapsed := maxf(float(ctx.tick - last) / rate, 0.0)
@@ -93,7 +94,8 @@ func apply(out: DotWeaponOutcome, b: DotWeaponBallistics, state: Dictionary, ctx
 	acc *= exp(-rec * elapsed)
 
 	var grow := 1.0 + minf(b.recoil_build * build * float(n), b.recoil_build_max * build)
-	var f := posture(ctx)
+	var f := posture(ctx) * weapon
+	var share := b.recoil_camera if b.recoil_camera >= 0.0 else punch
 	var kick := Vector2(
 		b.recoil_pitch * vertical * grow * f,
 		b.recoil_yaw * horizontal * grow * f * drift(seed_for(b, id), n),
@@ -106,11 +108,11 @@ func apply(out: DotWeaponOutcome, b: DotWeaponBallistics, state: Dictionary, ctx
 	state[_ACC_X] = acc.x
 	state[_ACC_Y] = acc.y
 
-	out.recoil = kick * punch
+	out.recoil = kick * share
 	out.recoil_recovery = rec
 	out.recoil_signed = true
 	# The bullet leaves where the kicked view points (the residue of earlier shots), not the unkicked aim.
-	return acc * (1.0 - punch) + residual * punch * follow
+	return acc * (1.0 - share) + residual * share * follow
 
 
 ## Turns [param dir] by [param offset] degrees (pitch up, yaw), about the view's own axes.

@@ -1,8 +1,8 @@
-extends "selftest/sections_ballistics.gd"
+extends "selftest/sections_accuracy.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 527
+const CHECKS := 563
 
 
 func _ready() -> void:
@@ -53,6 +53,13 @@ func _run() -> void:
 	_test_hitscan_unchanged()
 	_test_bullet_bridge()
 	_test_ammo_hitzones()
+	_test_accuracy_classes()
+	_test_accuracy_bloom()
+	_test_accuracy_settle_flinch()
+	_test_accuracy_scale_profile()
+	_test_accuracy_recoil()
+	_test_accuracy_prediction()
+	_test_accuracy_distribution()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [

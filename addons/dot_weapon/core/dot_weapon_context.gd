@@ -63,6 +63,12 @@ var sliding: bool = false
 ## Whether the carrier is sprinting.
 var sprinting: bool = false
 
+## Whether the carrier is running along a wall (spread as sliding).
+var wall_running: bool = false
+
+## The simulation tick the carrier last took damage on, -1 never: a hit flinches the spread.
+var hurt_tick: int = -1
+
 ## Whether sprinting stops aiming and reloading (the controller's `sv_sprint_noaim`).
 var sprint_blocks_aim: bool = false
 

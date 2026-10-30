@@ -55,5 +55,8 @@ extends RefCounted
 
 ## 14: [method DotWeaponArsenal.equip], a hand-out that holds a slot at once even while the arsenal is disabled. OLDEST stays 1.
 
-const LEVEL := 14
+## 15: the accuracy model: [DotWeaponAccuracyClass] presets, the "Accuracy model" and recoil posture fields of
+## [DotWeaponBallistics] (-1 takes the class), bloom delay, settle, flinch, `sv_spread_scale`. OLDEST stays 1.
+
+const LEVEL := 15
 const OLDEST := 1

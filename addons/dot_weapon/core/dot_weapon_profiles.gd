@@ -306,7 +306,7 @@ static func apply_flat(def: DotWeaponDef, values: Dictionary) -> void:
 
 
 static func _set_tuning(def: DotWeaponDef, name: String, value: Variant) -> void:
-	if def.tuning == null or not (name in def.tuning) or typeof(def.tuning.get(name)) not in [TYPE_INT, TYPE_FLOAT, TYPE_BOOL]:
+	if def.tuning == null or not (name in def.tuning) or typeof(def.tuning.get(name)) not in [TYPE_INT, TYPE_FLOAT, TYPE_BOOL, TYPE_STRING]:
 		DotLog.warn(OVERLAY_CHANNEL, "unknown tuning key in profile; ignored", {"weapon": String(def.id), "key": name})
 		return
 	def.tuning.set(name, _coerce(def.tuning.get(name), value))
@@ -343,7 +343,7 @@ static func flat_of(def: DotWeaponDef) -> Dictionary:
 	}
 	if def.tuning != null:
 		for p: Dictionary in def.tuning.get_property_list():
-			if int(p["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE and int(p["type"]) in [TYPE_INT, TYPE_FLOAT, TYPE_BOOL]:
+			if int(p["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE and int(p["type"]) in [TYPE_INT, TYPE_FLOAT, TYPE_BOOL, TYPE_STRING]:
 				out["%s.%s" % [OVERLAY_TUNING, p["name"]]] = def.tuning.get(p["name"])
 	for k in def.params:
 		if def.params[k] is int or def.params[k] is float or def.params[k] is bool or def.params[k] is String:
