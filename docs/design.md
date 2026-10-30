@@ -63,6 +63,14 @@ Behaviours set `DotShot.spread`; dot-combat's `DotShot.scatter()` turns it into 
 
 `DotWeaponRecoil` does live here, because recoil is weapon feel rather than hit resolution. `kick()` takes floats rather than a weapon, which is what lets a behaviour compute a kick from the charge it was held at.
 
+## The accuracy model
+
+Every gun-like weapon has a class (rifle, smg, lmg, sniper, shotgun, pistol; `accuracy_class`, else its tags, else words in its id) whose row in `DotWeaponAccuracyClass` fills each "Accuracy model" and recoil-posture field of `DotWeaponBallistics` left at -1, so every weapon feels distinct without a profile naming each number, and a profile (`extra: tuning:`) or a server's overriding profile sets any of them per weapon.
+
+The cone is: the posture spread (still to moving by a speed that rises at once and settles back over `settle_ticks`), plus `spread_hip` unless aiming, times `spread_slide` (sliding, wall-running) or `spread_sprint`, plus a flinch from `ctx.hurt_tick` shed over 0.4 s, through `sv_spread_*` when enabled, plus bloom (times `bloom_crouch` crouched), times `spread_aim` aiming, times `sv_spread_scale` (0 fires dead straight). Bloom only sheds `bloom_delay_ticks` after the last shot, never inside the gun's own use interval: before that rule a gun firing every 5 ticks shed most of its bloom between shots, which is why a held machine gun flew in a straight line. Recoil is multiplied by `recoil_aim`, `recoil_crouch` and `recoil_move`; `recoil_camera` is the per-weapon camera share that otherwise `sv_recoil_punch` sets, and `sv_recoil_scale 0` removes the kick.
+
+Everything is in `state` and a function of the context, so the predicting client draws and fires the same cone as the server (suite section "server and predicted client agree"); `arsenal.spread_now()` is that cone, and the shots land uniformly inside it (section "the crosshair cone is the shots' real spread").
+
 ## `DotShot` describes itself
 
 The split from dot-combat was possible because `DotShot` stopped pointing at a weapon. The resolver used to read `shot.weapon.damage`, `shot.weapon.max_range` and `shot.weapon.delivery`, which made "what dot-combat can resolve" the same question as "what that one resource can describe". It now carries the numbers the resolver needs, so a trap, a turret or an environmental hazard can produce one with no weapon anywhere near it.
