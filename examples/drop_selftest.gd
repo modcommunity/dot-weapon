@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 34
+const CHECKS := 35
 
 
 func _ready() -> void:
@@ -57,7 +57,7 @@ func _test_rules() -> void:
 	_check(r.set_cvar("sv_weapon_drop_max", "9999") and r.max_count == 512, "sv_weapon_drop_max clamps")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 10, "ten cvars are described")
+	_check(r.cvar_specs().size() == 12, "twelve cvars are described")
 	_done()
 
 
@@ -84,6 +84,11 @@ func _test_throw_and_swap() -> void:
 	var b := _arsenal()
 	var _g2 := b.give(&"rifle", false)
 	var _s := drops.spawn({"id": &"rifle", "magazine": 12, "reserve": 0}, Vector3(0, 1, 0), Vector3.ZERO, 3)
+	var up_at: Array = []
+	var up_drops := _drops()
+	up_drops.dropped.connect(func(_i: int, _st: Dictionary, at: Transform3D, _v: Vector3, _o: int) -> void: up_at.append(at))
+	var _u := up_drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(0, 1, 0), Vector3.UP * 2.0, 3)
+	_check(up_at.size() == 1 and absf((up_at[0] as Transform3D).basis.determinant() - 1.0) < 0.001 and (-(up_at[0] as Transform3D).basis.z).dot(Vector3.UP) > 0.99, "a drop thrown straight up gets a valid facing")
 	drops.tick(1.0)
 	var mine := drops.throw(b, Vector3(0, 1, 0.2), Vector3.FORWARD, 9, null)
 	_check(mine > 0, "swap: the held weapon is dropped")

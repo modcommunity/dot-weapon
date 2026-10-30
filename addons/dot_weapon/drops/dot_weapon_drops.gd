@@ -86,7 +86,10 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 	r = r if r != null else rules
 	var id := _next_id
 	_next_id += 1
-	var at := Transform3D(Basis.looking_at(velocity.normalized() if velocity.length() > 0.1 else Vector3.FORWARD), origin)
+	var facing := velocity.normalized() if velocity.length() > 0.1 else Vector3.FORWARD
+	# A drop thrown straight up is colinear with the default up vector and warns.
+	var up := Vector3.FORWARD if absf(facing.dot(Vector3.UP)) > 0.999 else Vector3.UP
+	var at := Transform3D(Basis.looking_at(facing, up), origin)
 	_make(id, state, at, velocity, owner_id, r.lifetime, r.pickup_delay)
 	dropped.emit(id, state, at, velocity, owner_id)
 	_enforce_cap(r.max_count)
