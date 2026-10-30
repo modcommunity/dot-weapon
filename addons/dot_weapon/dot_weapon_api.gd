@@ -60,5 +60,7 @@ extends RefCounted
 
 ## 16: [method DotWeaponDef.selector_modes], the fire-mode list a pack gives an automatic or burst gun. OLDEST stays 1.
 
-const LEVEL := 16
+## 17: [method DotWeaponNetSync.fire_mode_specs] takes owner_only, [method DotWeaponNetSync.fire_mode_will_change], push's with_fire_mode. OLDEST stays 1.
+
+const LEVEL := 17
 const OLDEST := 1

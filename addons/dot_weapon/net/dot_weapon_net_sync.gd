@@ -73,15 +73,15 @@ static func fitting_specs() -> Array[Dictionary]:
 
 
 ## The fire-mode half, separate for the same reason as [method fitting_specs]: a game that wants the
-## selection replicated adds a `net_fire_mode` property and registers this. Owner-only: only the
-## shooter's own HUD shows it.
-static func fire_mode_specs() -> Array[Dictionary]:
+## selection replicated adds a `net_fire_mode` property and registers this. Owner-only by default (the
+## shooter's HUD); [param owner_only] false sends it to everybody, so a watcher can hear the click.
+static func fire_mode_specs(owner_only: bool = true) -> Array[Dictionary]:
 	return [
 		{
 			"property": &"net_fire_mode",
 			"type": "UINT",
 			"bits": FIRE_MODE_BITS,
-			"owner_only": true,
+			"owner_only": owner_only,
 			"interpolated": false,
 		},
 	]
@@ -135,7 +135,9 @@ static func pull(arsenal: DotWeaponArsenal, target: Object) -> void:
 ## counts are not written here at all: a non-owner has no business displaying another
 ## player's exact magazine, and the owner is predicting its own and would have that
 ## prediction undone on every single snapshot.
-static func push(source: Object, arsenal: DotWeaponArsenal) -> void:
+##
+## [param with_fire_mode] false leaves the mode alone, for the owner who predicts its own.
+static func push(source: Object, arsenal: DotWeaponArsenal, with_fire_mode: bool = true) -> void:
 	if source == null or arsenal == null:
 		return
 
@@ -144,7 +146,7 @@ static func push(source: Object, arsenal: DotWeaponArsenal) -> void:
 	if slot > 0 and slot != arsenal.current_slot() and arsenal.has_slot(slot):
 		arsenal.select(slot, 0)
 
-	if &"net_fire_mode" in source and arsenal.current() != null:
+	if with_fire_mode and &"net_fire_mode" in source and arsenal.current() != null:
 		var held := arsenal.current()
 		var modes := held.def.allowed_fire_modes()
 		held.fire_mode_index = clampi(int(source.get(&"net_fire_mode")), 0, modes.size() - 1)
@@ -161,6 +163,18 @@ static func push(source: Object, arsenal: DotWeaponArsenal) -> void:
 	var code := int(source.get(&"net_fitted"))
 	if code != arsenal.attachments.encode(base, arsenal.fitting_at(arsenal.current_slot())):
 		arsenal.fit(arsenal.current_slot(), arsenal.attachments.decode(base, code))
+
+
+## Whether [method push] would change the held gun's fire mode while the slot stays the same: a watcher's cue to click.
+static func fire_mode_will_change(source: Object, arsenal: DotWeaponArsenal) -> bool:
+	if source == null or arsenal == null or not (&"net_fire_mode" in source) or arsenal.current() == null:
+		return false
+	var slot := int(source.get(&"net_slot"))
+	if slot > 0 and slot != arsenal.current_slot():
+		return false
+	var held := arsenal.current()
+	var index := clampi(int(source.get(&"net_fire_mode")), 0, held.def.allowed_fire_modes().size() - 1)
+	return index != held.fire_mode_index
 
 
 ## Applies an authoritative ammunition correction to a predicted arsenal.

@@ -519,6 +519,19 @@ func _test_fire_modes() -> void:
 	_check(DotWeaponDef.selector_modes(DotWeaponDef.Fire.AUTO, true) == PackedStringArray(["auto", "semi", "burst"]), "selector_modes: burst is added when it makes sense")
 	_check(DotWeaponDef.selector_modes(DotWeaponDef.Fire.BURST)[0] == "burst" and DotWeaponDef.selector_modes(DotWeaponDef.Fire.SEMI).is_empty(), "selector_modes: a burst gun starts on burst, a semi gun has no choice")
 
+	var wire := _FakeMode.new()
+	var watcher := _arsenal(cat)
+	watcher.give(&"rifle")
+	wire.net_slot = watcher.current_slot()
+	_check(not DotWeaponNetSync.fire_mode_will_change(wire, watcher), "a watcher whose mode matches the wire has no click due")
+	wire.net_fire_mode = 1
+	_check(DotWeaponNetSync.fire_mode_will_change(wire, watcher), "a different mode on the same slot is a click")
+	DotWeaponNetSync.push(wire, watcher, false)
+	_check(watcher.current().fire_mode_index == 0, "push with_fire_mode false leaves the mode alone")
+	DotWeaponNetSync.push(wire, watcher)
+	_check(watcher.current().fire_mode_index == 1 and not DotWeaponNetSync.fire_mode_will_change(wire, watcher), "push writes the mode and the click is spent")
+	_check(not DotWeaponNetSync.fire_mode_specs(false)[0]["owner_only"] and DotWeaponNetSync.fire_mode_specs()[0]["owner_only"], "the spec goes to everybody only when asked")
+
 	# A pistol without a list has no choice and refuses.
 	_check(a.select(2, 400), "switch to the pistol")
 	var _d := _drive(a, 401, 2, false)
@@ -550,3 +563,8 @@ func _test_muzzle() -> void:
 	_check(DotWeaponMuzzle.warm_done() and DotWeaponMuzzle.spare_count() == 0, "nothing warming, nothing waiting")
 	host.queue_free()
 	_done()
+
+
+class _FakeMode extends Object:
+	var net_slot: int = 0
+	var net_fire_mode: int = 0
