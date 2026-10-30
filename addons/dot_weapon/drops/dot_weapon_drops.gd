@@ -94,23 +94,63 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 
 
 ## The weapon within reach whose slot [param arsenal] has empty goes into it. Returns the drop id, or 0.
+## Automatic pickup: the arena leaves it to [member DotWeaponDropRules.auto_pickup].
 func take_for(arsenal: Object, position: Vector3, taker_id: int, source: Object = null) -> int:
 	if not is_authority or arsenal == null:
 		return 0
 	var radius := rules.resolve(source).pickup_radius
+	return _take(arsenal, _nearest(arsenal, position, Vector3.ZERO, radius), taker_id)
+
+
+## The use key: takes the dropped weapon [param position] is looking at (or the nearest in
+## [member DotWeaponDropRules.use_radius]) into its empty slot, ammo as it lay. Returns the drop id, or 0.
+func use(arsenal: Object, position: Vector3, direction: Vector3, taker_id: int, source: Object = null) -> int:
+	if not is_authority or arsenal == null:
+		return 0
+	return _take(arsenal, _nearest(arsenal, position, direction, rules.resolve(source).use_radius), taker_id)
+
+
+## What a "press use" prompt shows for the drop [param position] looks at: {id, weapon, magazine,
+## reserve, can_take}, or empty when none is in reach. Works on a client, from what it was told.
+func prompt_for(arsenal: Object, position: Vector3, direction: Vector3, source: Object = null) -> Dictionary:
+	var id := _nearest(null, position, direction, rules.resolve(source).use_radius)
+	if id == 0:
+		return {}
+	var state: Dictionary = _entries[id]["state"]
+	var can := true
+	if arsenal != null and arsenal.has_method(&"has_slot") and arsenal.get(&"catalogue") != null:
+		var def: Object = arsenal.get(&"catalogue").call(&"get_def", StringName(state["id"]))
+		can = def != null and not arsenal.call(&"has_slot", def.get(&"slot"))
+	return {"id": id, "weapon": StringName(state["id"]), "magazine": state.get("magazine", 0),
+		"reserve": state.get("reserve", 0), "can_take": can}
+
+
+## The best drop within [param radius] of [param position]; with [param arsenal], only one whose slot is empty.
+## A drop in front of [param direction] beats one behind at the same distance.
+func _nearest(arsenal: Object, position: Vector3, direction: Vector3, radius: float) -> int:
 	var best := 0
-	var best_d := radius * radius
+	var best_score := INF
 	for id: int in _entries:
 		var e: Dictionary = _entries[id]
 		if float(e["delay"]) > 0.0:
 			continue
-		var def: Object = arsenal.get(&"catalogue").call(&"get_def", StringName(e["state"]["id"]))
-		if def == null or arsenal.call(&"has_slot", def.get(&"slot")):
+		if arsenal != null:
+			var def: Object = arsenal.get(&"catalogue").call(&"get_def", StringName(e["state"]["id"]))
+			if def == null or arsenal.call(&"has_slot", def.get(&"slot")):
+				continue
+		var offset := (e["body"] as Node3D).global_position - position
+		var d := offset.length()
+		if d > radius:
 			continue
-		var d := (e["body"] as Node3D).global_position.distance_squared_to(position)
-		if d <= best_d:
+		var facing := offset.normalized().dot(direction.normalized()) if direction != Vector3.ZERO and d > 0.01 else 0.0
+		var score := d - facing * 0.5
+		if score < best_score:
 			best = id
-			best_d = d
+			best_score = score
+	return best
+
+
+func _take(arsenal: Object, best: int, taker_id: int) -> int:
 	if best == 0:
 		return 0
 	var state: Dictionary = _entries[best]["state"]

@@ -10,7 +10,7 @@ const CHANNEL := "weapon.drop"
 ## Class-def property names that override a rule (a negative number, or INHERIT, keeps the rule).
 const CLASS_KEYS := {
 	"drop_allowed": "key_enabled", "drop_on_death": "on_death", "drop_lifetime": "lifetime",
-	"drop_throw_force": "throw_force", "drop_throw_up": "throw_up", "drop_pickup_radius": "pickup_radius",
+	"drop_throw_force": "throw_force", "drop_throw_up": "throw_up", "drop_pickup_radius": "pickup_radius", "drop_use_radius": "use_radius",
 }
 
 signal changed
@@ -33,6 +33,10 @@ var throw_up: float = 2.0
 var pickup_radius: float = 1.4
 ## Seconds after a drop before anybody may take it (so a throw is not caught again).
 var pickup_delay: float = 0.7
+## A weapon in reach with an empty slot is taken without a key (off: the use key takes it).
+var auto_pickup: bool = false
+## How far the use key reaches to a dropped weapon, metres.
+var use_radius: float = 2.2
 ## The drop key also takes the weapon you are standing at, once your own is out of the slot.
 var swap: bool = true
 
@@ -46,6 +50,8 @@ const _SPECS := [
 	["sv_weapon_drop_up", "throw_up", "float:0:20", "Extra upward throw speed"],
 	["sv_weapon_drop_radius", "pickup_radius", "float:0.2:6", "Distance within which an empty slot takes a dropped weapon"],
 	["sv_weapon_drop_delay", "pickup_delay", "float:0:10", "Seconds before a dropped weapon can be taken"],
+	["sv_weapon_drop_auto", "auto_pickup", "bool", "1 takes a dropped weapon in reach without the use key"],
+	["sv_weapon_drop_use_radius", "use_radius", "float:0.2:8", "How far the use key reaches to a dropped weapon"],
 	["sv_weapon_drop_swap", "swap", "bool", "1 lets the drop key take the weapon underfoot after dropping"],
 ]
 
