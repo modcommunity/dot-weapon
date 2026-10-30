@@ -263,6 +263,17 @@ func allowed_fire_modes() -> Array[Fire]:
 	return out
 
 
+## The selector list a pack gives a gun of [param fire]: its own mode first, then the ones it can sensibly
+## switch to ([param with_burst] adds burst). Semi, charge and hold guns get none: nothing to choose.
+static func selector_modes(fire: Fire, with_burst: bool = false) -> PackedStringArray:
+	match fire:
+		Fire.AUTO:
+			return PackedStringArray(["auto", "semi", "burst"] if with_burst else ["auto", "semi"])
+		Fire.BURST:
+			return PackedStringArray(["burst", "semi", "auto"])
+	return PackedStringArray()
+
+
 ## [constant Fire] for "auto", "semi" or "burst"; -1 for anything else.
 static func fire_mode_named(n: String) -> int:
 	match n.to_lower():

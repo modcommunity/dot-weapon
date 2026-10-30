@@ -515,6 +515,10 @@ func _test_fire_modes() -> void:
 		prev = c
 	_check(a.fire_mode() != before and a.fire_mode() == DotWeaponDef.Fire.SEMI, "the fire-mode button cycles once per press")
 
+	_check(DotWeaponDef.selector_modes(DotWeaponDef.Fire.AUTO) == PackedStringArray(["auto", "semi"]), "selector_modes: an automatic gun gets auto then semi")
+	_check(DotWeaponDef.selector_modes(DotWeaponDef.Fire.AUTO, true) == PackedStringArray(["auto", "semi", "burst"]), "selector_modes: burst is added when it makes sense")
+	_check(DotWeaponDef.selector_modes(DotWeaponDef.Fire.BURST)[0] == "burst" and DotWeaponDef.selector_modes(DotWeaponDef.Fire.SEMI).is_empty(), "selector_modes: a burst gun starts on burst, a semi gun has no choice")
+
 	# A pistol without a list has no choice and refuses.
 	_check(a.select(2, 400), "switch to the pistol")
 	var _d := _drive(a, 401, 2, false)

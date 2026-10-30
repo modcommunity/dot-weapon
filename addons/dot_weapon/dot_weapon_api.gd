@@ -58,5 +58,7 @@ extends RefCounted
 ## 15: the accuracy model: [DotWeaponAccuracyClass] presets, the "Accuracy model" and recoil posture fields of
 ## [DotWeaponBallistics] (-1 takes the class), bloom delay, settle, flinch, `sv_spread_scale`. OLDEST stays 1.
 
-const LEVEL := 15
+## 16: [method DotWeaponDef.selector_modes], the fire-mode list a pack gives an automatic or burst gun. OLDEST stays 1.
+
+const LEVEL := 16
 const OLDEST := 1
