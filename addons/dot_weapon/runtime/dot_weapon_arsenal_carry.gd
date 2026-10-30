@@ -2,6 +2,8 @@
 extends "dot_weapon_arsenal_state.gd"
 ## Carrying, dropping and fire modes for [DotWeaponArsenal]; a layer between the state and the state machine so neither file grows past the size gate.
 
+const CHANNEL := "weapon.arsenal"
+
 ## Takes a weapon away. Switches off it first if it is the one in hand.
 func take(slot: int) -> DotResult:
 	if not _slots.has(slot):
@@ -161,6 +163,7 @@ func set_fire_mode(mode: DotWeaponDef.Fire) -> bool:
 		return false
 	if i != s.fire_mode_index:
 		s.fire_mode_index = i
+		DotLog.debug(CHANNEL, "fire mode changed", {"weapon": String(s.id()), "mode": DotWeaponDef.Fire.keys()[mode], "index": i})
 		fire_mode_changed.emit(_current, mode)
 	return true
 
