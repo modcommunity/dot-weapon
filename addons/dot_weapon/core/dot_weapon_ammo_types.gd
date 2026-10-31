@@ -17,6 +17,16 @@ static func schema() -> Array:
 		f.call("velocity", "float", 1.0, {"min": 0.0, "max": 100.0}),
 		f.call("drag", "float", 1.0, {"min": 0.0, "max": 100.0}),
 		f.call("armour_pierce", "float", 0.0, {"min": 0.0, "max": 1.0}),
+		f.call("penetration", "float", 0.0, {"min": 0.0, "max": 100.0}),
+		f.call("max_depth", "float", 1.0, {"min": 0.01, "max": 20.0}),
+		f.call("materials", "string", ""),
+		f.call("default_resistance", "float", 1.0, {"min": 0.0, "max": 1000.0}),
+		f.call("body_cost", "float", 0.1, {"min": 0.0, "max": 100.0}),
+		f.call("body_zones", "string", ""),
+		f.call("min_damage", "float", 0.0, {"min": 0.0, "max": 1.0}),
+		f.call("max_passes", "int", 4, {"min": 0, "max": 32}),
+		f.call("guns", "string", ""),
+		f.call("default", "bool", false),
 	]
 
 
@@ -37,7 +47,8 @@ func load_set(profiles: DotProfileSet) -> int:
 	for id in profiles.list_ids():
 		var res := profiles.load_profile(id)
 		if res.ok:
-			add(DotWeaponAmmoType.from_flat(StringName(id), (res.value as DotProfile).to_dictionary()))
+			var d := (res.value as DotProfile).to_dictionary()
+			add(DotWeaponAmmoType.from_flat(StringName(id), d.get("values", d)))
 			n += 1
 	return n
 
@@ -49,6 +60,18 @@ func add(t: DotWeaponAmmoType) -> void:
 ## The type for [param id], or null (no change to the bullet).
 func get_type(id: StringName) -> DotWeaponAmmoType:
 	return _types.get(id) as DotWeaponAmmoType
+
+
+## The type [param weapon_id] fires when no round is loaded: one whose `guns` lists it, else the `default` one, else null.
+func type_for_weapon(weapon_id: StringName) -> DotWeaponAmmoType:
+	var fallback: DotWeaponAmmoType = null
+	for id in ids():
+		var t := _types[id] as DotWeaponAmmoType
+		if t.guns.has(String(weapon_id)):
+			return t
+		if t.is_default and fallback == null:
+			fallback = t
+	return fallback
 
 
 ## Ids in text order.

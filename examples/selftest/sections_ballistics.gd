@@ -310,6 +310,30 @@ func _ammo_loaded_round() -> void:
 	_drop(off)
 
 
+func _ammo_penetration() -> void:
+	var fmj := DotWeaponAmmoType.from_flat(&"fmj", {"penetration": 0.8, "materials": "wood:0.5, steel:6", "guns": "rifle, smg"})
+	_check(fmj.materials == {&"wood": 0.5, &"steel": 6.0} and fmj.guns == PackedStringArray(["rifle", "smg"]), "an ammo profile parses its material table and gun list")
+	var pen := fmj.make_penetration()
+	_check(pen != null and is_equal_approx(pen.resistance_of(&"steel"), 6.0) and is_equal_approx(pen.resistance_of(&"glass"), 1.0), "and builds the penetration a shot carries")
+	_check(DotWeaponAmmoType.from_flat(&"blank", {}).make_penetration() == null, "a round with no penetration power passes nothing")
+	var types := DotWeaponAmmoTypes.new()
+	var ball := DotWeaponAmmoType.from_flat(&"ball", {"penetration": 0.2, "default": true})
+	types.add(fmj)
+	types.add(ball)
+	_check(types.type_for_weapon(&"rifle") == fmj and types.type_for_weapon(&"pistol") == ball, "one profile serves several guns, the default serves the rest")
+	var a := _arsenal()
+	a.give(&"rifle")
+	var rifle_id: StringName = a.current().def.id
+	_check(not (a.simulate_tick(_cmd(true), _ctx(10), null).shots[0] as DotShot).penetration, "without ammo profiles a shot carries no penetration")
+	_drop(a)
+	var b := _arsenal()
+	b.ammo_types = types
+	b.give(&"rifle")
+	var fired: DotShot = b.simulate_tick(_cmd(true), _ctx(10), null).shots[0]
+	_check(fired.penetration != null and is_equal_approx(fired.penetration.power, 0.8) and rifle_id == &"rifle", "with them the shot carries its gun's round")
+	_drop(b)
+
+
 func _test_ammo_hitzones() -> void:
 	_section("ammo types and hit-zone armour")
 	var types := DotWeaponAmmoTypes.new()
@@ -317,7 +341,7 @@ func _test_ammo_hitzones() -> void:
 	types.add(ap)
 	types.add(DotWeaponAmmoType.from_flat(&"ball", {}))
 	_check(ap.armour_pierce == 1.0 and types.ids() == [&"ap", &"ball"], "pierce clamps, ids sorted")
-	_check(DotWeaponAmmoTypes.schema().size() == 5 and DotWeaponAmmoTypes.profile_schemas().has("ammo"), "ammo is a profile kind")
+	_check(DotWeaponAmmoTypes.schema().size() == 15 and DotWeaponAmmoTypes.profile_schemas().has("ammo"), "ammo is a profile kind")
 	_check(types.get_type(&"nope") == null, "an unknown round is null")
 	var base := DotWeaponBallistics.new()
 	base.muzzle_velocity = 600.0
@@ -333,6 +357,7 @@ func _test_ammo_hitzones() -> void:
 	zones.presence_fn = Callable()
 
 	_ammo_loaded_round()
+	_ammo_penetration()
 
 	var manager := DotCombatManager.new()
 	manager.register_service = false

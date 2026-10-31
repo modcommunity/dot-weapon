@@ -65,6 +65,9 @@ var ballistics_rules: DotWeaponBallisticsRules = null
 ## Loaded round per weapon id (see [DotWeaponAmmoTypes]); server side only, not in snapshots.
 var loaded_ammo: Dictionary = {}
 
+## The game's ammo profiles; [method DotWeaponArsenal.round_for] reads them. Null: no ammo types.
+var ammo_types: DotWeaponAmmoTypes = null
+
 @export_group("Rules")
 
 ## Switches away from a weapon that has run out entirely.

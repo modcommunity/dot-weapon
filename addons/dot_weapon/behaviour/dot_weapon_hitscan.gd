@@ -216,6 +216,12 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 		if round_id != &"":
 			shot.set_meta(&"ammo", round_id)
 
+	if arsenal != null and arsenal.has_method("round_for") and not shot.deferred:
+		var ammo := arsenal.call("round_for", def.id) as DotWeaponAmmoType
+		if ammo != null:
+			shot.penetration = ammo.make_penetration()
+			shot.set_meta(&"ammo", ammo.id)
+
 	shot.scatter()
 	out.add_shot(shot)
 

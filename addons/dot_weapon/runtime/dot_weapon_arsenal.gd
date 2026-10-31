@@ -51,6 +51,15 @@ func load_ammo(weapon_id: StringName, ammo: StringName) -> void:
 		loaded_ammo[weapon_id] = ammo
 
 
+## The round [param weapon_id] fires: the one loaded, else the profile that lists the gun, else the default one. Null without [member ammo_types].
+func round_for(weapon_id: StringName) -> DotWeaponAmmoType:
+	if ammo_types == null:
+		return null
+	var loaded := ammo_of(weapon_id)
+	var t := ammo_types.get_type(loaded) if loaded != &"" else null
+	return t if t != null else ammo_types.type_for_weapon(weapon_id)
+
+
 ## The round loaded in [param weapon_id], or empty.
 func ammo_of(weapon_id: StringName) -> StringName:
 	return loaded_ammo.get(weapon_id, &"")
