@@ -38,7 +38,11 @@ var collision_mask: int = 1
 ## Slots whose weapons never drop (a permanent melee weapon).
 var keep_slots: Array[int] = []
 
-var _entries: Dictionary = {}   ## int -> Dictionary {body, state, age, rest, owner, order}
+## [code]team_of.call(player_id) -> int[/code]: 0 for no team (free-for-all, teams off). Stamps each drop
+## with its dropper's team and reads the taker's; unset means no teams.
+var team_of: Callable = Callable()
+
+var _entries: Dictionary = {}   ## int -> Dictionary {body, state, age, rest, owner, order, team}
 var _next_id: int = 1
 var _order: int = 0
 
@@ -90,7 +94,7 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 	# A drop thrown straight up is colinear with the default up vector and warns.
 	var up := Vector3.FORWARD if absf(facing.dot(Vector3.UP)) > 0.999 else Vector3.UP
 	var at := Transform3D(Basis.looking_at(facing, up), origin)
-	_make(id, state, at, velocity, owner_id, r.lifetime, r.pickup_delay)
+	_make(id, state, at, velocity, owner_id, r.lifetime, r.pickup_delay, _team(owner_id))
 	dropped.emit(id, state, at, velocity, owner_id)
 	_enforce_cap(r.max_count)
 	return id
@@ -101,8 +105,8 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 func take_for(arsenal: Object, position: Vector3, taker_id: int, source: Object = null) -> int:
 	if not is_authority or arsenal == null:
 		return 0
-	var radius := rules.resolve(source).pickup_radius
-	return _take(arsenal, _nearest(arsenal, position, Vector3.ZERO, radius), taker_id)
+	var r := rules.resolve(source)
+	return _take(arsenal, _nearest(arsenal, position, Vector3.ZERO, r.pickup_radius, _team(taker_id), true), taker_id, r)
 
 
 ## The use key: takes the dropped weapon [param position] is looking at (or the nearest in
@@ -110,36 +114,40 @@ func take_for(arsenal: Object, position: Vector3, taker_id: int, source: Object 
 func use(arsenal: Object, position: Vector3, direction: Vector3, taker_id: int, source: Object = null) -> int:
 	if not is_authority or arsenal == null:
 		return 0
-	return _take(arsenal, _nearest(arsenal, position, direction, rules.resolve(source).use_radius), taker_id)
+	var r := rules.resolve(source)
+	return _take(arsenal, _nearest(arsenal, position, direction, r.use_radius, _team(taker_id)), taker_id, r)
 
 
 ## What a "press use" prompt shows for the drop [param position] looks at: {id, weapon, magazine,
 ## reserve, can_take}, or empty when none is in reach. Works on a client, from what it was told.
-func prompt_for(arsenal: Object, position: Vector3, direction: Vector3, source: Object = null) -> Dictionary:
-	var id := _nearest(null, position, direction, rules.resolve(source).use_radius)
+func prompt_for(arsenal: Object, position: Vector3, direction: Vector3, source: Object = null, taker_team: int = 0) -> Dictionary:
+	var id := _nearest(null, position, direction, rules.resolve(source).use_radius, taker_team)
 	if id == 0:
 		return {}
 	var state: Dictionary = _entries[id]["state"]
 	var can := true
-	if arsenal != null and arsenal.has_method(&"has_slot") and arsenal.get(&"catalogue") != null:
-		var def: Object = arsenal.get(&"catalogue").call(&"get_def", StringName(state["id"]))
-		can = def != null and not arsenal.call(&"has_slot", def.get(&"slot"))
+	if arsenal != null and arsenal.get(&"catalogue") != null:
+		can = arsenal.get(&"catalogue").call(&"get_def", StringName(state["id"])) != null
 	return {"id": id, "weapon": StringName(state["id"]), "magazine": state.get("magazine", 0),
 		"reserve": state.get("reserve", 0), "can_take": can}
 
 
 ## The best drop within [param radius] of [param position]; with [param arsenal], only one whose slot is empty.
 ## A drop in front of [param direction] beats one behind at the same distance.
-func _nearest(arsenal: Object, position: Vector3, direction: Vector3, radius: float) -> int:
+func _nearest(arsenal: Object, position: Vector3, direction: Vector3, radius: float, taker_team: int = 0, empty_only: bool = false) -> int:
+	if not rules.allow_pickup:
+		return 0
 	var best := 0
 	var best_score := INF
 	for id: int in _entries:
 		var e: Dictionary = _entries[id]
 		if float(e["delay"]) > 0.0:
 			continue
+		if rules.team_only and taker_team != 0 and int(e["team"]) != 0 and int(e["team"]) != taker_team:
+			continue
 		if arsenal != null:
 			var def: Object = arsenal.get(&"catalogue").call(&"get_def", StringName(e["state"]["id"]))
-			if def == null or arsenal.call(&"has_slot", def.get(&"slot")):
+			if def == null or (empty_only and arsenal.call(&"has_slot", def.get(&"slot"))):
 				continue
 		var offset := (e["body"] as Node3D).global_position - position
 		var d := offset.length()
@@ -153,15 +161,46 @@ func _nearest(arsenal: Object, position: Vector3, direction: Vector3, radius: fl
 	return best
 
 
-func _take(arsenal: Object, best: int, taker_id: int) -> int:
+func _team(player_id: int) -> int:
+	return int(team_of.call(player_id)) if team_of.is_valid() else 0
+
+
+## The team stamped on drop [param drop_id] when it was dropped (0 none).
+func drop_team(drop_id: int) -> int:
+	return int(_entries[drop_id]["team"]) if _entries.has(drop_id) else 0
+
+
+## Takes drop [param best] into [param arsenal]. A slot already holding a different weapon is no
+## reason to refuse: with no room beside it the held one swaps out onto the floor; the same weapon
+## twice gives its ammunition.
+func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = null) -> int:
 	if best == 0:
 		return 0
-	var state: Dictionary = _entries[best]["state"]
-	var given: Object = arsenal.call(&"give", StringName(state["id"]), false)
+	var e: Dictionary = _entries[best]
+	var state: Dictionary = e["state"]
+	var id := StringName(state["id"])
+	var def: Object = arsenal.get(&"catalogue").call(&"get_def", id)
+	var swapped: Dictionary = {}
+	if def != null and arsenal.call(&"has_slot", def.get(&"slot")):
+		var slot_no: int = def.get(&"slot")
+		if bool(arsenal.call(&"carries", id)):
+			var pool: StringName = def.get(&"ammo_type")
+			if pool == &"" or int(arsenal.call(&"add_ammo", pool, int(state.get("reserve", 0)) + int(state.get("magazine", 0)))) <= 0:
+				return 0
+			_remove(best, taker_id)
+			return best
+		var in_slot: Array = arsenal.call(&"weapons_in", slot_no)
+		if in_slot.size() >= int(arsenal.call(&"slot_capacity")):
+			var old: Object = arsenal.call(&"slot_at", slot_no)
+			swapped = {"id": old.call(&"id"), "magazine": old.get(&"magazine"), "reserve": 0}
+	var given: Object = arsenal.call(&"give", id, false)
 	if given == null or not given.get(&"ok"):
 		return 0
 	arsenal.call(&"apply_dropped", state)
+	var where: Vector3 = (e["body"] as Node3D).global_position
 	_remove(best, taker_id)
+	if not swapped.is_empty():
+		var _back := spawn(swapped, where, Vector3.UP * 1.5, taker_id, r)
 	return best
 
 
@@ -205,15 +244,15 @@ func snapshot() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for id: int in _entries:
 		var e: Dictionary = _entries[id]
-		out.append({"id": id, "state": e["state"], "at": (e["body"] as Node3D).global_transform, "rest": e["rest"], "life": maxf(float(e["life"]) - float(e["age"]), 0.0) if float(e["life"]) > 0.0 else 0.0})
+		out.append({"id": id, "state": e["state"], "at": (e["body"] as Node3D).global_transform, "rest": e["rest"], "team": e["team"], "life": maxf(float(e["life"]) - float(e["age"]), 0.0) if float(e["life"]) > 0.0 else 0.0})
 	return out
 
 
 ## Client side: the authority dropped a weapon.
-func mirror_drop(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, life: float = 0.0, rest: bool = false) -> void:
+func mirror_drop(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, life: float = 0.0, rest: bool = false, team: int = 0) -> void:
 	if _entries.has(drop_id):
 		return
-	_make(drop_id, state, at, velocity, 0, life, 0.0)
+	_make(drop_id, state, at, velocity, 0, life, 0.0, team)
 	if rest:
 		mirror_settled(drop_id, at)
 
@@ -236,7 +275,7 @@ func describe() -> Dictionary:
 	return {"count": _entries.size(), "authority": is_authority, "rules": rules.describe()}
 
 
-func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int, life: float, delay: float) -> void:
+func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int, life: float, delay: float, team: int = 0) -> void:
 	var body := RigidBody3D.new()
 	body.name = "Drop%d" % id
 	body.collision_layer = 0
@@ -273,7 +312,7 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
 	_order += 1
 	_entries[id] = {"body": body, "state": state, "age": 0.0, "life": life, "delay": delay,
-		"still": 0.0, "rest": false, "owner": owner_id, "order": _order}
+		"still": 0.0, "rest": false, "owner": owner_id, "order": _order, "team": team}
 	DotLog.debug(CHANNEL, "weapon dropped", {"id": id, "weapon": String(state.get("id", &""))})
 
 

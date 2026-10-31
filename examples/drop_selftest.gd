@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 35
+const CHECKS := 50
 
 
 func _ready() -> void:
@@ -14,6 +14,7 @@ func _run() -> void:
 	print("dot-weapon drop self-test")
 	_test_rules()
 	_test_throw_and_swap()
+	_test_pickup_rules()
 	await _test_lifetime_and_cap()
 	await _test_settle_and_mirror()
 	print("")
@@ -57,7 +58,7 @@ func _test_rules() -> void:
 	_check(r.set_cvar("sv_weapon_drop_max", "9999") and r.max_count == 512, "sv_weapon_drop_max clamps")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 12, "twelve cvars are described")
+	_check(r.cvar_specs().size() == 14, "fourteen cvars are described")
 	_done()
 
 
@@ -179,4 +180,58 @@ func _test_settle_and_mirror() -> void:
 	_drop(server)
 	_drop(client)
 	_drop(floor_body)
+	_done()
+
+
+func _test_pickup_rules() -> void:
+	_section("pickup rules: allow, team, owner, occupied slot")
+	var drops := _drops()
+	var teams := {1: 1, 2: 2, 3: 1, 4: 0, 5: 0}
+	drops.team_of = func(pid: int) -> int: return int(teams.get(pid, 0))
+	var r := drops.rules
+	_check(r.allow_pickup and not r.team_only, "defaults: pickup on, team-only off")
+	var names := []
+	for sp in r.cvar_specs():
+		names.append(sp["name"])
+	_check(names.has("mp_allow_pickup") and names.has("mp_pickup_team_only"), "both cvars are listed")
+	var at := Vector3(0, 1, 0)
+	var shot := {"id": &"rifle", "magazine": 7, "reserve": 0}
+	var d1 := drops.spawn(shot, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	var b := _arsenal()
+	_check(drops.use(b, at, Vector3.FORWARD, 2) == d1 and b.carries(&"rifle"), "player B takes player A's drop (other team, default rules)")
+	var d2 := drops.spawn(shot, at, Vector3.ZERO, 5)
+	drops.tick(1.0)
+	var c := _arsenal()
+	_check(drops.use(c, at, Vector3.FORWARD, 2) == d2 and c.carries(&"rifle"), "and a bot's drop (no team)")
+	r.allow_pickup = false
+	var d3 := drops.spawn(shot, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	var e := _arsenal()
+	_check(drops.use(e, at, Vector3.FORWARD, 2) == 0 and not e.carries(&"rifle"), "mp_allow_pickup 0 blocks the use key")
+	_check(drops.take_for(e, at, 2) == 0, "and the automatic pickup")
+	_check(drops.prompt_for(e, at, Vector3.FORWARD, null, 2).is_empty(), "and the prompt")
+	r.allow_pickup = true
+	r.team_only = true
+	_check(drops.drop_team(d3) == 1, "the drop remembers its dropper's team")
+	_check(drops.use(e, at, Vector3.FORWARD, 2) == 0, "team-only: an enemy-team drop is refused")
+	_check(drops.prompt_for(e, at, Vector3.FORWARD, null, 2).is_empty(), "and not offered")
+	_check(drops.use(e, at, Vector3.FORWARD, 3) == d3 and e.carries(&"rifle"), "team-only: own team's drop is taken")
+	var d4 := drops.spawn(shot, at, Vector3.ZERO, 4)
+	drops.tick(1.0)
+	var f := _arsenal()
+	_check(drops.use(f, at, Vector3.FORWARD, 2) == d4, "team-only: a drop with no team is free to all")
+	var d5 := drops.spawn(shot, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	var g := _arsenal()
+	_check(drops.use(g, at, Vector3.FORWARD, 4) == d5, "team-only in free-for-all (taker has no team) restricts nothing")
+	r.team_only = false
+	var cat := _catalogue()
+	cat.get_def(&"pistol").slot = cat.get_def(&"rifle").slot
+	var h := _arsenal(cat)
+	var _gh := h.give(&"pistol")
+	var d6 := drops.spawn(shot, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	_check(drops.use(h, at, Vector3.FORWARD, 2) == d6 and h.carries(&"rifle") and not h.carries(&"pistol"), "a taken weapon swaps with the one in its slot")
+	_check(drops.count() == 1, "and the swapped-out weapon lies on the floor")
 	_done()

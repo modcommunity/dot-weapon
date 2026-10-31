@@ -40,7 +40,14 @@ var use_radius: float = 2.2
 ## The drop key also takes the weapon you are standing at, once your own is out of the slot.
 var swap: bool = true
 
+## Players may take weapons off the floor at all (mp_allow_pickup).
+var allow_pickup: bool = true
+## A weapon may only be taken by a player on the team of whoever dropped it (mp_pickup_team_only); free-for-all is never restricted.
+var team_only: bool = false
+
 const _SPECS := [
+	["mp_allow_pickup", "allow_pickup", "bool", "1 lets players pick weapons up off the floor; 0 blocks every pickup"],
+	["mp_pickup_team_only", "team_only", "bool", "1 lets a player take only a weapon dropped by their own team (no effect without teams); 0 takes any"],
 	["sv_weapon_drop", "enabled", "bool", "1 lets weapons be dropped at all"],
 	["sv_weapon_drop_death", "on_death", "bool", "1 drops a dead player's weapon"],
 	["sv_weapon_drop_key", "key_enabled", "bool", "1 lets the drop key throw the weapon in hand"],
@@ -156,7 +163,7 @@ func follow_cvars(source: Object) -> bool:
 
 
 func _on_replicated_cvar(cvar_name: String, value: String) -> void:
-	if cvar_name.begins_with("sv_weapon_drop"):
+	if cvar_name.begins_with("sv_weapon_drop") or cvar_name == "mp_allow_pickup" or cvar_name == "mp_pickup_team_only":
 		var _applied := set_cvar(cvar_name, value)
 
 
