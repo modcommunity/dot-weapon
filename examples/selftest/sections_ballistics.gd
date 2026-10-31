@@ -334,6 +334,26 @@ func _ammo_penetration() -> void:
 	_drop(b)
 
 
+## Loads real profile files through make_set and load_set: the dictionary level load_set reads once went wrong.
+func _ammo_profile_files() -> void:
+	var root := OS.get_temp_dir().path_join("dw_ammo_%d" % Time.get_ticks_usec())
+	var dir := root.path_join("addons/demo/ammo")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var f := FileAccess.open(dir.path_join("belt.yml"), FileAccess.WRITE)
+	f.store_string("name: \"Belt\"\npenetration: 0.5\nmaterials: \"glass:0.1,concrete:2.5\"\nricochet_materials: \"concrete,metal\"\nricochet_angle: 12\nricochet_keep: 0.4\nguns: \"minigun\"\n")
+	f.close()
+	var set := DotWeaponAmmoTypes.make_set("demo", "g", PackedStringArray([root]))
+	var types := DotWeaponAmmoTypes.new()
+	_check(types.load_set(set) == 1, "load_set loads the ammo profile file")
+	var belt := types.get_type(&"belt")
+	_check(belt != null and is_equal_approx(belt.penetration, 0.5) and belt.display_name == "Belt", "its numbers and name come from the file")
+	_check(belt != null and is_equal_approx(float(belt.materials.get(&"concrete", 0.0)), 2.5) and belt.guns.has("minigun"), "the material map and gun list are read")
+	var pen: DotPenetration = belt.make_penetration() if belt != null else null
+	_check(pen != null and pen.ricochets(&"metal", 10.0) and not pen.ricochets(&"metal", 20.0) and not pen.ricochets(&"glass", 10.0), "ricochet fields reach the DotPenetration")
+	_check(pen != null and is_equal_approx(pen.ricochet_keep, 0.4), "and the kept share")
+	set.clear_cache()
+
+
 func _test_ammo_hitzones() -> void:
 	_section("ammo types and hit-zone armour")
 	var types := DotWeaponAmmoTypes.new()
@@ -341,7 +361,7 @@ func _test_ammo_hitzones() -> void:
 	types.add(ap)
 	types.add(DotWeaponAmmoType.from_flat(&"ball", {}))
 	_check(ap.armour_pierce == 1.0 and types.ids() == [&"ap", &"ball"], "pierce clamps, ids sorted")
-	_check(DotWeaponAmmoTypes.schema().size() == 15 and DotWeaponAmmoTypes.profile_schemas().has("ammo"), "ammo is a profile kind")
+	_check(DotWeaponAmmoTypes.schema().size() == 18 and DotWeaponAmmoTypes.profile_schemas().has("ammo"), "ammo is a profile kind")
 	_check(types.get_type(&"nope") == null, "an unknown round is null")
 	var base := DotWeaponBallistics.new()
 	base.muzzle_velocity = 600.0
@@ -356,6 +376,7 @@ func _test_ammo_hitzones() -> void:
 	_check(zones.multiplier(DotHitGroup.HEAD, null) == 1.0, "a victim with no armour on takes full damage")
 	zones.presence_fn = Callable()
 
+	_ammo_profile_files()
 	_ammo_loaded_round()
 	_ammo_penetration()
 

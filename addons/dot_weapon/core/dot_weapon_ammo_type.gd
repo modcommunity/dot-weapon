@@ -28,6 +28,12 @@ var body_zones: Dictionary = {}
 ## Damage never falls below this share after a pass while power remains.
 var min_damage: float = 0.0
 var max_passes: int = 4
+## Materials a shallow hit bounces off (comma list); needs `penetration` above 0 and the server's `sv_ricochet`.
+var ricochet_materials: PackedStringArray = PackedStringArray()
+## Largest angle from the surface, in degrees, that still bounces; 0 turns ricochet off for this round.
+var ricochet_angle: float = 0.0
+## Share of power a bounce keeps.
+var ricochet_keep: float = 0.6
 ## Weapon ids this round is the default for (a profile can serve several guns).
 var guns: PackedStringArray = PackedStringArray()
 ## The round every weapon that no profile lists uses.
@@ -60,6 +66,10 @@ static func from_flat(p_id: StringName, c: Dictionary) -> DotWeaponAmmoType:
 	t.body_zones = parse_map(String(c.get("body_zones", "")))
 	t.min_damage = clampf(float(c.get("min_damage", 0.0)), 0.0, 1.0)
 	t.max_passes = maxi(0, int(c.get("max_passes", 4)))
+	for m in String(c.get("ricochet_materials", "")).split(",", false):
+		t.ricochet_materials.append(m.strip_edges())
+	t.ricochet_angle = clampf(float(c.get("ricochet_angle", 0.0)), 0.0, 90.0)
+	t.ricochet_keep = clampf(float(c.get("ricochet_keep", 0.6)), 0.0, 1.0)
 	for g in String(c.get("guns", "")).split(",", false):
 		t.guns.append(g.strip_edges())
 	t.is_default = bool(c.get("default", false))
@@ -79,6 +89,9 @@ func make_penetration() -> DotPenetration:
 	p.body_zones = body_zones
 	p.min_damage = min_damage
 	p.max_passes = max_passes
+	p.ricochet_materials = ricochet_materials
+	p.ricochet_angle = ricochet_angle
+	p.ricochet_keep = ricochet_keep
 	return p
 
 

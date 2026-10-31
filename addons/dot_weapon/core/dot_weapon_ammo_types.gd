@@ -25,6 +25,9 @@ static func schema() -> Array:
 		f.call("body_zones", "string", ""),
 		f.call("min_damage", "float", 0.0, {"min": 0.0, "max": 1.0}),
 		f.call("max_passes", "int", 4, {"min": 0, "max": 32}),
+		f.call("ricochet_materials", "string", ""),
+		f.call("ricochet_angle", "float", 0.0, {"min": 0.0, "max": 90.0}),
+		f.call("ricochet_keep", "float", 0.6, {"min": 0.0, "max": 1.0}),
 		f.call("guns", "string", ""),
 		f.call("default", "bool", false),
 	]
