@@ -17,6 +17,8 @@ extends Node3D
 const CHANNEL := "weapon.drop"
 const SETTLE_SPEED := 0.08
 const SETTLE_SEC := 0.6
+## A drop still wobbling after this long (a thin gun on a slope) is put to rest where it lies.
+const SETTLE_MAX_SEC := 4.0
 ## Cap on how far a thrown weapon may start from the player, so a wall in front cannot swallow it.
 const REACH := 0.5
 
@@ -227,12 +229,29 @@ func tick(delta: float) -> void:
 				e["still"] = float(e["still"]) + delta
 			else:
 				e["still"] = 0.0
-			if float(e["still"]) >= SETTLE_SEC:
-				e["rest"] = true
-				body.freeze = true
-				settled.emit(id, body.global_transform)
+			e["moving"] = float(e.get("moving", 0.0)) + delta
+			if float(e["still"]) >= SETTLE_SEC or float(e["moving"]) >= SETTLE_MAX_SEC:
+				_rest(id, e, body)
 		elif body.global_position.y < -200.0:
 			_remove(id, 0)
+
+
+## Freezes a drop in place. The solver leaves a thin box a few centimetres inside the floor
+## (contact slop), so the penetration is resolved first and the drop freezes on the surface.
+func _rest(id: int, e: Dictionary, body: RigidBody3D) -> void:
+	var hit := KinematicCollision3D.new()
+	for _i in 4:
+		if not body.test_move(body.global_transform, Vector3.ZERO, hit, 0.001, true, 4):
+			break
+		var out := hit.get_travel()
+		if out.length() < 0.0005:
+			break
+		body.global_position += out
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3.ZERO
+	e["rest"] = true
+	body.freeze = true
+	settled.emit(id, body.global_transform)
 
 
 func _physics_process(delta: float) -> void:
