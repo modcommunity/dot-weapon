@@ -12,7 +12,9 @@ const FIRE := {
 	&"light": &"light_fire", &"magnum": &"magnum_fire", &"smg": &"smg_fire", &"rifle": &"rifle_fire",
 	&"heavy": &"heavy_fire", &"sniper": &"sniper_fire", &"shotgun": &"shotgun_fire",
 	&"minigun": &"minigun_fire", &"launcher": &"launcher_fire", &"beam": &"beam_fire",
-	&"charge": &"charge_fire", &"swing": &"swing", &"bash": &"bash", &"throw": &"throw",
+	&"charge": &"charge_fire", &"lmg": &"lmg_fire", &"battle": &"battle_fire", &"marksman": &"marksman_fire",
+	&"carbine": &"carbine_fire", &"derringer": &"derringer_fire", &"mpistol": &"mpistol_fire",
+	&"autoshot": &"autoshot_fire", &"grenade": &"grenade_fire", &"rail": &"rail_fire", &"swing": &"swing", &"bash": &"bash", &"throw": &"throw",
 	&"impact": &"impact", &"suppressed": &"suppressed_fire", &"dry": &"dry", &"equip": &"equip",
 	&"casing": &"casing", &"reload_shell": &"reload_shell", &"reload_out": &"reload_out", &"reload_in": &"reload_in",
 }
@@ -20,7 +22,18 @@ const FIRE := {
 ## Sound class -> the class whose reload files it uses (a silenced pistol reloads like a pistol).
 const RELOAD_CLASS := {
 	&"light": &"light", &"suppressed": &"light", &"magnum": &"magnum", &"smg": &"smg", &"rifle": &"rifle",
-	&"heavy": &"heavy", &"sniper": &"sniper",
+	&"heavy": &"heavy", &"sniper": &"sniper", &"lmg": &"lmg", &"battle": &"heavy", &"marksman": &"heavy",
+	&"carbine": &"rifle", &"derringer": &"magnum", &"mpistol": &"smg", &"autoshot": &"heavy", &"grenade": &"launcher",
+	&"launcher": &"launcher", &"beam": &"energy", &"charge": &"energy", &"rail": &"energy",
+}
+
+## Sound class -> the dry-click and equip set it uses (`dry_<set>`, `equip_<set>`), else the generic `dry` and `equip`.
+const FEEL := {
+	&"light": &"light", &"suppressed": &"light", &"magnum": &"light", &"derringer": &"light", &"smg": &"light",
+	&"mpistol": &"light", &"rifle": &"heavy", &"carbine": &"heavy", &"heavy": &"heavy", &"battle": &"heavy",
+	&"marksman": &"heavy", &"sniper": &"heavy", &"lmg": &"heavy", &"autoshot": &"heavy", &"shotgun": &"heavy",
+	&"launcher": &"heavy", &"grenade": &"heavy", &"minigun": &"heavy", &"beam": &"energy", &"charge": &"energy",
+	&"rail": &"energy",
 }
 
 ## Variant counts found on disk, kept because probing is a file lookup per variant.
@@ -64,6 +77,12 @@ static func reload_name(sound_class: StringName, stage: StringName) -> StringNam
 ## One variant of [param sound_class]'s reload [param stage], or null when dot-audio is not linked.
 static func pick_reload(sound_class: StringName, stage: StringName = &"out", roll: int = 0) -> AudioStream:
 	return pick(reload_name(sound_class, stage), roll)
+
+
+## One variant of [param sound_class]'s dry click (`kind` &"dry") or equip sound (&"equip"): the class's own set, else the generic one.
+static func pick_feel(sound_class: StringName, kind: StringName, roll: int = 0) -> AudioStream:
+	var own := StringName("%s_%s" % [kind, FEEL.get(sound_class, &"")])
+	return pick(own if FEEL.has(sound_class) and count(own) > 0 else kind, roll)
 
 
 ## The same class heard from a distance (a different recording, more air), or null.
@@ -127,12 +146,16 @@ const BOUNDS := {
 	&"light": Vector2(0.3, 1.2), &"magnum": Vector2(0.5, 1.5), &"smg": Vector2(0.15, 0.6), &"rifle": Vector2(0.15, 1.5),
 	&"heavy": Vector2(0.15, 1.5), &"sniper": Vector2(0.8, 2.5), &"shotgun": Vector2(0.6, 1.6),
 	&"minigun": Vector2(0.08, 0.4), &"launcher": Vector2(0.25, 1.2), &"beam": Vector2(0.15, 0.6),
-	&"charge": Vector2(0.25, 0.8), &"suppressed": Vector2(0.1, 0.5), &"swing": Vector2(0.2, 1.0),
+	&"charge": Vector2(0.25, 0.9), &"lmg": Vector2(0.15, 0.6), &"battle": Vector2(0.4, 1.5),
+	&"marksman": Vector2(0.4, 1.5), &"carbine": Vector2(0.2, 1.0), &"derringer": Vector2(0.2, 0.8),
+	&"mpistol": Vector2(0.1, 0.4), &"autoshot": Vector2(0.4, 1.4), &"grenade": Vector2(0.25, 1.0),
+	&"rail": Vector2(0.4, 1.6), &"suppressed": Vector2(0.1, 0.5), &"swing": Vector2(0.2, 1.0),
 	&"bash": Vector2(0.15, 0.5), &"throw": Vector2(0.3, 1.0),
 }
 
 ## Classes that are reloaded (the rest are melee, thrown or energy).
-const RELOADED := [&"light", &"magnum", &"smg", &"rifle", &"heavy", &"sniper", &"shotgun", &"suppressed"]
+const RELOADED := [&"light", &"magnum", &"smg", &"rifle", &"heavy", &"sniper", &"shotgun", &"suppressed",
+	&"lmg", &"battle", &"marksman", &"carbine", &"derringer", &"mpistol", &"autoshot", &"grenade", &"launcher", &"rail", &"beam", &"charge"]
 
 
 ## Problems with a pack's weapon -> sound class map ([param classes], id -> class): each id's class must be known, have fire
