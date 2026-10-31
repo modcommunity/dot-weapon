@@ -1,0 +1,9 @@
+{
+	"pickup": {
+		"take": "Take",
+		"ammo": "Take ammo",
+		"swap": "Hold to swap",
+		"cannot": "Cannot carry",
+		"magazine": "Ammo"
+	}
+}

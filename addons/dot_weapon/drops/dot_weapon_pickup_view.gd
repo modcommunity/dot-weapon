@@ -96,7 +96,7 @@ func text_for(info: Dictionary) -> String:
 	var action := _t(action_key, fallback)
 	if not bool(info.get("can_take", true)):
 		action = _t("weapon.pickup.cannot", "Cannot carry")
-	return "%s\n%s %d / %d\n[%s] %s" % [shown, _t("weapon.pickup.ammo", "Ammo"), mag, mag + reserve, key_text, action]
+	return "%s\n%s %d / %d\n[%s] %s" % [shown, _t("weapon.pickup.magazine", "Ammo"), mag, mag + reserve, key_text, action]
 
 
 func _t(key: String, fallback: String) -> String:
