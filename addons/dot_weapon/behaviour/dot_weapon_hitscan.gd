@@ -23,7 +23,7 @@ const _SINCE := &"since_use"
 const _MOTION := &"motion"
 const _NEVER := 1 << 20
 
-var _class_key: String = "\u0000"
+var _class_key: String = ""
 var _class: String = ""
 ## The cone the last context tick or use computed, for display; -1 before any.
 var _shown: float = -1.0

@@ -2,7 +2,7 @@ extends "selftest/sections_accuracy.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 571
+const CHECKS := 572
 
 
 func _ready() -> void:
@@ -14,6 +14,7 @@ func _run() -> void:
 	print("dot-weapon self-test")
 	print("")
 
+	_test_no_nul_in_sources()
 	_test_definition()
 	_test_catalogue()
 	_test_id_order()
@@ -79,6 +80,26 @@ func _run() -> void:
 		return
 
 	get_tree().quit(1 if _failed > 0 or _sections_entered != _sections_finished else 0)
+
+
+func _nul_files(dir: String, out: Array) -> void:
+	for f in DirAccess.get_files_at(dir):
+		if f.ends_with(".gd") or f.ends_with(".uid"):
+			var bytes := FileAccess.get_file_as_bytes(dir.path_join(f))
+			# The escape in a string literal (the real cause once) makes the engine report a NUL parse error too.
+			if bytes.has(0) or (not dir.begins_with("res://examples") and bytes.get_string_from_utf8().contains("\\u0000")):
+				out.append(dir.path_join(f))
+	for d in DirAccess.get_directories_at(dir):
+		_nul_files(dir.path_join(d), out)
+
+
+func _test_no_nul_in_sources() -> void:
+	_section("sources hold no NUL byte")
+	var bad: Array = []
+	_nul_files("res://addons/dot_weapon", bad)
+	_nul_files("res://examples", bad)
+	_check(bad.is_empty(), "no .gd or .uid file contains a NUL (a release run fails on one)", str(bad))
+	_done()
 
 
 func _test_definition() -> void:

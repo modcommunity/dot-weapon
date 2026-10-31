@@ -166,7 +166,10 @@ func _test_settle_and_mirror() -> void:
 	server.removed.connect(func(id: int, _t: int) -> void: client.mirror_removed(id))
 	var id := server.spawn({"id": &"rifle", "magazine": 5, "reserve": 0}, Vector3(0, 1.5, 0), Vector3(2, 0, 0), 1)
 	_check(client.has_drop(id), "a client mirrors the drop")
-	for i in range(240):
+	# The settle cap is 4 s, exactly 240 frames: wait for the signal, bounded, not for a frame count.
+	for i in range(int((DotWeaponDrops.SETTLE_MAX_SEC + 2.0) * 60.0)):
+		if rested.has(id):
+			break
 		await get_tree().physics_frame
 	_check(rested.has(id), "the authority sees it come to rest")
 	var s := server.snapshot()
