@@ -309,6 +309,10 @@ func snapshot() -> Array[Dictionary]:
 ## Client side: the authority dropped a weapon.
 func mirror_drop(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, life: float = 0.0, rest: bool = false, team: int = 0) -> void:
 	if _entries.has(drop_id):
+		# Seen already: this is the authority re-announcing it after a push or an ammunition change.
+		mirror_ammo(drop_id, state)
+		if not rest:
+			mirror_pushed(drop_id, at, velocity, Vector3.ZERO)
 		return
 	_make(drop_id, state, at, velocity, 0, life, 0.0, team)
 	if rest:
@@ -336,6 +340,15 @@ func mirror_pushed(drop_id: int, at: Transform3D, velocity: Vector3, spin: Vecto
 	body.linear_velocity = velocity
 	body.angular_velocity = spin
 	e["rest"] = false
+
+
+## The state, pose and rest flag of a drop, for re-announcing it: {state, at, velocity, rest}, or empty.
+func pose_of(drop_id: int) -> Dictionary:
+	if not _entries.has(drop_id):
+		return {}
+	var e: Dictionary = _entries[drop_id]
+	var body: RigidBody3D = e["body"]
+	return {"state": e["state"], "at": body.global_transform, "velocity": body.linear_velocity, "rest": bool(e.get("rest", false))}
 
 
 ## Client side: ammunition left on a dropped weapon changed.
