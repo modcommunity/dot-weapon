@@ -40,6 +40,24 @@ var use_radius: float = 2.2
 ## The drop key also takes the weapon you are standing at, once your own is out of the slot.
 var swap: bool = true
 
+## Seconds the use key is held over a dropped weapon of another type to swap it with the one in hand; a tap never swaps.
+var hold_time: float = 0.6
+## Shots, blasts and melee push dropped weapons about.
+var shootable: bool = true
+## Scales the push a shot or melee hit gives a dropped weapon (1 is a bullet's momentum over the weapon's mass).
+var impulse_scale: float = 1.0
+## Scales the push an explosion gives a dropped weapon.
+var blast_scale: float = 1.0
+## Most dropped weapons simulated awake at once; the rest are held still until one sleeps. 0 unlimited.
+var max_active: int = 16
+## Seconds a dropped weapon must lie still before it sleeps.
+var sleep_time: float = 0.6
+## Mass of a dropped weapon, kilograms.
+var mass: float = 4.0
+## Friction and bounciness of a dropped weapon.
+var friction: float = 0.8
+var bounce: float = 0.2
+
 ## Players may take weapons off the floor at all (mp_allow_pickup).
 var allow_pickup: bool = true
 ## A weapon may only be taken by a player on the team of whoever dropped it (mp_pickup_team_only); free-for-all is never restricted.
@@ -59,6 +77,15 @@ const _SPECS := [
 	["sv_weapon_drop_delay", "pickup_delay", "float:0:10", "Seconds before a dropped weapon can be taken"],
 	["sv_weapon_drop_auto", "auto_pickup", "bool", "1 takes a dropped weapon in reach without the use key"],
 	["sv_weapon_drop_use_radius", "use_radius", "float:0.2:8", "How far the use key reaches to a dropped weapon"],
+	["sv_weapon_drop_hold", "hold_time", "float:0.05:5", "Seconds the use key is held over a different weapon to swap it with the one in hand"],
+	["sv_weapon_drop_shootable", "shootable", "bool", "1 lets shots, blasts and melee push dropped weapons about"],
+	["sv_weapon_drop_impulse", "impulse_scale", "float:0:20", "Scale of the push a shot or melee hit gives a dropped weapon"],
+	["sv_weapon_drop_blast", "blast_scale", "float:0:20", "Scale of the push an explosion gives a dropped weapon"],
+	["sv_weapon_drop_active", "max_active", "int:0:256", "Most dropped weapons simulated awake at once; 0 unlimited"],
+	["sv_weapon_drop_sleep", "sleep_time", "float:0.1:10", "Seconds a dropped weapon lies still before it sleeps"],
+	["sv_weapon_drop_mass", "mass", "float:0.1:100", "Mass of a dropped weapon, kilograms"],
+	["sv_weapon_drop_friction", "friction", "float:0:2", "Friction of a dropped weapon"],
+	["sv_weapon_drop_bounce", "bounce", "float:0:1", "Bounciness of a dropped weapon"],
 	["sv_weapon_drop_swap", "swap", "bool", "1 lets the drop key take the weapon underfoot after dropping"],
 ]
 

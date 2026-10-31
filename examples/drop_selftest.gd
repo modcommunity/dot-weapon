@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 50
+const CHECKS := 72
 
 
 func _ready() -> void:
@@ -17,6 +17,8 @@ func _run() -> void:
 	_test_pickup_rules()
 	await _test_lifetime_and_cap()
 	await _test_settle_and_mirror()
+	_test_hold_and_ammo()
+	await _test_physics()
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [_sections_entered, _sections_finished, _passed, _failed])
 	for line in _failures:
@@ -58,7 +60,7 @@ func _test_rules() -> void:
 	_check(r.set_cvar("sv_weapon_drop_max", "9999") and r.max_count == 512, "sv_weapon_drop_max clamps")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 14, "fourteen cvars are described")
+	_check(r.cvar_specs().size() == 23, "twenty-three cvars are described")
 	_done()
 
 
@@ -235,6 +237,79 @@ func _test_pickup_rules() -> void:
 	var _gh := h.give(&"pistol")
 	var d6 := drops.spawn(shot, at, Vector3.ZERO, 1)
 	drops.tick(1.0)
-	_check(drops.use(h, at, Vector3.FORWARD, 2) == d6 and h.carries(&"rifle") and not h.carries(&"pistol"), "a taken weapon swaps with the one in its slot")
+	_check(drops.use(h, at, Vector3.FORWARD, 2) == 0 and h.carries(&"pistol"), "a tap never swaps a different weapon")
+	_check(drops.use(h, at, Vector3.FORWARD, 2, null, true) == d6 and h.carries(&"rifle") and not h.carries(&"pistol"), "a hold swaps with the one in its slot")
 	_check(drops.count() == 1, "and the swapped-out weapon lies on the floor")
+	_done()
+
+
+func _test_hold_and_ammo() -> void:
+	_section("hold, tap and ammunition")
+	var hold := DotWeaponUseHold.new()
+	hold.hold_time = 0.5
+	_check(hold.step(true, 0.2) == DotWeaponUseHold.Event.NONE and absf(hold.progress - 0.4) < 0.01, "a held key fills the circle")
+	_check(hold.step(false, 0.0) == DotWeaponUseHold.Event.TAP and hold.progress == 0.0, "release before the time is a tap")
+	var _a := hold.step(true, 0.3)
+	_check(hold.step(true, 0.3) == DotWeaponUseHold.Event.HOLD, "reaching the time fires the hold")
+	_check(hold.step(true, 0.3) == DotWeaponUseHold.Event.NONE and hold.step(false, 0.0) == DotWeaponUseHold.Event.NONE, "once, and the release after it is no tap")
+	var _b := hold.step(true, 0.2)
+	_check(hold.step(true, 0.1, false) == DotWeaponUseHold.Event.NONE and hold.progress == 0.0, "looking away cancels")
+
+	var drops := _drops()
+	var a := _arsenal()
+	var _g := a.give(&"rifle")
+	var pool: StringName = a.catalogue.get_def(&"rifle").ammo_type
+	var ammo: DotWeaponAmmo = a.ammo()
+	ammo.set_cap(pool, 100)
+	ammo.set_count(pool, 70)
+	var changed: Array = []
+	drops.ammo_changed.connect(func(id: int, st: Dictionary) -> void: changed.append([id, st]))
+	var at := Vector3(0, 1, 0)
+	var d := drops.spawn({"id": &"rifle", "magazine": 20, "reserve": 40}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	_check(drops.use(a, at, Vector3.FORWARD, 2) == d and drops.has_drop(d), "a tap on the same weapon unloads into the reserve and the drop stays when it overflows")
+	_check(ammo.count(pool) == 100, "capped at the maximum")
+	_check(changed.size() == 1 and int(changed[0][1]["reserve"]) + int(changed[0][1]["magazine"]) == 30, "30 rounds remain on the floor, and clients are told")
+	ammo.set_count(pool, 95)
+	var _u := drops.use(a, at, Vector3.FORWARD, 2)
+	ammo.set_count(pool, 0)
+	var _v := drops.use(a, at, Vector3.FORWARD, 2)
+	_check(not drops.has_drop(d) and ammo.count(pool) > 0, "once it all fits the drop is gone")
+	_check(drops.use(a, at, Vector3.FORWARD, 2) == 0, "nothing left to take")
+	var full := drops.spawn({"id": &"rifle", "magazine": 3, "reserve": 0}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	ammo.set_count(pool, 100)
+	_check(drops.use(a, at, Vector3.FORWARD, 2) == 0 and drops.has_drop(full), "a full reserve takes nothing")
+	_done()
+
+
+func _test_physics() -> void:
+	_section("shootable drops")
+	var drops := _drops()
+	drops.collision_mask = 0
+	var d := drops.spawn({"id": &"rifle", "magazine": 5, "reserve": 0}, Vector3(0, 5, 0), Vector3.ZERO, 1)
+	drops.rules.lifetime = 0.0
+	var seen: Array = []
+	drops.pushed.connect(func(id: int, _at: Transform3D, v: Vector3, _s: Vector3) -> void: seen.append([id, v]))
+	await get_tree().physics_frame
+	var hit := drops.raycast(Vector3(0, 5, 3), Vector3(0, 5, -3))
+	_check(hit.get("id", 0) == d, "a ray across a drop finds it")
+	_check(drops.raycast(Vector3(4, 5, 3), Vector3(4, 5, -3)).is_empty(), "and a ray beside it does not")
+	drops._rest(d, drops._entries[d], drops._entries[d]["body"])
+	_check(drops.active_count() == 0, "a settled drop is not active")
+	_check(drops.hit(d, hit["point"], Vector3.FORWARD, 8.0) and seen.size() == 1 and drops.active_count() == 1, "a shot wakes it and tells clients")
+	_check((seen[0][1] as Vector3).length() > 0.5, "and gives it speed")
+	drops.rules.shootable = false
+	_check(not drops.hit(d, hit["point"], Vector3.FORWARD, 8.0), "sv_weapon_drop_shootable 0 leaves it alone")
+	drops.rules.shootable = true
+	_check(drops.blast(Vector3(0, 4, 0), 6.0, 10.0) == 1 and seen.size() == 2, "an explosion in range pushes it")
+	_check(drops.blast(Vector3(0, 40, 0), 3.0, 10.0) == 0, "and one out of range does not")
+	drops.rules.max_active = 1
+	var e := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(3, 5, 0), Vector3.ZERO, 1)
+	var _h := drops.hit(e, Vector3(3, 5, 0), Vector3.FORWARD, 5.0)
+	_check(drops.active_count() <= 1, "max_active puts the oldest to rest")
+	var client := _drops(false)
+	client.mirror_drop(d, {"id": &"rifle", "magazine": 5, "reserve": 0}, Transform3D(Basis.IDENTITY, Vector3(0, 5, 0)), Vector3.ZERO, 0.0, true)
+	client.mirror_pushed(d, Transform3D(Basis.IDENTITY, Vector3(1, 5, 0)), Vector3(0, 0, -3), Vector3.ZERO)
+	_check(client.active_count() == 1 and absf(client.snapshot()[0]["at"].origin.x - 1.0) < 0.01, "a client wakes the drop at the authority's pose")
 	_done()

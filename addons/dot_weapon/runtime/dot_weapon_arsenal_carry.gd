@@ -62,28 +62,38 @@ func enforce_limit() -> Array[StringName]:
 
 
 ## Drops the weapon in hand for a world pickup: removes it, cancels any reload, switches to the next
-## weapon and returns `{id, magazine, reserve}` (empty when nothing may be dropped). Slots in
-## [param keep_slots] (a permanent melee weapon) are never dropped. The reserve goes with it only when
-## no other carried weapon draws on the same pool.
+## weapon and returns `{id, magazine, reserve}` plus `fit` (mount to attachment id) and `fm` (fire mode
+## index) when set (empty when nothing may be dropped). Slots in [param keep_slots] (a permanent melee
+## weapon) are never dropped. The reserve goes with it only when no other carried weapon draws on the same pool.
 func drop_current(keep_slots: Array[int] = []) -> Dictionary:
-	var held := current()
-	if held == null or keep_slots.has(_current) or disabled:
+	return drop_from_slot(_current, keep_slots)
+
+
+## [method drop_current] for the weapon at the front of [param slot_number], held or not.
+func drop_from_slot(slot_number: int, keep_slots: Array[int] = []) -> Dictionary:
+	var held: DotWeaponSlot = _slots.get(slot_number, null)
+	if held == null or keep_slots.has(slot_number) or disabled:
 		return {}
 	var state := {"id": held.id(), "magazine": held.magazine, "reserve": 0}
-	var slot_number := _current
-	_cancel_transient()
+	if held.fitting != null and not held.fitting.is_empty():
+		state["fit"] = held.fitting.to_dictionary()
+	if held.fire_mode_index != 0:
+		state["fm"] = held.fire_mode_index
+	if slot_number == _current:
+		_cancel_transient()
 	if _shelf_of(slot_number).is_empty():
 		var _taken := take(slot_number)
 	else:
 		_slots[slot_number] = _shelf_of(slot_number).pop_front()
 		if _shelf_of(slot_number).is_empty():
 			_shelf.erase(slot_number)
-		var to := current()
-		_switch_to = slot_number
-		_holstering = false
-		_switch_done_tick = -1
-		if to != null:
-			switched.emit(slot_number, slot_number)
+		if slot_number == _current:
+			var to := current()
+			_switch_to = slot_number
+			_holstering = false
+			_switch_done_tick = -1
+			if to != null:
+				switched.emit(slot_number, slot_number)
 		carried_changed.emit()
 	var pool := held.def.ammo_type
 	if pool != &"" and not held.def.infinite_reserve:
@@ -98,15 +108,22 @@ func drop_current(keep_slots: Array[int] = []) -> Dictionary:
 	return state
 
 
-## Puts the ammunition of a [method drop_current] state back on the weapon [param state] names, which
-## must already be carried (given with `full = false`).
+## Puts the ammunition, attachments and fire mode of a [method drop_current] state back on the weapon
+## [param state] names, which must already be carried (given with `full = false`).
 func apply_dropped(state: Dictionary) -> void:
 	var def := catalogue.get_def(StringName(state.get("id", &"")))
 	if def == null:
 		return
+	var fit_state: Variant = state.get("fit", null)
+	if fit_state is Dictionary and attachments != null:
+		var parsed := DotWeaponFitting.from_dictionary(fit_state as Dictionary)
+		if parsed.ok:
+			var _fitted: Variant = call("fit", def.slot, parsed.value)
 	for w in weapons_in(def.slot):
 		if w.id() == def.id:
-			w.magazine = clampi(int(state.get("magazine", 0)), 0, maxi(def.magazine, 0))
+			w.magazine = clampi(int(state.get("magazine", 0)), 0, maxi(w.def.magazine, 0))
+			if state.has("fm"):
+				w.fire_mode_index = clampi(int(state["fm"]), 0, maxi(w.def.allowed_fire_modes().size() - 1, 0))
 	if def.ammo_type != &"" and int(state.get("reserve", 0)) > 0:
 		var _added := add_ammo(def.ammo_type, int(state["reserve"]))
 	carried_changed.emit()
