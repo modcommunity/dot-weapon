@@ -50,6 +50,19 @@ static func parse_map(text: String) -> Dictionary:
 	return out
 
 
+## Resistances every round gets for a material its profile does not list: a fence is mostly air, so a bullet crosses it for a small loss.
+const DEFAULT_MATERIALS := {&"fence": 0.5}
+
+
+## [param listed] with [constant DEFAULT_MATERIALS] filled in where the profile is silent.
+static func with_default_materials(listed: Dictionary) -> Dictionary:
+	var out := listed.duplicate()
+	for k in DEFAULT_MATERIALS:
+		if not out.has(k) and not out.has(String(k)):
+			out[k] = DEFAULT_MATERIALS[k]
+	return out
+
+
 static func from_flat(p_id: StringName, c: Dictionary) -> DotWeaponAmmoType:
 	var t := DotWeaponAmmoType.new()
 	t.id = p_id
@@ -83,7 +96,7 @@ func make_penetration() -> DotPenetration:
 	var p := DotPenetration.new()
 	p.power = penetration
 	p.max_depth = max_depth
-	p.materials = materials
+	p.materials = with_default_materials(materials)
 	p.default_resistance = default_resistance
 	p.body_cost = body_cost
 	p.body_zones = body_zones
