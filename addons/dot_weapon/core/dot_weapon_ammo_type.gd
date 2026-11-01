@@ -99,7 +99,9 @@ func make_penetration() -> DotPenetration:
 	p.materials = with_default_materials(materials)
 	p.default_resistance = default_resistance
 	p.body_cost = body_cost
-	p.body_zones = body_zones
+	p.body_zones = DotPenetration.DEFAULT_BODY_ZONES.duplicate()
+	for z in body_zones:
+		p.body_zones[z] = body_zones[z]
 	p.min_damage = min_damage
 	p.max_passes = max_passes
 	p.ricochet_materials = ricochet_materials
