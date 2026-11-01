@@ -12,6 +12,8 @@ var max_segments: int = 256
 
 var _segments: Array = []
 var _mesh := ImmediateMesh.new()
+## True while the mesh holds a surface; an idle frame then skips the clear and the GL buffer churn behind it.
+var _drawn := false
 
 
 func _ready() -> void:
@@ -43,7 +45,10 @@ func count() -> int:
 
 
 func _process(delta: float) -> void:
+	if _segments.is_empty() and not _drawn:
+		return
 	_mesh.clear_surfaces()
+	_drawn = false
 	var i := _segments.size() - 1
 	while i >= 0:
 		_segments[i][2] -= delta
@@ -71,3 +76,4 @@ func _process(delta: float) -> void:
 		_mesh.surface_add_vertex(b + side)
 		_mesh.surface_add_vertex(b - side)
 	_mesh.surface_end()
+	_drawn = true
