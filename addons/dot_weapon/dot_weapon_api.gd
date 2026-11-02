@@ -64,5 +64,7 @@ extends RefCounted
 
 ## 18: [DotWeaponUseKey], the shared E-key rules over a dropped weapon (tap/hold); a tap on a different weapon now replaces it. OLDEST stays 1.
 
-const LEVEL := 18
+## 19: [DotWeaponWheel], the shared previous/next weapon wheel over a ring of slots (mouse wheel or pad). OLDEST stays 1.
+
+const LEVEL := 19
 const OLDEST := 1

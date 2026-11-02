@@ -568,3 +568,50 @@ func _test_muzzle() -> void:
 class _FakeMode extends Object:
 	var net_slot: int = 0
 	var net_fire_mode: int = 0
+
+
+func _test_wheel() -> void:
+	_section("the weapon wheel steps a ring")
+
+	var a := _arsenal()
+	a.give(&"rifle")
+	a.give(&"pistol")
+	var w := DotWeaponWheel.from_arsenal(a)
+	var slots := a.slots()
+	_check(slots.size() >= 2, "the fixture carries two slots", str(slots))
+	_check(w.target(1) == slots[1], "next goes to the following slot")
+	_check(w.target(-1) == slots[slots.size() - 1] or slots.size() == 2, "previous wraps to the last")
+	_check(w.target(1, slots[slots.size() - 1]) == slots[0], "next wraps past the end")
+	_check(w.target(1, 99) == slots[0], "an entry not in the ring steps to the first")
+	w.wrap = false
+	_check(w.target(-1, slots[0]) == null, "without wrap the first has no previous")
+	w.wrap = true
+
+	var one := DotWeaponWheel.new()
+	one.ring_provider = func() -> Array: return [3]
+	_check(one.target(1, 3) == null, "a ring of one has nowhere to go")
+	_check(DotWeaponWheel.new().target(1) == null, "no provider is not an error")
+
+	var up := InputEventAction.new()
+	up.action = w.next_action
+	up.pressed = true
+	if not InputMap.has_action(w.next_action):
+		InputMap.add_action(w.next_action)
+	_check(w.step_for(up) == 1, "the next action steps forward")
+	var pad := InputEventJoypadButton.new()
+	pad.button_index = JOY_BUTTON_LEFT_SHOULDER
+	pad.pressed = true
+	_check(w.step_for(pad) == -1, "the left shoulder steps back")
+	w.previous_joy_button = -1
+	_check(w.step_for(pad) == 0, "a pad button can be turned off")
+
+	var got: Array = []
+	w.chosen.connect(func(t: Variant) -> void: got.append(t))
+	_check(w.handle_event(up) and got == [slots[1]], "an event emits the target", str(got))
+	w.blocked = func() -> bool: return true
+	_check(not w.handle_event(up) and got.size() == 1, "blocked does nothing")
+	_check(w.describe().has("ring") and w.describe()["blocked"] == true, "describe reports state")
+
+	InputMap.erase_action(w.next_action)
+	_drop(a)
+	_done()
