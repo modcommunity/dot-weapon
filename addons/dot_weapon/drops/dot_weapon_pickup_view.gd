@@ -54,7 +54,8 @@ func _ready() -> void:
 	shader.code = CIRCLE_SHADER
 	_material = ShaderMaterial.new()
 	_material.shader = shader
-	_material.render_priority = 11
+	# Under the text (10) and its outline (9): the circle must never cover the panel.
+	_material.render_priority = 8
 	_circle = MeshInstance3D.new()
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.16, 0.16)
@@ -107,4 +108,4 @@ func _face_camera() -> void:
 	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if cam == null:
 		return
-	_circle.global_transform = Transform3D(cam.global_transform.basis, global_position + Vector3.DOWN * 0.1)
+	_circle.global_transform = Transform3D(cam.global_transform.basis, global_position + Vector3.DOWN * lift)
