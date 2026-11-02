@@ -1,14 +1,9 @@
 class_name DotWeaponDropKey
 extends RefCounted
 
-## One player's drop key. Keep one per player and call [method step] every tick with the key state.
-## With [member DotWeaponDropRules.key_hold] at 0 the press throws at once; above 0 the weapon is thrown when the key
-## has been held that long, a shorter tap throws nothing and letting go cancels. The server decides; a client calls
-## [method client_progress] to draw a ring.
-##
-## One instance per role: the server's [method step] and the client's [method client_progress] keep separate state, so a
-## listen host makes two keys (using one for both double-counts the hold). Games call [method reset] on death, respawn,
-## disconnect and weapon switch; a change of the held weapon mid-hold cancels the hold by itself.
+## One player's drop key: call [method step] every tick with the key state (server), [method client_progress] for a ring.
+## With [member DotWeaponDropRules.key_hold] at 0 a press throws at once; above 0 the throw happens after that hold.
+## One instance per role (a listen host needs two); call [method reset] on death, respawn, disconnect and weapon switch.
 
 var hold := DotWeaponUseHold.new()
 var _was_down: bool = false
