@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 86
+const CHECKS := 103
 
 
 func _ready() -> void:
@@ -19,6 +19,7 @@ func _run() -> void:
 	await _test_lifetime_and_cap()
 	await _test_settle_and_mirror()
 	_test_hold_and_ammo()
+	_test_e_key_rules()
 	await _test_physics()
 	await _test_blast()
 	print("")
@@ -270,9 +271,8 @@ func _test_pickup_rules() -> void:
 	var _gh := h.give(&"pistol")
 	var d6 := drops.spawn(shot, at, Vector3.ZERO, 1)
 	drops.tick(1.0)
-	_check(drops.use(h, at, Vector3.FORWARD, 2) == 0 and h.carries(&"pistol"), "a tap never swaps a different weapon")
-	_check(drops.use(h, at, Vector3.FORWARD, 2, null, true) == d6 and h.carries(&"rifle") and not h.carries(&"pistol"), "a hold swaps with the one in its slot")
-	_check(drops.count() == 1, "and the swapped-out weapon lies on the floor")
+	_check(drops.use(h, at, Vector3.FORWARD, 2) == d6 and h.carries(&"rifle") and not h.carries(&"pistol"), "a tap on a different weapon replaces the one in its slot")
+	_check(drops.count() == 1, "and the replaced weapon lies on the floor")
 	_done()
 
 
@@ -395,4 +395,93 @@ func _test_blast() -> void:
 	hidden.linear_velocity = Vector3.ZERO
 	var _m := drops.blast(centre, 6.0, 10.0)
 	_check(hidden.linear_velocity.length() > 0.5, "with no sight check set, behaviour is as before")
+	_done()
+
+
+func _fitted_arsenal() -> DotWeaponArsenal:
+	var cat := _catalogue()
+	cat.get_def(&"rifle").mounts = [&"muzzle"] as Array[StringName]
+	var a := _arsenal(cat)
+	a.attachments = DotWeaponAttachments.new()
+	for id in ["suppressor", "brake"]:
+		var att := DotWeaponAttachment.new()
+		att.id = StringName(id)
+		att.mount = &"muzzle"
+		var _r := a.attachments.add(att)
+	return a
+
+
+func _fit_with(a: DotWeaponArsenal, id: StringName) -> void:
+	var f := DotWeaponFitting.make(&"rifle")
+	f.fit(&"muzzle", id)
+	var r := a.fit(a.catalogue.get_def(&"rifle").slot, f)
+	_check(r.ok, "fitted %s" % id)
+
+
+func _test_e_key_rules() -> void:
+	_section("E key rules")
+	var at := Vector3(0, 1, 0)
+	var drops := _drops()
+	var a := _fitted_arsenal()
+	var slot: int = a.catalogue.get_def(&"rifle").slot
+	var pistol_slot: int = a.catalogue.get_def(&"pistol").slot
+	_check(slot != pistol_slot, "rifle and pistol use different slots")
+	# Empty slot: a tap adds.
+	var d1 := drops.spawn({"id": &"rifle", "magazine": 11, "reserve": 0}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	_check(drops.prompt_for(a, at, Vector3.FORWARD).get("mode") == "take", "empty slot: prompt says take")
+	_check(drops.use(a, at, Vector3.FORWARD, 2) == d1 and a.carries(&"rifle"), "empty slot: a tap adds the weapon")
+	_check(a.weapons_in(slot)[0].magazine == 11, "with its magazine as it lay")
+	# Same weapon: prompt says ammo; hold swaps the fitting only, counts stay.
+	_fit_with(a, &"suppressor")
+	a.weapons_in(slot)[0].magazine = 20
+	var pool: StringName = a.catalogue.get_def(&"rifle").ammo_type
+	a.ammo().set_cap(pool, 100)
+	a.ammo().set_count(pool, 50)
+	var fit_d := DotWeaponFitting.make(&"rifle")
+	fit_d.fit(&"muzzle", &"brake")
+	var d2 := drops.spawn({"id": &"rifle", "magazine": 3, "reserve": 9, "fit": fit_d.to_dictionary()}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	_check(drops.prompt_for(a, at, Vector3.FORWARD).get("mode") == "ammo", "same weapon: prompt says ammo")
+	_check(drops.use(a, at, Vector3.FORWARD, 2, null, true) == d2, "same weapon, hold: replaces")
+	_check(String(a.fitting_at(slot).attachment_on(&"muzzle")) == "brake", "the dropped gun's attachment now sits on the held one")
+	_check(a.weapons_in(slot)[0].magazine == 20 and a.ammo().count(pool) == 50, "magazine and reserve in hand are kept")
+	var left: Dictionary = drops.snapshot().filter(func(e: Dictionary) -> bool: return int(e["id"]) == d2)[0]["state"]
+	_check(left["fit"] != fit_d.to_dictionary() and int(left["magazine"]) == 3 and int(left["reserve"]) == 9, "the old fitting lies on the floor with the drop's rounds")
+	# Hold with nothing to trade does nothing.
+	var plain := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0, "fit": left["fit"]}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	_check(drops.use(a, at, Vector3.FORWARD, 2, null, true) in [d2, plain] and a.fitting_at(slot).attachment_on(&"muzzle") != &"" , "a second hold trades back")
+	# Same weapon tap: ammo only, capped, fitting untouched.
+	var before := String(a.fitting_at(slot).attachment_on(&"muzzle"))
+	drops.clear()
+	a.ammo().set_count(pool, 95)
+	var d3 := drops.spawn({"id": &"rifle", "magazine": 10, "reserve": 10, "fit": fit_d.to_dictionary()}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	_check(drops.use(a, at, Vector3.FORWARD, 2) == d3 and a.ammo().count(pool) == 100, "same weapon, tap: ammo up to the cap")
+	_check(drops.has_drop(d3) and String(a.fitting_at(slot).attachment_on(&"muzzle")) == before, "the remainder stays on the floor and the fitting is unchanged")
+	# Different weapon in the same slot: a tap replaces at once.
+	drops.clear()
+	var cat2 := _catalogue()
+	cat2.get_def(&"pistol").slot = cat2.get_def(&"rifle").slot
+	var b := _arsenal(cat2)
+	var _gb := b.give(&"pistol")
+	var d4 := drops.spawn({"id": &"rifle", "magazine": 5, "reserve": 0}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	_check(drops.prompt_for(b, at, Vector3.FORWARD).get("mode") == "swap", "different weapon: prompt says swap")
+	_check(drops.use(b, at, Vector3.FORWARD, 2) == d4 and b.carries(&"rifle") and not b.carries(&"pistol"), "different weapon, tap: replaces")
+	_check(drops.count() == 1, "and the old one drops")
+	# Reload state survives: a reload begun before the swap is cancelled, the new gun is not stuck reloading.
+	_check(not b.is_reloading(), "no reload state is left behind by a swap")
+	# Server and client agree: a mirror sees the same prompt.
+	var client := _drops(false)
+	var srv_id := drops.snapshot()[0]
+	client.mirror_drop(int(srv_id["id"]), srv_id["state"], Transform3D(Basis.IDENTITY, at), Vector3.ZERO, 0.0, true)
+	client.tick(1.0)
+	drops.tick(1.0)
+	var c := _arsenal(cat2)
+	var _gc := c.give(&"pistol")
+	var sp := drops.prompt_for(c, at, Vector3.FORWARD)
+	var cp := client.prompt_for(c, at, Vector3.FORWARD)
+	_check(not sp.is_empty() and sp.get("mode") == cp.get("mode") and sp.get("weapon") == cp.get("weapon"), "server and client prompts agree")
 	_done()

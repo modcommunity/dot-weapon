@@ -62,5 +62,7 @@ extends RefCounted
 
 ## 17: [method DotWeaponNetSync.fire_mode_specs] takes owner_only, [method DotWeaponNetSync.fire_mode_will_change], push's with_fire_mode. OLDEST stays 1.
 
-const LEVEL := 17
+## 18: [DotWeaponUseKey], the shared E-key rules over a dropped weapon (tap/hold); a tap on a different weapon now replaces it. OLDEST stays 1.
+
+const LEVEL := 18
 const OLDEST := 1

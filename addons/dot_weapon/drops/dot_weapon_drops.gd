@@ -128,8 +128,9 @@ func _take_near(arsenal: Object, position: Vector3, taker_id: int, r: DotWeaponD
 
 ## The use key: a tap ([param held] false) takes the dropped weapon [param position] is looking at (or the
 ## nearest in [member DotWeaponDropRules.use_radius]) into a free slot, or unloads its ammunition into the
-## same weapon already carried, up to the carry capacity, leaving the overflow on the floor. Only a hold
-## ([param held] true, see [DotWeaponUseHold]) swaps it for a different weapon in the way. Returns the drop id, or 0.
+## same weapon already carried, up to the carry capacity, leaving the overflow on the floor. A different
+## weapon in the slot is replaced at once (the old one drops). Only a hold ([param held] true, see
+## [DotWeaponUseHold]) over the same weapon replaces it fully: attachments trade, ammunition counts stay. Returns the drop id, or 0.
 func use(arsenal: Object, position: Vector3, direction: Vector3, taker_id: int, source: Object = null, held: bool = false) -> int:
 	if not is_authority or arsenal == null:
 		return 0
@@ -198,9 +199,8 @@ func drop_team(drop_id: int) -> int:
 
 
 ## Takes drop [param best] into [param arsenal]. A free slot takes it with its ammunition and attachments as
-## it lay. The same weapon twice unloads its ammunition into the reserve (the overflow stays). A different
-## weapon already in the slot is swapped out onto the floor only when [param held], or in the automatic case
-## ([param keyed] false: dropping and taking in one go).
+## it lay. The same weapon twice unloads its ammunition into the reserve (the overflow stays), or with
+## [param held] trades fittings. A different weapon already in the slot is swapped out onto the floor.
 func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = null, held: bool = false, keyed: bool = false) -> int:
 	if best == 0:
 		return 0
@@ -212,11 +212,9 @@ func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = nu
 	if def != null and arsenal.call(&"has_slot", def.get(&"slot")):
 		var slot_no: int = def.get(&"slot")
 		if bool(arsenal.call(&"carries", id)):
-			return _unload(arsenal, best, def, taker_id)
+			return _replace_same(arsenal, best, def, taker_id) if held and keyed else _unload(arsenal, best, def, taker_id)
 		var in_slot: Array = arsenal.call(&"weapons_in", slot_no)
 		if in_slot.size() >= int(arsenal.call(&"slot_capacity")):
-			if keyed and not held:
-				return 0
 			swapped = arsenal.call(&"drop_from_slot", slot_no, keep_slots)
 			if swapped.is_empty():
 				return 0
@@ -231,6 +229,39 @@ func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = nu
 	_remove(best, taker_id)
 	if not swapped.is_empty():
 		var _back := spawn(swapped, where, Vector3.UP * 1.5, taker_id, r)
+	return best
+
+
+## Holding the use key over the weapon already in hand: its attachments and fire mode trade places with
+## the drop's, while the magazine and reserve in hand stay as they are (ammunition is conserved: the old
+## fitting lands on the floor with the drop's own rounds). Returns the drop id, or 0 when nothing differs.
+func _replace_same(arsenal: Object, best: int, def: Object, taker_id: int) -> int:
+	var state: Dictionary = _entries[best]["state"]
+	var slot_no: int = def.get(&"slot")
+	var front: Array = arsenal.call(&"weapons_in", slot_no)
+	if front.is_empty() or front[0].call(&"id") != def.get(&"id") or arsenal.get(&"attachments") == null:
+		return 0
+	var held_fit: Dictionary = {}
+	var fitting: Object = arsenal.call(&"fitting_at", slot_no)
+	if fitting != null and not bool(fitting.call(&"is_empty")):
+		held_fit = fitting.call(&"to_dictionary")
+	var new_fit: Dictionary = state.get("fit", {}) if state.get("fit", null) is Dictionary else {}
+	if held_fit == new_fit:
+		return 0
+	var incoming := DotWeaponFitting.make(def.get(&"id"))
+	if not new_fit.is_empty():
+		var parsed := DotWeaponFitting.from_dictionary(new_fit)
+		if not parsed.ok:
+			return 0
+		incoming = parsed.value
+	var applied: Object = arsenal.call(&"fit", slot_no, incoming)
+	if applied == null or not bool(applied.get(&"ok")):
+		return 0
+	if held_fit.is_empty():
+		state.erase("fit")
+	else:
+		state["fit"] = held_fit
+	ammo_changed.emit(best, state)
 	return best
 
 

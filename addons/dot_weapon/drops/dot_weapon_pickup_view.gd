@@ -93,8 +93,10 @@ func text_for(info: Dictionary) -> String:
 	var mag := int(info.get("magazine", 0))
 	var reserve := int(info.get("reserve", 0))
 	var action_key := "weapon.pickup.%s" % info.get("mode", "take")
-	var fallback: String = {"take": "Take", "ammo": "Take ammo", "swap": "Hold to swap"}.get(info.get("mode", "take"), "Take")
+	var fallback: String = {"take": "Take", "ammo": "Take ammo", "swap": "Replace"}.get(info.get("mode", "take"), "Take")
 	var action := _t(action_key, fallback)
+	if info.get("mode", "take") == "ammo":
+		action += "  (%s)" % _t("weapon.pickup.hold_replace", "hold: replace")
 	if not bool(info.get("can_take", true)):
 		action = _t("weapon.pickup.cannot", "Cannot carry")
 	return "%s\n%s %d / %d\n[%s] %s" % [shown, _t("weapon.pickup.magazine", "Ammo"), mag, mag + reserve, key_text, action]
