@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 103
+const CHECKS := 114
 
 
 func _ready() -> void:
@@ -20,6 +20,7 @@ func _run() -> void:
 	await _test_settle_and_mirror()
 	_test_hold_and_ammo()
 	_test_e_key_rules()
+	_test_drop_key_hold()
 	await _test_physics()
 	await _test_blast()
 	print("")
@@ -63,7 +64,7 @@ func _test_rules() -> void:
 	_check(r.set_cvar("sv_weapon_drop_max", "9999") and r.max_count == 512, "sv_weapon_drop_max clamps")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 23, "twenty-three cvars are described")
+	_check(r.cvar_specs().size() == 24, "twenty-four cvars are described")
 	_done()
 
 
@@ -416,6 +417,38 @@ func _fit_with(a: DotWeaponArsenal, id: StringName) -> void:
 	f.fit(&"muzzle", id)
 	var r := a.fit(a.catalogue.get_def(&"rifle").slot, f)
 	_check(r.ok, "fitted %s" % id)
+
+
+func _test_drop_key_hold() -> void:
+	_section("drop key hold")
+	var at := Vector3(0, 1.6, 0)
+	var drops := _drops()
+	var key := DotWeaponDropKey.new()
+	var a := _arsenal()
+	var _g := a.give(&"rifle")
+	_check(drops.rules.key_hold == 0.0, "the hold is off by default")
+	_check(key.step(drops, a, at, Vector3.FORWARD, 1, true, 0.016) == 1 and not a.carries(&"rifle"), "hold 0: the press throws at once")
+	_check(key.step(drops, a, at, Vector3.FORWARD, 1, true, 0.016) == 0, "and holding on does not throw again")
+	var _r := key.step(drops, a, at, Vector3.FORWARD, 1, false, 0.016)
+	drops.clear()
+	drops.rules.key_hold = 0.5
+	var b := _arsenal()
+	var _g2 := b.give(&"rifle")
+	var k2 := DotWeaponDropKey.new()
+	_check(k2.step(drops, b, at, Vector3.FORWARD, 1, true, 0.2) == 0 and b.carries(&"rifle"), "hold 0.5: nothing yet at 0.2 s")
+	_check(absf(k2.hold.progress - 0.4) < 0.01, "the progress reads the fraction")
+	_check(k2.step(drops, b, at, Vector3.FORWARD, 1, false, 0.016) == 0 and b.carries(&"rifle") and drops.count() == 0, "a tap shorter than the hold throws nothing")
+	var _a2 := k2.step(drops, b, at, Vector3.FORWARD, 1, true, 0.3)
+	_check(k2.step(drops, b, at, Vector3.FORWARD, 1, false, 0.016) == 0 and b.carries(&"rifle") and k2.hold.progress == 0.0, "releasing mid-hold cancels")
+	var _a3 := k2.step(drops, b, at, Vector3.FORWARD, 1, true, 0.3)
+	var id := k2.step(drops, b, at, Vector3.FORWARD, 1, true, 0.3)
+	_check(id > 0 and not b.carries(&"rifle") and drops.count() == 1, "held long enough: the weapon is thrown")
+	_check(k2.step(drops, b, at, Vector3.FORWARD, 1, true, 0.3) == 0, "once per hold")
+	var k3 := DotWeaponDropKey.new()
+	var _p := k3.client_progress(true, 0.25, 0.5)
+	_check(absf(k3.client_progress(true, 0.0, 0.5) - 0.5) < 0.01, "the client ring fills toward the rule")
+	_check(k3.client_progress(true, 0.1, 0.0) == 0.0, "and stays empty when the hold is off")
+	_done()
 
 
 func _test_e_key_rules() -> void:

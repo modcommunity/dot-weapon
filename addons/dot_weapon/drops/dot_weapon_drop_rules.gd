@@ -10,7 +10,7 @@ const CHANNEL := "weapon.drop"
 ## Class-def property names that override a rule (a negative number, or INHERIT, keeps the rule).
 const CLASS_KEYS := {
 	"drop_allowed": "key_enabled", "drop_on_death": "on_death", "drop_lifetime": "lifetime",
-	"drop_throw_force": "throw_force", "drop_throw_up": "throw_up", "drop_pickup_radius": "pickup_radius", "drop_use_radius": "use_radius",
+	"drop_key_hold": "key_hold", "drop_throw_force": "throw_force", "drop_throw_up": "throw_up", "drop_pickup_radius": "pickup_radius", "drop_use_radius": "use_radius",
 }
 
 signal changed
@@ -39,6 +39,9 @@ var auto_pickup: bool = false
 var use_radius: float = 2.2
 ## The drop key also takes the weapon you are standing at, once your own is out of the slot.
 var swap: bool = true
+
+## Seconds the drop key must be held before the weapon is thrown; 0 throws on the press (see [DotWeaponDropKey]).
+var key_hold: float = 0.0
 
 ## Seconds the use key is held over a dropped weapon of another type to swap it with the one in hand; a tap never swaps.
 var hold_time: float = 0.6
@@ -69,6 +72,7 @@ const _SPECS := [
 	["sv_weapon_drop", "enabled", "bool", "1 lets weapons be dropped at all"],
 	["sv_weapon_drop_death", "on_death", "bool", "1 drops a dead player's weapon"],
 	["sv_weapon_drop_key", "key_enabled", "bool", "1 lets the drop key throw the weapon in hand"],
+	["sv_weapon_drop_key_hold", "key_hold", "float:0:5", "Seconds the drop key is held to throw the weapon in hand; 0 throws on the press"],
 	["sv_weapon_drop_time", "lifetime", "float:0:3600", "Seconds a dropped weapon lies before it vanishes; 0 never"],
 	["sv_weapon_drop_max", "max_count", "int:0:512", "Most dropped weapons on the map, oldest removed first; 0 unlimited"],
 	["sv_weapon_drop_force", "throw_force", "float:0:40", "Throw speed along the aim"],

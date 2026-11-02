@@ -66,5 +66,7 @@ extends RefCounted
 
 ## 19: [DotWeaponWheel], the shared previous/next weapon wheel over a ring of slots (mouse wheel or pad). OLDEST stays 1.
 
-const LEVEL := 19
+## 20: [DotWeaponDropKey], the drop key with an opt-in hold (`sv_weapon_drop_key_hold`, `drop_key_hold` per class; 0 = on the press). OLDEST stays 1.
+
+const LEVEL := 20
 const OLDEST := 1
