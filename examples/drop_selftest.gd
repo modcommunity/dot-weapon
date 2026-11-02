@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 114
+const CHECKS := 119
 
 
 func _ready() -> void:
@@ -41,6 +41,7 @@ class _ClassStub extends RefCounted:
 	var drop_allowed: int = -1
 	var drop_pickup_radius: float = -1.0
 	var drop_throw_up: float = -1.0
+	var drop_key_hold: float = -1.0
 
 
 func _drops(authority: bool = true) -> DotWeaponDrops:
@@ -448,6 +449,24 @@ func _test_drop_key_hold() -> void:
 	var _p := k3.client_progress(true, 0.25, 0.5)
 	_check(absf(k3.client_progress(true, 0.0, 0.5) - 0.5) < 0.01, "the client ring fills toward the rule")
 	_check(k3.client_progress(true, 0.1, 0.0) == 0.0, "and stays empty when the hold is off")
+	_check(DotWeaponDropKey.new().client_progress(true, 0.25, 0.5, false) == 0.0, "no ring when a throw is not possible (unarmed or disabled)")
+	var stub := _ClassStub.new()
+	stub.drop_key_hold = 1.0
+	_check(DotWeaponDropKey.hold_time_for(drops.rules, stub) == 1.0 and DotWeaponDropKey.hold_time_for(drops.rules) == 0.5, "the ring's hold time follows a class override like the server")
+	drops.clear()
+	var c := _arsenal()
+	var _g3 := c.give(&"rifle")
+	var _g4 := c.give(&"pistol")
+	var k4 := DotWeaponDropKey.new()
+	var _h := k4.step(drops, c, at, Vector3.FORWARD, 1, true, 0.3)
+	k4.reset()
+	_check(k4.step(drops, c, at, Vector3.FORWARD, 1, true, 0.3) == 0 and drops.count() == 0, "a reset (respawn) mid-hold throws nothing and restarts the hold")
+	k4.reset()
+	var _h2 := k4.step(drops, c, at, Vector3.FORWARD, 1, true, 0.3)
+	var held_id: StringName = c.current().id()
+	var _dropped := c.drop_current()
+	_check(c.current() != null and c.current().id() != held_id, "the held weapon changed mid-hold")
+	_check(k4.step(drops, c, at, Vector3.FORWARD, 1, true, 0.3) == 0 and c.carries(c.current().id()), "so the new weapon is not thrown by that press")
 	_done()
 
 
