@@ -21,6 +21,8 @@ const SETTLE_SEC := 0.6
 const SETTLE_MAX_SEC := 4.0
 ## Cap on how far a thrown weapon may start from the player, so a wall in front cannot swallow it.
 const REACH := 0.5
+## The box of a weapon with no model.
+const DEFAULT_SIZE := Vector3(0.12, 0.14, 0.7)
 
 ## A weapon left a hand (or a corpse): [param state] is [code]{id, magazine, reserve}[/code].
 signal dropped(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int)
@@ -49,6 +51,7 @@ var keep_slots: Array[int] = []
 var team_of: Callable = Callable()
 
 var _entries: Dictionary = {}   ## int -> Dictionary {body, state, age, rest, owner, order, team}
+var _fits: Dictionary = {}   ## StringName -> [size, centre] of a weapon's model box
 var _next_id: int = 1
 var _order: int = 0
 
@@ -521,30 +524,46 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 	body.physics_material_override = material
 	add_child(body)
 	body.global_transform = at
-	var look: Node3D = look_of.call(StringName(state["id"])) if (draws and look_of.is_valid()) else null
-	var size := Vector3(0.12, 0.14, 0.7)
+	var weapon := StringName(state["id"])
+	var look: Node3D = look_of.call(weapon) if look_of.is_valid() and (draws or not _fits.has(weapon)) else null
+	var size := DEFAULT_SIZE
+	var centre := Vector3.ZERO
+	if look == null and _fits.has(weapon):
+		size = _fits[weapon][0]
+		centre = _fits[weapon][1]
 	if look != null:
+		# A server draws nothing but must rest the same box a client's model fills, or the client's
+		# mesh sinks into (or floats off) the floor where the server's box came to rest.
 		body.add_child(look)
-		var box := _bounds(look)
-		if box.size.length() > 0.05:
-			size = box.size.max(Vector3.ONE * 0.06)
-			body.add_child(_shape(size, box.get_center()))
-		else:
-			body.add_child(_shape(size, Vector3.ZERO))
-	else:
-		body.add_child(_shape(size, Vector3.ZERO))
-		if draws:
-			var mesh := MeshInstance3D.new()
-			var bm := BoxMesh.new()
-			bm.size = size
-			mesh.mesh = bm
-			body.add_child(mesh)
+		var fit := _fit_of(weapon, look)
+		size = fit[0]
+		centre = fit[1]
+		if not draws:
+			body.remove_child(look)
+			look.free()
+	body.add_child(_shape(size, centre))
+	if draws and look == null:
+		var mesh := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = size
+		mesh.mesh = bm
+		body.add_child(mesh)
 	body.linear_velocity = velocity
 	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
 	_order += 1
 	_entries[id] = {"body": body, "state": state, "age": 0.0, "life": life, "delay": delay,
 		"still": 0.0, "rest": false, "owner": owner_id, "order": _order, "team": team}
 	DotLog.debug(CHANNEL, "weapon dropped", {"id": id, "weapon": String(state.get("id", &""))})
+
+
+## The collision box [size, centre] of [param look] (inside the tree), measured once per weapon.
+func _fit_of(weapon: StringName, look: Node3D) -> Array:
+	if _fits.has(weapon):
+		return _fits[weapon]
+	var box := _bounds(look)
+	var fit: Array = [box.size.max(Vector3.ONE * 0.06), box.get_center()] if box.size.length() > 0.05 else [DEFAULT_SIZE, Vector3.ZERO]
+	_fits[weapon] = fit
+	return fit
 
 
 func _shape(size: Vector3, centre: Vector3) -> CollisionShape3D:
