@@ -412,10 +412,15 @@ func hit(drop_id: int, point: Vector3, direction: Vector3, momentum: float) -> b
 	return true
 
 
+## Optional [code]func(from: Vector3, to: Vector3) -> bool[/code] that says whether an explosion at [code]from[/code]
+## reaches [code]to[/code]; a game assigns its combat trace's [code]line_of_sight[/code] so walls shield drops as they do players.
+var can_see: Callable = Callable()
+
+
 ## An explosion at [param centre]: every drop within [param radius] is thrown outward, harder the closer.
 ## [param strength] is the impulse at the centre. Returns how many moved.
 func blast(centre: Vector3, radius: float, strength: float) -> int:
-	if not is_authority or not rules.shootable or radius <= 0.0:
+	if not is_authority or not rules.shootable or radius <= 0.0 or rules.blast_scale <= 0.0:
 		return 0
 	var n := 0
 	for id: int in _entries.keys():
@@ -423,6 +428,8 @@ func blast(centre: Vector3, radius: float, strength: float) -> int:
 		var offset := body.global_position - centre
 		var d := offset.length()
 		if d > radius:
+			continue
+		if can_see.is_valid() and not can_see.call(centre, body.global_position):
 			continue
 		var fall := 1.0 - d / radius
 		var dir := (offset / d if d > 0.01 else Vector3.UP) + Vector3.UP * 0.35

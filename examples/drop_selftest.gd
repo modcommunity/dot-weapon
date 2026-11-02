@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 72
+const CHECKS := 81
 
 
 func _ready() -> void:
@@ -19,6 +19,7 @@ func _run() -> void:
 	await _test_settle_and_mirror()
 	_test_hold_and_ammo()
 	await _test_physics()
+	await _test_blast()
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [_sections_entered, _sections_finished, _passed, _failed])
 	for line in _failures:
@@ -312,4 +313,54 @@ func _test_physics() -> void:
 	client.mirror_drop(d, {"id": &"rifle", "magazine": 5, "reserve": 0}, Transform3D(Basis.IDENTITY, Vector3(0, 5, 0)), Vector3.ZERO, 0.0, true)
 	client.mirror_pushed(d, Transform3D(Basis.IDENTITY, Vector3(1, 5, 0)), Vector3(0, 0, -3), Vector3.ZERO)
 	_check(client.active_count() == 1 and absf(client.snapshot()[0]["at"].origin.x - 1.0) < 0.01, "a client wakes the drop at the authority's pose")
+	_done()
+
+
+func _test_blast() -> void:
+	_section("explosions push drops by sv_weapon_drop_blast, not through walls")
+	var drops := _drops()
+	drops.rules.lifetime = 0.0
+	var pushes: Array = []
+	drops.pushed.connect(func(id: int, _at: Transform3D, _v: Vector3, _s: Vector3) -> void: pushes.append(id))
+	var state := {"id": &"rifle", "magazine": 5, "reserve": 0}
+	var open := drops.spawn(state, Vector3(3, 1, 0), Vector3.ZERO, 1)
+	await get_tree().physics_frame
+	var body: RigidBody3D = drops._entries[open]["body"]
+	var centre := Vector3(0, 1, 0)
+
+	_check(drops.blast(centre, 6.0, 10.0) == 1, "an explosion beside a drop moves it")
+	var v1 := body.linear_velocity
+	_check(v1.x > 0.5, "away from the centre", str(v1))
+	body.linear_velocity = Vector3.ZERO
+	drops.rules.blast_scale = 2.0
+	var _n := drops.blast(centre, 6.0, 10.0)
+	_close(body.linear_velocity.length(), v1.length() * 2.0, "sv_weapon_drop_blast 2 doubles the push", 0.15)
+	body.linear_velocity = Vector3.ZERO
+	drops.rules.blast_scale = 0.0
+	pushes.clear()
+	var moved := drops.blast(centre, 6.0, 10.0)
+	_check(body.linear_velocity.length() < 0.001, "sv_weapon_drop_blast 0 gives no push")
+	_check(moved == 0 and pushes.is_empty(), "and wakes nothing and tells no client", "moved %d, pushes %d" % [moved, pushes.size()])
+	drops.rules.blast_scale = 1.0
+
+	var wall := DotTraceFlat.new()
+	var _w := wall.add_box(AABB(Vector3(1.0, 0.0, -3.0), Vector3(0.4, 4.0, 6.0)))
+	drops.can_see = func(a: Vector3, b: Vector3) -> bool: return wall.line_of_sight(a, b)
+	var behind := drops.spawn(state, Vector3(3, 1, 0), Vector3.ZERO, 1)
+	var open2 := drops.spawn(state, Vector3(0, 1, 3), Vector3.ZERO, 1)
+	drops._remove(open, 0, false)
+	await get_tree().physics_frame
+	var hidden: RigidBody3D = drops._entries[behind]["body"]
+	var seen_body: RigidBody3D = drops._entries[open2]["body"]
+	hidden.linear_velocity = Vector3.ZERO
+	seen_body.linear_velocity = Vector3.ZERO
+	pushes.clear()
+	var count := drops.blast(centre, 6.0, 10.0)
+	_check(hidden.linear_velocity.length() < 0.001 and not pushes.has(behind), "a drop behind a solid wall gets no push", str(hidden.linear_velocity))
+	_check(seen_body.linear_velocity.length() > 0.5 and pushes.has(open2), "the same distance in the open does", str(seen_body.linear_velocity))
+	_check(count == 1, "and only the visible one is counted", str(count))
+	drops.can_see = Callable()
+	hidden.linear_velocity = Vector3.ZERO
+	var _m := drops.blast(centre, 6.0, 10.0)
+	_check(hidden.linear_velocity.length() > 0.5, "with no sight check set, behaviour is as before")
 	_done()
