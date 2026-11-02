@@ -77,7 +77,7 @@ const _SPECS := [
 	["sv_weapon_drop_delay", "pickup_delay", "float:0:10", "Seconds before a dropped weapon can be taken"],
 	["sv_weapon_drop_auto", "auto_pickup", "bool", "1 takes a dropped weapon in reach without the use key"],
 	["sv_weapon_drop_use_radius", "use_radius", "float:0.2:8", "How far the use key reaches to a dropped weapon"],
-	["sv_weapon_drop_hold", "hold_time", "float:0.05:5", "Seconds the use key is held over a different weapon to swap it with the one in hand"],
+	["sv_weapon_drop_hold", "hold_time", "float:0.05:5", "Seconds the use key is held over the weapon already in hand to replace it with the dropped one (attachments trade, ammunition stays)"],
 	["sv_weapon_drop_shootable", "shootable", "bool", "1 lets shots, blasts and melee push dropped weapons about"],
 	["sv_weapon_drop_impulse", "impulse_scale", "float:0:20", "Scale of the push a shot or melee hit gives a dropped weapon"],
 	["sv_weapon_drop_blast", "blast_scale", "float:0:20", "Scale of the push an explosion gives a dropped weapon"],
