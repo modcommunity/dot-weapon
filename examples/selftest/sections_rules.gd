@@ -545,6 +545,7 @@ func _test_fire_modes() -> void:
 	_check(res.ok and b.fire_mode() == DotWeaponDef.Fire.SEMI, "the selection survives a weapon switch and a snapshot")
 	_drop(a)
 	_drop(b)
+	wire.free()
 	_done()
 
 
