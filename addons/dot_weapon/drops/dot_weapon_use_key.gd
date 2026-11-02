@@ -1,10 +1,8 @@
 class_name DotWeaponUseKey
 extends RefCounted
 
-## One player's use key over a dropped weapon, the rules every game shares. Keep one per player and call
-## [method step] every tick with the key state. Over a free slot or a different weapon the press acts at once
-## (take, or replace and drop the old one). Over the weapon already in hand a tap takes its ammunition and a
-## hold of [member DotWeaponDropRules.hold_time] replaces it fully; looking away or letting go cancels.
+## One player's use key over a dropped weapon. Keep one per player and call [method step] every tick with the key state.
+## Over a free slot or a different weapon the press acts at once (take, or replace and drop the old one); over the weapon in hand a tap takes its ammo and a hold of [member DotWeaponDropRules.hold_time] replaces it; looking away or letting go cancels.
 
 var hold := DotWeaponUseHold.new()
 var _was_down: bool = false
