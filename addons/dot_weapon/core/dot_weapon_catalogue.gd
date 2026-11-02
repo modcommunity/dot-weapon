@@ -420,6 +420,15 @@ func _script_for(def: DotWeaponDef) -> DotResult:
 	return DotResult.success(loaded)
 
 
+## Loads every weapon's behaviour script now, for a loading gate. The first `instantiate` of each otherwise pays the load and compile (1-5 ms each) in the middle of the first spawn.
+func warm_scripts() -> int:
+	var loaded := 0
+	for id in ids():
+		if _script_for(get_def(id)).ok:
+			loaded += 1
+	return loaded
+
+
 ## Drops the script cache. For an editor tool or a test that reloads content.
 func forget_scripts() -> void:
 	_scripts.clear()
