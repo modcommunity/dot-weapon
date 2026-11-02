@@ -3,6 +3,7 @@
 		"take": "Take",
 		"ammo": "Take ammo",
 		"swap": "Hold to swap",
+		"hold_replace": "hold: replace",
 		"cannot": "Cannot carry",
 		"magazine": "Ammo"
 	}
