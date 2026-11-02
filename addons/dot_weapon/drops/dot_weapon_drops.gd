@@ -1,18 +1,9 @@
 class_name DotWeaponDrops
 extends Node3D
 
-## Weapons lying in the world after a player dropped or died with them. The authority simulates
-## each as a rigid body, ages it, caps the count and hands it to whoever has the empty slot; a
-## client draws the same body and snaps to the authority's resting place. The game carries the
-## three signals over its net link and answers them with [code]mirror_*[/code].
-##
-## [codeblock]
-## drops.rules = DotWeaponDropRules.new()
-## drops.is_authority = true
-## drops.look_of = func(weapon_id): return world_model_for(weapon_id)   # a Node3D, optional
-## drops.dropped.connect(send_drop)
-## drops.throw(arsenal, eye_origin, aim_dir, owner_id, class_def)      # the drop key
-## [/codeblock]
+## Weapons lying in the world after a player dropped or died with them: the authority simulates
+## each as a rigid body, a client snaps to its resting place. The game carries the signals and
+## answers with [code]mirror_*[/code]; setup is in docs/design.md.
 
 const CHANNEL := "weapon.drop"
 const SETTLE_SPEED := 0.08
@@ -126,11 +117,9 @@ func _take_near(arsenal: Object, position: Vector3, taker_id: int, r: DotWeaponD
 	return _take(arsenal, _nearest(arsenal, position, Vector3.ZERO, r.pickup_radius, _team(taker_id), true), taker_id, r)
 
 
-## The use key: a tap ([param held] false) takes the dropped weapon [param position] is looking at (or the
-## nearest in [member DotWeaponDropRules.use_radius]) into a free slot, or unloads its ammunition into the
-## same weapon already carried, up to the carry capacity, leaving the overflow on the floor. A different
-## weapon in the slot is replaced at once (the old one drops). Only a hold ([param held] true, see
-## [DotWeaponUseHold]) over the same weapon replaces it fully: attachments trade, ammunition counts stay. Returns the drop id, or 0.
+## The use key. A tap ([param held] false) takes the drop looked at into a free slot, or unloads its ammunition
+## into the same weapon carried (overflow stays); a different weapon is replaced at once. A hold ([DotWeaponUseHold])
+## over the same weapon replaces it fully, attachments trading. Returns the drop id, or 0.
 func use(arsenal: Object, position: Vector3, direction: Vector3, taker_id: int, source: Object = null, held: bool = false) -> int:
 	if not is_authority or arsenal == null:
 		return 0

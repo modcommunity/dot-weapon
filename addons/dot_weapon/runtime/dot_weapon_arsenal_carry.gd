@@ -61,10 +61,9 @@ func enforce_limit() -> Array[StringName]:
 	return dropped
 
 
-## Drops the weapon in hand for a world pickup: removes it, cancels any reload, switches to the next
-## weapon and returns `{id, magazine, reserve}` plus `fit` (mount to attachment id) and `fm` (fire mode
-## index) when set (empty when nothing may be dropped). Slots in [param keep_slots] (a permanent melee
-## weapon) are never dropped. The reserve goes with it only when no other carried weapon draws on the same pool.
+## Drops the weapon in hand for a world pickup, cancels any reload and switches to the next weapon.
+## Returns `{id, magazine, reserve}` plus `fit` and `fm` when set; empty when nothing may be dropped.
+## [param keep_slots] (a permanent melee weapon) are never dropped; the reserve goes only when no other weapon shares its pool.
 func drop_current(keep_slots: Array[int] = []) -> Dictionary:
 	return drop_from_slot(_current, keep_slots)
 

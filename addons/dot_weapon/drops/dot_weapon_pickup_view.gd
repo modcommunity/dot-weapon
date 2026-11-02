@@ -1,10 +1,9 @@
 class_name DotWeaponPickupView
 extends Node3D
 
-## The prompt over a dropped weapon: its name, magazine and total ammunition, the key glyph, and a
-## circle that fills while the key is held. Draws only; the game feeds it [method DotWeaponDrops.prompt_for].
-## Text comes through [member translate] (a [code]Callable(key, fallback) -> String[/code]), so a locale
-## addon can supply it without this one naming it.
+## The prompt over a dropped weapon: name, ammunition, key glyph and a hold circle. Draws only; the game
+## feeds it [method DotWeaponDrops.prompt_for]. Text comes through [member translate], a
+## [code]Callable(key, fallback) -> String[/code], so a locale addon can supply it.
 
 const CIRCLE_SHADER := """shader_type spatial;
 render_mode unshaded, depth_test_disabled, cull_disabled, blend_mix;
