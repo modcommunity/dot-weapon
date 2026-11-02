@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 81
+const CHECKS := 86
 
 
 func _ready() -> void:
@@ -15,6 +15,7 @@ func _run() -> void:
 	_test_rules()
 	_test_throw_and_swap()
 	_test_pickup_rules()
+	_test_auto_pickup_gate()
 	await _test_lifetime_and_cap()
 	await _test_settle_and_mirror()
 	_test_hold_and_ammo()
@@ -65,9 +66,39 @@ func _test_rules() -> void:
 	_done()
 
 
+func _test_auto_pickup_gate() -> void:
+	_section("auto pickup gate")
+	var drops := _drops()
+	var at := Vector3(0, 1, 0)
+	var shot := {"id": &"rifle", "magazine": 7, "reserve": 0}
+	var id := drops.spawn(shot, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	var a := _arsenal()
+	_check(not drops.rules.auto_pickup, "auto_pickup is off by default")
+	_check(drops.take_for(a, at, 2) == 0 and not a.carries(&"rifle") and drops.has_drop(id), "off: walking over a gun with an empty slot takes nothing")
+	_check(drops.use(a, at, Vector3.FORWARD, 2) == id and a.carries(&"rifle"), "off: the use key still takes it")
+	var id2 := drops.spawn(shot, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	var b := _arsenal()
+	drops.rules.auto_pickup = true
+	_check(drops.take_for(b, at, 2) == id2 and b.carries(&"rifle"), "on: the walk-over takes it, as before")
+	var c := _arsenal()
+	var _g := c.give(&"rifle")
+	var held := drops.throw(c, at, Vector3.FORWARD, 3)
+	drops.rules.auto_pickup = false
+	var d := _arsenal()
+	var _g2 := d.give(&"rifle", false)
+	var _s := drops.spawn(shot, at, Vector3.ZERO, 3)
+	drops.tick(1.0)
+	var mine := drops.throw(d, at, Vector3.FORWARD, 9)
+	_check(mine > 0 and d.carries(&"rifle") and held > 0, "off: the drop key's swap still takes the gun underfoot")
+	_done()
+
+
 func _test_throw_and_swap() -> void:
 	_section("throwing and taking")
 	var drops := _drops()
+	drops.rules.auto_pickup = true
 	var a := _arsenal()
 	var _g := a.give(&"rifle")
 	var seen: Array = []
@@ -215,6 +246,7 @@ func _test_pickup_rules() -> void:
 	drops.tick(1.0)
 	var e := _arsenal()
 	_check(drops.use(e, at, Vector3.FORWARD, 2) == 0 and not e.carries(&"rifle"), "mp_allow_pickup 0 blocks the use key")
+	drops.rules.auto_pickup = true
 	_check(drops.take_for(e, at, 2) == 0, "and the automatic pickup")
 	_check(drops.prompt_for(e, at, Vector3.FORWARD, null, 2).is_empty(), "and the prompt")
 	r.allow_pickup = true

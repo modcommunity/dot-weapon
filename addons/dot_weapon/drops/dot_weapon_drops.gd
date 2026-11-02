@@ -76,7 +76,7 @@ func throw(arsenal: Object, origin: Vector3, aim: Vector3, owner_id: int, source
 	var velocity := inherit + dir * r.throw_force + Vector3.UP * r.throw_up
 	var id := spawn(state, origin + dir * REACH, velocity, owner_id, r)
 	if r.swap:
-		var _took := take_for(arsenal, origin, owner_id, source)
+		var _took := _take_near(arsenal, origin, owner_id, rules.resolve(source))
 	return id
 
 
@@ -107,11 +107,19 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 
 
 ## The weapon within reach whose slot [param arsenal] has empty goes into it. Returns the drop id, or 0.
-## Automatic pickup: the arena leaves it to [member DotWeaponDropRules.auto_pickup].
+## Automatic pickup: does nothing unless [member DotWeaponDropRules.auto_pickup] is on, so a game cannot forget the gate.
 func take_for(arsenal: Object, position: Vector3, taker_id: int, source: Object = null) -> int:
 	if not is_authority or arsenal == null:
 		return 0
 	var r := rules.resolve(source)
+	if not r.auto_pickup:
+		return 0
+	return _take_near(arsenal, position, taker_id, r)
+
+
+func _take_near(arsenal: Object, position: Vector3, taker_id: int, r: DotWeaponDropRules) -> int:
+	if not is_authority or arsenal == null:
+		return 0
 	return _take(arsenal, _nearest(arsenal, position, Vector3.ZERO, r.pickup_radius, _team(taker_id), true), taker_id, r)
 
 
