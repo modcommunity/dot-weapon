@@ -575,8 +575,25 @@ func _test_muzzle() -> void:
 	_check(not DotWeaponMuzzle.warm(null, "rifle"), "warm with no host is false")
 	_check(DotWeaponMuzzle.attach(host, "rifle", d) == null and host.get_child_count() == 0, "attach returns null and adds nothing here")
 	_check(DotWeaponMuzzle.warm_done() and DotWeaponMuzzle.spare_count() == 0, "nothing warming, nothing waiting")
+	var orphan := _StuckFlash.new()
+	DotWeaponMuzzle._spares["orphan"] = orphan
+	_check(DotWeaponMuzzle.warm_done(), "a spare outside the tree never holds a gate")
+	orphan.free()
+	DotWeaponMuzzle._spares.erase("orphan")
+	var stuck := _StuckFlash.new()
+	host.add_child(stuck)
+	DotWeaponMuzzle._spares["stuck"] = stuck
+	DotWeaponMuzzle._warm_msec = Time.get_ticks_msec()
+	_check(not DotWeaponMuzzle.warm_done(), "a pool still building is waited for")
+	DotWeaponMuzzle._warm_msec = Time.get_ticks_msec() - DotWeaponMuzzle.warm_timeout_msec - 1
+	_check(DotWeaponMuzzle.warm_done() and DotWeaponMuzzle.spare_count() == 0, "a pool that never finishes is given up on after the timeout")
 	host.queue_free()
 	_done()
+
+
+class _StuckFlash extends Node3D:
+	func is_ready() -> bool:
+		return false
 
 
 class _FakeMode extends Object:

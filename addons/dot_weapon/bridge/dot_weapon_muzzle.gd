@@ -7,9 +7,14 @@ extends RefCounted
 
 const SCRIPT_PATH := "res://addons/dot_fx/runtime/dot_muzzle_flash.gd"
 const KEY := "muzzle_flash"
+const CHANNEL := "weapon.muzzle"
+
+## How long [method warm_done] waits for a flash pool before giving up, so a loading gate held on it always opens.
+static var warm_timeout_msec := 4000
 
 ## Flashes built ahead by [method warm], keyed by size and view, waiting for [method attach].
 static var _spares := {}
+static var _warm_msec := 0
 
 
 ## The profile's size name ("big", "none"...), or "" when the weapon does not say.
@@ -68,8 +73,10 @@ static func warm(
 	if size == 0:
 		return false
 	var key := _key(size, first_person)
-	if _spares.has(key) and is_instance_valid(_spares[key]):
+	if _spares.has(key) and is_instance_valid(_spares[key]) and (_spares[key] as Node).is_inside_tree():
 		return true
+	if _spares.has(key) and is_instance_valid(_spares[key]):
+		(_spares[key] as Node).queue_free()
 	var flash: Node3D = script.new()
 	flash.set("size", size)
 	flash.set("first_person", first_person)
@@ -78,14 +85,23 @@ static func warm(
 	flash.process_mode = Node.PROCESS_MODE_ALWAYS
 	host.add_child(flash)
 	_spares[key] = flash
+	_warm_msec = Time.get_ticks_msec()
 	return true
 
 
-## True once every flash [method warm] started has its pool built.
+## True once every flash [method warm] started has its pool built. A flash outside the tree never builds one (its host was freed or never entered), and a pool still unbuilt after [member warm_timeout_msec] is given up on, so a gate held on this opens.
 static func warm_done() -> bool:
-	for flash: Variant in _spares.values():
-		if is_instance_valid(flash) and not bool(flash.call("is_ready")):
-			return false
+	var timed_out := Time.get_ticks_msec() - _warm_msec > warm_timeout_msec
+	for key: Variant in _spares.keys():
+		var flash: Variant = _spares[key]
+		if not is_instance_valid(flash) or not (flash as Node).is_inside_tree():
+			continue
+		if not bool(flash.call("is_ready")):
+			if not timed_out:
+				return false
+			DotLog.warn(CHANNEL, "flash pool not built in time; giving up", {"key": str(key), "msec": warm_timeout_msec})
+			_spares.erase(key)
+			(flash as Node).queue_free()
 	return true
 
 
