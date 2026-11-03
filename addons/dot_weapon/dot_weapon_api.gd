@@ -68,5 +68,7 @@ extends RefCounted
 
 ## 20: [DotWeaponDropKey], the drop key with an opt-in hold (`sv_weapon_drop_key_hold`, `drop_key_hold` per class; 0 = on the press). OLDEST stays 1.
 
-const LEVEL := 20
+## 21: [method DotWeaponNetSync.correct_fire_mode], the owner's predicted selector yields to the server after a few mismatching snapshots. OLDEST stays 1.
+
+const LEVEL := 21
 const OLDEST := 1

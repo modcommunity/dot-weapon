@@ -177,6 +177,31 @@ static func fire_mode_will_change(source: Object, arsenal: DotWeaponArsenal) -> 
 	return index != held.fire_mode_index
 
 
+## Server authority for the owner's predicted selector: adopts the snapshot's mode once it has disagreed
+## for [param grace] snapshots in a row, so a press still in flight is not flipped back. True when it corrected.
+static func correct_fire_mode(source: Object, arsenal: DotWeaponArsenal, grace: int = 3) -> bool:
+	if source == null or arsenal == null or not (&"net_fire_mode" in source) or arsenal.current() == null:
+		return false
+	var slot := int(source.get(&"net_slot"))
+	if slot > 0 and slot != arsenal.current_slot():
+		arsenal.set_meta(&"fm_mismatch", 0)
+		return false
+	if not fire_mode_will_change(source, arsenal):
+		arsenal.set_meta(&"fm_mismatch", 0)
+		return false
+	var seen := int(arsenal.get_meta(&"fm_mismatch", 0)) + 1
+	arsenal.set_meta(&"fm_mismatch", seen)
+	if seen < grace:
+		return false
+	var held := arsenal.current()
+	var modes := held.def.allowed_fire_modes()
+	var wanted := modes[clampi(int(source.get(&"net_fire_mode")), 0, modes.size() - 1)]
+	if not arsenal.set_fire_mode(wanted):
+		return false
+	arsenal.set_meta(&"fm_mismatch", 0)
+	return true
+
+
 ## Applies an authoritative ammunition correction to a predicted arsenal.
 ##
 ## Called by the owning client when reconciliation says its prediction was wrong.

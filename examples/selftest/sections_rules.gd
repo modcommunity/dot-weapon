@@ -532,6 +532,19 @@ func _test_fire_modes() -> void:
 	_check(watcher.current().fire_mode_index == 1 and not DotWeaponNetSync.fire_mode_will_change(wire, watcher), "push writes the mode and the click is spent")
 	_check(not DotWeaponNetSync.fire_mode_specs(false)[0]["owner_only"] and DotWeaponNetSync.fire_mode_specs()[0]["owner_only"], "the spec goes to everybody only when asked")
 
+	var owner := _arsenal(cat)
+	owner.give(&"rifle")
+	wire.net_slot = owner.current_slot()
+	wire.net_fire_mode = 1
+	_check(not DotWeaponNetSync.correct_fire_mode(wire, owner) and not DotWeaponNetSync.correct_fire_mode(wire, owner), "a mismatch inside the grace is left to the prediction")
+	_check(DotWeaponNetSync.correct_fire_mode(wire, owner) and owner.current().fire_mode_index == 1, "a persistent mismatch yields to the server")
+	_check(not DotWeaponNetSync.correct_fire_mode(wire, owner), "once they agree nothing is corrected")
+	wire.net_fire_mode = 0
+	var _o := DotWeaponNetSync.correct_fire_mode(wire, owner)
+	wire.net_fire_mode = 1
+	var _p := DotWeaponNetSync.correct_fire_mode(wire, owner)
+	_check(owner.current().fire_mode_index == 1, "agreeing once resets the count")
+
 	# A pistol without a list has no choice and refuses.
 	_check(a.select(2, 400), "switch to the pistol")
 	var _d := _drive(a, 401, 2, false)
