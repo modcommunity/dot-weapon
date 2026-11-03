@@ -361,10 +361,11 @@ func crosshair_scale() -> float:
 	return (slot.def.tuning as DotWeaponBallistics).crosshair_scale_for(slot.def.tags)
 
 
-## The tick [method is_idle_for] promised: what [method simulate_tick] does for it, with no context.
+## The tick [method is_idle_for] promised: what [method simulate_tick] does for it, with no context
+## (or the [member idle_posture] one).
 func idle_tick() -> DotWeaponOutcome:
 	_held_ticks = 0
-	current().behaviour.tick(null)
+	current().behaviour.tick(idle_posture.call() as DotWeaponContext if idle_posture.is_valid() else null)
 	return DotWeaponOutcome.nothing("")
 
 

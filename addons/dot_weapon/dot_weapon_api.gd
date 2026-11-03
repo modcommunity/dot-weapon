@@ -72,5 +72,7 @@ extends RefCounted
 
 ## 22: [member DotWeaponArsenal.crosshair_cone], false lets a carrier nobody watches skip the context on idle ticks with spread rules attached. OLDEST stays 1.
 
-const LEVEL := 22
+## 23: [member DotWeaponArsenal.idle_posture], a cheap posture-only context so an idle tick with enabled spread rules builds no full one. OLDEST stays 1.
+
+const LEVEL := 23
 const OLDEST := 1

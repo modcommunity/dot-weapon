@@ -80,9 +80,16 @@ func spread_now() -> float:
 
 
 ## Needs a context while enabled spread rules follow the carrier, a crosshair follows an idle player
-## ([member DotWeaponArsenal.crosshair_cone]) or the cone settles.
+## ([member DotWeaponArsenal.crosshair_cone]) or the cone settles, unless the arsenal has an
+## [member DotWeaponArsenal.idle_posture] to stand in for it.
 func tick_needs_context() -> bool:
-	return _rules() != null or _cone_tracked() or float(state.get(_MOTION, 0.0)) > 0.0 or super.tick_needs_context()
+	if (_rules() != null or _cone_tracked() or float(state.get(_MOTION, 0.0)) > 0.0) and not _posture_provided():
+		return true
+	return super.tick_needs_context()
+
+
+func _posture_provided() -> bool:
+	return arsenal != null and (arsenal.get("idle_posture") as Callable).is_valid()
 
 
 ## The accuracy class of this weapon (see [DotWeaponAccuracyClass]).

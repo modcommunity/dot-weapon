@@ -334,6 +334,78 @@ func _test_idle_tick_with_rules() -> void:
 	_done()
 
 
+func _test_idle_posture_with_rules() -> void:
+	_section("an idle tick with enabled spread rules and a posture provider")
+
+	var cat := _catalogue()
+	(cat.get_def(&"rifle").tuning as DotWeaponBallistics).bloom = 2.0
+	(cat.get_def(&"rifle").tuning as DotWeaponBallistics).bloom_recovery = 0.2
+	var full := _arsenal(cat)
+	var cheap := _arsenal(cat)
+	var watched := _arsenal(cat)
+	var now := [0]
+
+	for a in [full, cheap, watched]:
+		a.give(&"rifle")
+		a.spread_rules = DotWeaponSpreadRules.new()
+		a.spread_rules.enabled = true
+		a.spread_rules.recovery = 40.0
+
+	cheap.crosshair_cone = false
+	full.crosshair_cone = false
+	_check(not cheap.is_idle_for(_cmd(), null), "enabled rules without a provider still build the context")
+	cheap.idle_posture = func() -> DotWeaponContext: return _idle_ctx(now[0])
+	watched.idle_posture = cheap.idle_posture
+	_check(cheap.is_idle_for(_cmd(), null), "a provider makes the idle path available")
+	_check(watched.is_idle_for(_cmd(), null), "also for a watched crosshair")
+
+	var skipped := 0
+	var same := true
+	var previous: DotWeaponCommand = null
+
+	for tick in range(900):
+		now[0] = tick
+		var cmd := _cmd(tick % 300 < 8)
+		var want := full.simulate_tick(cmd, _idle_ctx(tick), previous)
+		var got: DotWeaponOutcome
+		if cheap.is_idle_for(cmd, previous):
+			got = cheap.idle_tick()
+			skipped += 1
+		else:
+			got = cheap.simulate_tick(cmd, _idle_ctx(tick), previous)
+
+		if want.used != got.used or want.kind != got.kind or want.refusal != got.refusal \
+				or var_to_str(full.snapshot()) != var_to_str(cheap.snapshot()):
+			same = false
+			break
+
+		previous = cmd
+
+	_check(same, "outcomes and snapshots agree on every tick while the carrier walks, runs, sprints and crouches")
+	_check(skipped > 300, "and the idle path ran for much of it", str(skipped))
+
+	_drop(full)
+	_drop(cheap)
+	_drop(watched)
+	_done()
+
+
+## A carrier whose posture changes every 50 ticks: still, walk, run, sprint, crouched, in the air.
+func _idle_ctx(tick: int) -> DotWeaponContext:
+	var c := _ctx(tick)
+	match floori(tick / 50.0) % 6:
+		1: c.speed = 2.0
+		2: c.speed = 6.0
+		3:
+			c.speed = 7.0
+			c.sprinting = true
+		4: c.crouched = true
+		5: c.airborne = true
+	if tick % 200 == 120:
+		c.hurt_tick = tick
+	return c
+
+
 func _test_snapshot() -> void:
 	_section("a snapshot survives a correction")
 

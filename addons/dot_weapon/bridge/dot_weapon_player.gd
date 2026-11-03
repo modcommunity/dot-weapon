@@ -85,6 +85,23 @@ static func context_for(
 	return ctx
 
 
+## A context holding only the motion facts, for [member DotWeaponArsenal.idle_posture]: no entity, eye
+## or direction, which is most of what [method context_for] costs.
+static func posture_for(player: Node, tick: int = 0) -> DotWeaponContext:
+	var ctx := DotWeaponContext.new()
+	ctx.tick = tick
+	if player == null:
+		return ctx
+	var motion := _motion_from(_controllers_of(player))
+	ctx.speed = float(motion.get("speed", 0.0))
+	ctx.airborne = not bool(motion.get("on_floor", true))
+	ctx.crouched = bool(motion.get("crouched", false))
+	ctx.sliding = bool(motion.get("sliding", false))
+	ctx.wall_running = bool(motion.get("wall_running", false))
+	ctx.sprinting = bool(motion.get("sprinting", false))
+	return ctx
+
+
 ## The switch's active controller, then the player's controller: the nodes asked for an eye and
 ## a motion, in that order. Either may be missing.
 static func _controllers_of(player: Node) -> Array:
