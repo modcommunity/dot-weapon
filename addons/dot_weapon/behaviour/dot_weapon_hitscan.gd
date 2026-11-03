@@ -70,7 +70,7 @@ func _tick(ctx: DotWeaponContext) -> void:
 
 	_shown = _spread_for(b, ctx)
 	# Only state the idle path would also have: a still gun without rules keeps the cone out of it.
-	if _rules_object() != null or held_motion > 0.0 or motion > 0.0:
+	if _cone_tracked() or held_motion > 0.0 or motion > 0.0:
 		state[_NOW] = _shown
 
 
@@ -79,9 +79,10 @@ func spread_now() -> float:
 	return _shown if _shown >= 0.0 else float(state.get(_NOW, 0.0))
 
 
-## Needs a context with spread rules attached (the crosshair follows an idle player) or while the cone settles.
+## Needs a context while enabled spread rules follow the carrier, a crosshair follows an idle player
+## ([member DotWeaponArsenal.crosshair_cone]) or the cone settles.
 func tick_needs_context() -> bool:
-	return _rules_object() != null or float(state.get(_MOTION, 0.0)) > 0.0 or super.tick_needs_context()
+	return _rules() != null or _cone_tracked() or float(state.get(_MOTION, 0.0)) > 0.0 or super.tick_needs_context()
 
 
 ## The accuracy class of this weapon (see [DotWeaponAccuracyClass]).
@@ -113,6 +114,10 @@ func _class_ticks(own: int, key: String) -> int:
 
 func _motion_of(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
 	return clampf(ctx.speed / maxf(0.001, b.spread_speed_ref), 0.0, 1.0)
+
+
+func _cone_tracked() -> bool:
+	return _rules_object() != null and bool(arsenal.get("crosshair_cone"))
 
 
 func _rules_object() -> DotWeaponSpreadRules:

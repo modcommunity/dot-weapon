@@ -56,6 +56,10 @@ var backpack_tier: int = 0
 ## Movement-dependent spread (`sv_spread_*`); null or disabled leaves every gun's own spread.
 var spread_rules: DotWeaponSpreadRules = null
 
+## Whether an idle carrier's crosshair cone is kept current (spread rules attached). A machine nobody
+## watches, such as a server's stand-in, sets it false so its untouched weapon ticks with no context.
+var crosshair_cone: bool = true
+
 ## Per-weapon recoil patterns (`sv_recoil_*`); null or disabled leaves every gun's flat kick.
 var recoil_rules: DotWeaponRecoilRules = null
 

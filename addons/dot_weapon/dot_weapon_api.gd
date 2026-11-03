@@ -70,5 +70,7 @@ extends RefCounted
 
 ## 21: [method DotWeaponNetSync.correct_fire_mode], the owner's predicted selector yields to the server after a few mismatching snapshots. OLDEST stays 1.
 
-const LEVEL := 21
+## 22: [member DotWeaponArsenal.crosshair_cone], false lets a carrier nobody watches skip the context on idle ticks with spread rules attached. OLDEST stays 1.
+
+const LEVEL := 22
 const OLDEST := 1

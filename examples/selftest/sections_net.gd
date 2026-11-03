@@ -279,6 +279,61 @@ func _test_idle_tick() -> void:
 	_done()
 
 
+func _test_idle_tick_with_rules() -> void:
+	_section("an idle tick with spread rules attached, crosshair_cone off")
+
+	var cat := _catalogue()
+	(cat.get_def(&"rifle").tuning as DotWeaponBallistics).bloom = 2.0
+	(cat.get_def(&"rifle").tuning as DotWeaponBallistics).bloom_recovery = 0.2
+	var slow := _arsenal(cat)
+	var fast := _arsenal(cat)
+	var watched := _arsenal(cat)
+
+	for a in [slow, fast, watched]:
+		a.give(&"rifle")
+		a.spread_rules = DotWeaponSpreadRules.new()
+
+	slow.crosshair_cone = false
+	fast.crosshair_cone = false
+	_check(not watched.is_idle_for(_cmd(), null), "a watched carrier with rules still builds the context")
+	_check(fast.is_idle_for(_cmd(), null), "an unwatched one does not")
+
+	var skipped := 0
+	var same := true
+	var previous: DotWeaponCommand = null
+	var rested := false
+
+	for tick in range(900):
+		# A shot every 300 ticks, then a long rest in which the bloom decays to nothing.
+		var cmd := _cmd(tick % 300 < 8)
+		var want := slow.simulate_tick(cmd, _ctx(tick), previous)
+		var got: DotWeaponOutcome
+		if fast.is_idle_for(cmd, previous):
+			got = fast.idle_tick()
+			skipped += 1
+		else:
+			got = fast.simulate_tick(cmd, _ctx(tick), previous)
+
+		if want.used != got.used or want.kind != got.kind or want.refusal != got.refusal \
+				or var_to_str(slow.snapshot()) != var_to_str(fast.snapshot()):
+			same = false
+			break
+
+		if tick % 300 == 299:
+			rested = fast.current().behaviour.state.get(&"bloom", 0.0) == 0.0 and fast.spread_now() >= 0.0
+
+		previous = cmd
+
+	_check(same, "outcomes and snapshots agree on every tick, through shots and the decay after them")
+	_check(skipped > 300, "and the idle path ran for much of it", str(skipped))
+	_check(rested, "the bloom is back at rest")
+
+	_drop(slow)
+	_drop(fast)
+	_drop(watched)
+	_done()
+
+
 func _test_snapshot() -> void:
 	_section("a snapshot survives a correction")
 
