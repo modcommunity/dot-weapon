@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 140
+const CHECKS := 146
 
 
 func _ready() -> void:
@@ -25,6 +25,7 @@ func _run() -> void:
 	await _test_physics()
 	await _test_blast()
 	await _test_lies_flat()
+	_test_body_reuse()
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [_sections_entered, _sections_finished, _passed, _failed])
 	for line in _failures:
@@ -638,4 +639,23 @@ func _test_lies_flat() -> void:
 	_check(at.origin.y < 0.15, "close to the floor")
 	_drop(drops)
 	_drop(floor_body)
+	_done()
+
+
+func _test_body_reuse() -> void:
+	_section("dropped bodies are reused")
+	var drops := _drops()
+	drops.prewarm(&"rifle", 1)
+	_check(drops.get_child_count() == 0, "a prewarmed body waits out of the tree")
+	var state := {"id": &"rifle", "magazine": 5, "reserve": 0}
+	var a := drops.spawn(state, Vector3(0, 2, 0), Vector3.ZERO, 1)
+	var first: Node = drops.get_child(0)
+	_check(first.name == "Drop%d" % a, "the first drop takes the prewarmed body")
+	drops.mirror_removed(a)
+	_check(drops.get_child_count() == 0, "a removed drop leaves the tree")
+	var b := drops.spawn(state, Vector3(1, 2, 0), Vector3.ZERO, 1)
+	_check(drops.get_child(0) == first, "the next drop of that weapon reuses the same body")
+	_check(not (first as RigidBody3D).freeze and (first as RigidBody3D).linear_velocity == Vector3.ZERO, "reused body is live and still")
+	_check(b != a, "with a new id")
+	_drop(drops)
 	_done()

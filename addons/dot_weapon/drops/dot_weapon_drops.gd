@@ -14,6 +14,8 @@ const SETTLE_MAX_SEC := 4.0
 const REACH := 0.5
 ## The box of a weapon with no model.
 const DEFAULT_SIZE := Vector3(0.12, 0.14, 0.7)
+## Spare bodies kept per weapon for reuse.
+const MAX_PARKED := 4
 
 ## A weapon left a hand (or a corpse): [param state] is [code]{id, magazine, reserve}[/code].
 signal dropped(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int)
@@ -43,6 +45,8 @@ var team_of: Callable = Callable()
 
 var _entries: Dictionary = {}   ## int -> Dictionary {body, state, age, rest, owner, order, team}
 var _fits: Dictionary = {}   ## StringName -> [size, centre] of a weapon's model box
+## StringName -> Array of [body, size]: bodies out of the tree, reused by the next drop of that weapon (no model rebuilt).
+var _parked: Dictionary = {}
 var _next_id: int = 1
 var _order: int = 0
 
@@ -597,21 +601,44 @@ func describe() -> Dictionary:
 
 
 func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int, life: float, delay: float, team: int = 0) -> void:
-	var body := RigidBody3D.new()
+	var weapon := StringName(state["id"])
+	var body: RigidBody3D = null
+	var size := DEFAULT_SIZE
+	var parked: Array = _parked.get(weapon, [])
+	if not parked.is_empty():
+		var spare: Array = parked.pop_back()
+		body = spare[0]
+		size = spare[1]
+		_configure(body)
+		add_child(body)
+		body.global_transform = at
+		body.freeze = false
+		body.sleeping = false
+	else:
+		var built := _build(weapon, at)
+		body = built[0]
+		size = built[1]
 	body.name = "Drop%d" % id
+	body.linear_velocity = velocity
+	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
+	_order += 1
+	_entries[id] = {"body": body, "state": state, "age": 0.0, "life": life, "delay": delay,
+		"still": 0.0, "rest": false, "size": size, "owner": owner_id, "order": _order, "team": team}
+	DotLog.debug(CHANNEL, "weapon dropped", {"id": id, "weapon": String(state.get("id", &""))})
+
+
+## Builds the body, model and box for [param weapon] at [param at] and adds it to the tree. Returns [body, size].
+func _build(weapon: StringName, at: Transform3D) -> Array:
+	var body := RigidBody3D.new()
 	body.collision_layer = 0
 	body.collision_mask = collision_mask
-	body.mass = rules.mass
 	body.continuous_cd = true
 	body.linear_damp = 0.15
 	body.angular_damp = 1.2
-	var material := PhysicsMaterial.new()
-	material.friction = rules.friction
-	material.bounce = rules.bounce
-	body.physics_material_override = material
+	body.set_meta(&"weapon", weapon)
+	_configure(body)
 	add_child(body)
 	body.global_transform = at
-	var weapon := StringName(state["id"])
 	var look: Node3D = look_of.call(weapon) if look_of.is_valid() and (draws or not _fits.has(weapon)) else null
 	var size := DEFAULT_SIZE
 	var centre := Vector3.ZERO
@@ -635,12 +662,45 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 		bm.size = size
 		mesh.mesh = bm
 		body.add_child(mesh)
-	body.linear_velocity = velocity
-	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
-	_order += 1
-	_entries[id] = {"body": body, "state": state, "age": 0.0, "life": life, "delay": delay,
-		"still": 0.0, "rest": false, "size": size, "owner": owner_id, "order": _order, "team": team}
-	DotLog.debug(CHANNEL, "weapon dropped", {"id": id, "weapon": String(state.get("id", &""))})
+	return [body, size]
+
+
+## Applies the current rules to a new or reused body, so a cvar changed between drops still takes.
+func _configure(body: RigidBody3D) -> void:
+	body.mass = rules.mass
+	var material := PhysicsMaterial.new()
+	material.friction = rules.friction
+	material.bounce = rules.bounce
+	body.physics_material_override = material
+
+
+## Builds [param count] bodies of [param weapon] now and keeps them out of the tree for the next drops, so the first throw does not pay for the model. Call under the loading cover.
+func prewarm(weapon: StringName, count: int = 1) -> void:
+	for _i in mini(count, MAX_PARKED):
+		var built := _build(weapon, Transform3D.IDENTITY)
+		_park(built[0], weapon, built[1])
+
+
+func _park(body: RigidBody3D, weapon: StringName, size: Vector3) -> void:
+	var parked: Array = _parked.get(weapon, [])
+	if parked.size() >= MAX_PARKED:
+		body.queue_free() if body.is_inside_tree() else body.free()
+		return
+	body.freeze = true
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3.ZERO
+	if body.get_parent() != null:
+		body.get_parent().remove_child(body)
+	parked.append([body, size])
+	_parked[weapon] = parked
+
+
+func _exit_tree() -> void:
+	for weapon: StringName in _parked:
+		for spare: Array in _parked[weapon]:
+			if is_instance_valid(spare[0]):
+				(spare[0] as Node).free()
+	_parked.clear()
 
 
 ## The collision box [size, centre] of [param look] (inside the tree), measured once per weapon.
@@ -694,7 +754,8 @@ func _remove(id: int, taker_id: int, tell: bool = true) -> void:
 	if e.is_empty():
 		return
 	_entries.erase(id)
-	if is_instance_valid(e["body"]):
-		(e["body"] as Node).queue_free()
+	var body: RigidBody3D = e["body"]
+	if is_instance_valid(body):
+		_park(body, body.get_meta(&"weapon", &""), e["size"])
 	if tell:
 		removed.emit(id, taker_id)
