@@ -519,6 +519,26 @@ func _test_fire_modes() -> void:
 	_check(DotWeaponDef.selector_modes(DotWeaponDef.Fire.AUTO, true) == PackedStringArray(["auto", "semi", "burst"]), "selector_modes: burst is added when it makes sense")
 	_check(DotWeaponDef.selector_modes(DotWeaponDef.Fire.BURST)[0] == "burst" and DotWeaponDef.selector_modes(DotWeaponDef.Fire.SEMI).is_empty(), "selector_modes: a burst gun starts on burst, a semi gun has no choice")
 
+	_fire_mode_net_checks(cat)
+
+	# A pistol without a list has no choice and refuses.
+	_check(a.select(2, 400), "switch to the pistol")
+	var _d := _drive(a, 401, 2, false)
+	_check(a.fire_modes_available().size() == 1 and not a.cycle_fire_mode(), "a gun with one mode refuses to cycle")
+
+	# Selection belongs to the weapon instance and survives a switch and a snapshot.
+	var _s := a.select(1, 500)
+	var snap := a.snapshot()
+	var b := _arsenal(cat)
+	var res := b.restore(snap)
+	_check(res.ok and b.fire_mode() == DotWeaponDef.Fire.SEMI, "the selection survives a weapon switch and a snapshot")
+	_drop(a)
+	_drop(b)
+	_done()
+
+
+## Fire mode over the wire: the click, the push and the owner correction.
+func _fire_mode_net_checks(cat: DotWeaponCatalogue) -> void:
 	var wire := _FakeMode.new()
 	var watcher := _arsenal(cat)
 	watcher.give(&"rifle")
@@ -544,22 +564,7 @@ func _test_fire_modes() -> void:
 	wire.net_fire_mode = 1
 	var _p := DotWeaponNetSync.correct_fire_mode(wire, owner)
 	_check(owner.current().fire_mode_index == 1, "agreeing once resets the count")
-
-	# A pistol without a list has no choice and refuses.
-	_check(a.select(2, 400), "switch to the pistol")
-	var _d := _drive(a, 401, 2, false)
-	_check(a.fire_modes_available().size() == 1 and not a.cycle_fire_mode(), "a gun with one mode refuses to cycle")
-
-	# Selection belongs to the weapon instance and survives a switch and a snapshot.
-	var _s := a.select(1, 500)
-	var snap := a.snapshot()
-	var b := _arsenal(cat)
-	var res := b.restore(snap)
-	_check(res.ok and b.fire_mode() == DotWeaponDef.Fire.SEMI, "the selection survives a weapon switch and a snapshot")
-	_drop(a)
-	_drop(b)
 	wire.free()
-	_done()
 
 
 func _test_muzzle() -> void:
