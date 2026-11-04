@@ -91,14 +91,29 @@ func text_for(info: Dictionary) -> String:
 	var shown: String = String(name_of.call(id)) if name_of.is_valid() else String(id).capitalize()
 	var mag := int(info.get("magazine", 0))
 	var reserve := int(info.get("reserve", 0))
-	var action_key := "weapon.pickup.%s" % info.get("mode", "take")
-	var fallback: String = {"take": "Take", "ammo": "Take ammo", "swap": "Replace"}.get(info.get("mode", "take"), "Take")
-	var action := _t(action_key, fallback)
-	if info.get("mode", "take") == "ammo":
+	var mode: String = info.get("mode", "take")
+	var action: String
+	if mode == "swap" and bool(info.get("hold", false)):
+		action = _crossed(_t("weapon.pickup.ammo", "Take ammo"), not bool(info.get("ammo_ok", true)))
 		action += "  (%s)" % _t("weapon.pickup.hold_replace", "hold: replace")
+	elif mode == "ammo":
+		action = _crossed(_t("weapon.pickup.ammo", "Take ammo"), not bool(info.get("ammo_ok", true)))
+		action += "  (%s)" % _t("weapon.pickup.hold_replace", "hold: replace")
+	else:
+		action = _t("weapon.pickup.%s" % mode, {"take": "Take", "swap": "Replace"}.get(mode, "Take"))
 	if not bool(info.get("can_take", true)):
 		action = _t("weapon.pickup.cannot", "Cannot carry")
 	return "%s\n%s %d / %d\n[%s] %s" % [shown, _t("weapon.pickup.magazine", "Ammo"), mag, mag + reserve, key_text, action]
+
+
+## Strikes [param text] through (combining long stroke) when [param crossed]: the key does nothing here.
+func _crossed(text: String, crossed: bool) -> String:
+	if not crossed:
+		return text
+	var out := ""
+	for c in text:
+		out += c + "\u0336"
+	return out
 
 
 func _t(key: String, fallback: String) -> String:

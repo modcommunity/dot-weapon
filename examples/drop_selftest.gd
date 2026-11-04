@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 119
+const CHECKS := 140
 
 
 func _ready() -> void:
@@ -20,9 +20,11 @@ func _run() -> void:
 	await _test_settle_and_mirror()
 	_test_hold_and_ammo()
 	_test_e_key_rules()
+	_test_swap_hold()
 	_test_drop_key_hold()
 	await _test_physics()
 	await _test_blast()
+	await _test_lies_flat()
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [_sections_entered, _sections_finished, _passed, _failed])
 	for line in _failures:
@@ -65,7 +67,7 @@ func _test_rules() -> void:
 	_check(r.set_cvar("sv_weapon_drop_max", "9999") and r.max_count == 512, "sv_weapon_drop_max clamps")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 24, "twenty-four cvars are described")
+	_check(r.cvar_specs().size() == 26, "twenty-six cvars are described")
 	_done()
 
 
@@ -126,7 +128,7 @@ func _test_throw_and_swap() -> void:
 	var up_drops := _drops()
 	up_drops.dropped.connect(func(_i: int, _st: Dictionary, at: Transform3D, _v: Vector3, _o: int) -> void: up_at.append(at))
 	var _u := up_drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(0, 1, 0), Vector3.UP * 2.0, 3)
-	_check(up_at.size() == 1 and absf((up_at[0] as Transform3D).basis.determinant() - 1.0) < 0.001 and (-(up_at[0] as Transform3D).basis.z).dot(Vector3.UP) > 0.99, "a drop thrown straight up gets a valid facing")
+	_check(up_at.size() == 1 and absf((up_at[0] as Transform3D).basis.determinant() - 1.0) < 0.001 and absf((up_at[0] as Transform3D).basis.z.y) < 0.05, "a drop thrown straight up gets a valid facing and starts with its long axis flat")
 	drops.tick(1.0)
 	var mine := drops.throw(b, Vector3(0, 1, 0.2), Vector3.FORWARD, 9, null)
 	_check(mine > 0, "swap: the held weapon is dropped")
@@ -497,9 +499,9 @@ func _test_e_key_rules() -> void:
 	_check(drops.prompt_for(a, at, Vector3.FORWARD).get("mode") == "ammo", "same weapon: prompt says ammo")
 	_check(drops.use(a, at, Vector3.FORWARD, 2, null, true) == d2, "same weapon, hold: replaces")
 	_check(String(a.fitting_at(slot).attachment_on(&"muzzle")) == "brake", "the dropped gun's attachment now sits on the held one")
-	_check(a.weapons_in(slot)[0].magazine == 20 and a.ammo().count(pool) == 50, "magazine and reserve in hand are kept")
+	_check(a.weapons_in(slot)[0].magazine == 3 and a.ammo().count(pool) == 50, "the dropped gun's magazine comes with it and the reserve in hand is kept")
 	var left: Dictionary = drops.snapshot().filter(func(e: Dictionary) -> bool: return int(e["id"]) == d2)[0]["state"]
-	_check(left["fit"] != fit_d.to_dictionary() and int(left["magazine"]) == 3 and int(left["reserve"]) == 9, "the old fitting lies on the floor with the drop's rounds")
+	_check(left["fit"] != fit_d.to_dictionary() and int(left["magazine"]) == 20 and int(left["reserve"]) == 9, "the old gun lies on the floor as it was, with its magazine")
 	# Hold with nothing to trade does nothing.
 	var plain := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0, "fit": left["fit"]}, at, Vector3.ZERO, 1)
 	drops.tick(1.0)
@@ -536,4 +538,104 @@ func _test_e_key_rules() -> void:
 	var sp := drops.prompt_for(c, at, Vector3.FORWARD)
 	var cp := client.prompt_for(c, at, Vector3.FORWARD)
 	_check(not sp.is_empty() and sp.get("mode") == cp.get("mode") and sp.get("weapon") == cp.get("weapon"), "server and client prompts agree")
+	_done()
+
+
+func _test_swap_hold() -> void:
+	_section("replace by hold")
+	var at := Vector3(0, 1, 0)
+	var drops := _drops()
+	var r := DotWeaponDropRules.new()
+	_check(not r.swap_hold and r.lie_flat, "defaults: a tap still replaces, drops lie flat")
+	_check(r.set_cvar("sv_weapon_drop_swap_hold", "1") and r.swap_hold, "sv_weapon_drop_swap_hold turns the hold on")
+	_check(r.set_cvar("sv_weapon_drop_flat", "0") and not r.lie_flat, "sv_weapon_drop_flat turns the lying off")
+	drops.rules.swap_hold = true
+	drops.rules.hold_time = 0.5
+	# Pistol and rifle share a slot and a pool; the knife is another slot.
+	var cat := _catalogue()
+	var slot: int = cat.get_def(&"rifle").slot
+	cat.get_def(&"pistol").slot = slot
+	cat.get_def(&"pistol").ammo_type = cat.get_def(&"rifle").ammo_type
+	var a := _arsenal(cat)
+	var _g1 := a.give(&"pistol")
+	var _g2 := a.give(&"knife")
+	var pool: StringName = cat.get_def(&"rifle").ammo_type
+	a.ammo().set_cap(pool, 20)
+	a.ammo().set_count(pool, 10)
+	var d := drops.spawn({"id": &"rifle", "magazine": 5, "reserve": 20}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	var info := drops.prompt_for(a, at, Vector3.FORWARD)
+	_check(info.get("mode") == "swap" and info.get("hold") == true and info.get("ammo_ok") == true, "prompt: replace needs a hold, ammo is on offer")
+	var key := DotWeaponUseKey.new()
+	var _b := key.step(drops, a, at, Vector3.FORWARD, 2, true, 0.2)
+	var _c := key.step(drops, a, at, Vector3.FORWARD, 2, false, 0.0)
+	_check(a.carries(&"pistol") and not a.carries(&"rifle"), "a tap does not replace the weapon")
+	_check(a.ammo().count(pool) > 10, "a tap takes ammunition from the drop")
+	_check(DotWeaponUseKey.new().client_progress(info, true, 0.25, 0.5) > 0.4, "the circle fills on the client while held")
+	var _d := key.step(drops, a, at, Vector3.FORWARD, 2, true, 0.3)
+	_check(a.carries(&"pistol"), "held for less than the time: nothing yet")
+	var _e := key.step(drops, a, at, Vector3.FORWARD, 2, true, 0.3)
+	_check(a.carries(&"rifle") and not a.carries(&"pistol"), "held for the time: the weapon is replaced")
+	_check(a.carries(&"knife"), "the knife in another slot stays")
+	_check(a.current() != null and a.current().def.id == &"rifle", "and the new gun is in hand")
+	_check(drops.count() >= 1, "the old gun lies on the floor")
+	# Full pool: the ammunition prompt is crossed out.
+	drops.clear()
+	a.ammo().set_count(pool, 100)
+	var _f := drops.spawn({"id": &"pistol", "magazine": 5, "reserve": 20}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	var full := drops.prompt_for(a, at, Vector3.FORWARD)
+	_check(full.get("ammo_ok") == false, "full ammunition: the take-ammo key is marked unusable")
+	var view := DotWeaponPickupView.new()
+	_check("\u0336" in view.text_for(full), "and the prompt text crosses it out")
+	_check(not ("\u0336" in view.text_for(info)), "while a usable one is not crossed")
+	view.free()
+	# A different pool offers nothing to take.
+	var cat2 := _catalogue()
+	cat2.get_def(&"pistol").slot = cat2.get_def(&"rifle").slot
+	var b := _arsenal(cat2)
+	var _g3 := b.give(&"pistol")
+	drops.clear()
+	var _h := drops.spawn({"id": &"rifle", "magazine": 5, "reserve": 20}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	_check(drops.prompt_for(b, at, Vector3.FORWARD).get("ammo_ok") == false, "another ammunition type: crossed out")
+	_check(drops.use(b, at, Vector3.FORWARD, 2) == 0 and b.carries(&"pistol"), "and a tap does nothing")
+	# Same weapon at full ammunition.
+	var c := _arsenal(cat)
+	var _g4 := c.give(&"rifle")
+	c.ammo().set_cap(pool, 100)
+	c.ammo().set_count(pool, 100)
+	drops.clear()
+	var _i := drops.spawn({"id": &"rifle", "magazine": 5, "reserve": 20}, at, Vector3.ZERO, 1)
+	drops.tick(1.0)
+	var same := drops.prompt_for(c, at, Vector3.FORWARD)
+	_check(same.get("mode") == "ammo" and same.get("ammo_ok") == false, "same weapon at full ammunition: crossed out")
+	_done()
+
+
+func _test_lies_flat() -> void:
+	_section("dropped guns lie flat")
+	var floor_body := StaticBody3D.new()
+	var floor_shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(20, 1, 20)
+	floor_shape.shape = box
+	floor_body.add_child(floor_shape)
+	floor_body.position = Vector3(0, -0.5, 0)
+	add_child(floor_body)
+	var drops := _drops()
+	drops.collision_mask = 1
+	var rested: Array = []
+	drops.settled.connect(func(id: int, _at: Transform3D) -> void: rested.append(id))
+	var id := drops.spawn({"id": &"rifle", "magazine": 5, "reserve": 0}, Vector3(0, 1.4, 0), Vector3.UP * 1.5, 1)
+	for i in range(int((DotWeaponDrops.SETTLE_MAX_SEC + 3.0) * 60.0)):
+		if rested.has(id):
+			break
+		await get_tree().physics_frame
+	var at: Transform3D = drops.snapshot()[0]["at"]
+	_check(rested.has(id), "a gun thrown straight up comes to rest")
+	_check(absf(at.basis.z.y) < 0.3, "with its long axis flat, not standing on end")
+	_check(at.origin.y < 0.15, "close to the floor")
+	_drop(drops)
+	_drop(floor_body)
 	_done()

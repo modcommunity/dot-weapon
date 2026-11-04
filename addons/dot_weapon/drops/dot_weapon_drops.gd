@@ -91,9 +91,16 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 	var id := _next_id
 	_next_id += 1
 	var facing := velocity.normalized() if velocity.length() > 0.1 else Vector3.FORWARD
+	if r.lie_flat:
+		# Its long axis starts horizontal, rolled onto its side, so a throw straight up lands flat, not on end.
+		facing = Vector3(facing.x, 0.0, facing.z)
+		facing = facing.normalized() if facing.length() > 0.05 else Vector3.FORWARD
 	# A drop thrown straight up is colinear with the default up vector and warns.
 	var up := Vector3.FORWARD if absf(facing.dot(Vector3.UP)) > 0.999 else Vector3.UP
-	var at := Transform3D(Basis.looking_at(facing, up), origin)
+	var basis := Basis.looking_at(facing, up)
+	if r.lie_flat:
+		basis = basis.rotated(facing, deg_to_rad(90.0 + randf_range(-25.0, 25.0)))
+	var at := Transform3D(basis, origin)
 	_make(id, state, at, velocity, owner_id, r.lifetime, r.pickup_delay, _team(owner_id))
 	dropped.emit(id, state, at, velocity, owner_id)
 	_enforce_cap(r.max_count)
@@ -138,15 +145,34 @@ func prompt_for(arsenal: Object, position: Vector3, direction: Vector3, source: 
 	if arsenal != null and arsenal.get(&"catalogue") != null:
 		can = arsenal.get(&"catalogue").call(&"get_def", StringName(state["id"])) != null
 	var mode := "take"
+	var hold := false
+	var ammo_ok := false
 	if can and arsenal != null and arsenal.get(&"catalogue") != null:
 		var def: Object = arsenal.get(&"catalogue").call(&"get_def", StringName(state["id"]))
+		var slot_no: int = def.get(&"slot")
 		if bool(arsenal.call(&"carries", StringName(state["id"]))):
 			mode = "ammo"
-		elif arsenal.call(&"has_slot", def.get(&"slot")) and arsenal.call(&"weapons_in", def.get(&"slot")).size() >= int(arsenal.call(&"slot_capacity")):
+			hold = true
+		elif arsenal.call(&"has_slot", slot_no) and arsenal.call(&"weapons_in", slot_no).size() >= int(arsenal.call(&"slot_capacity")):
 			mode = "swap"
+			hold = rules.resolve(source).swap_hold
+		if mode != "take":
+			ammo_ok = _ammo_fits(arsenal, state, def)
 	return {"id": id, "weapon": StringName(state["id"]), "magazine": state.get("magazine", 0),
-		"reserve": state.get("reserve", 0), "can_take": can, "mode": mode,
+		"reserve": state.get("reserve", 0), "can_take": can, "mode": mode, "hold": hold, "ammo_ok": ammo_ok,
 		"at": (_entries[id]["body"] as Node3D).global_position, "fitted": state.has("fit")}
+
+
+## Whether a tap could move any of the drop's rounds into [param arsenal]: the weapon in that slot draws on the same pool and the pool has room.
+func _ammo_fits(arsenal: Object, state: Dictionary, def: Object) -> bool:
+	var pool: StringName = def.get(&"ammo_type")
+	if pool == &"" or int(state.get("reserve", 0)) + int(state.get("magazine", 0)) <= 0:
+		return false
+	var in_slot: Array = arsenal.call(&"weapons_in", def.get(&"slot"))
+	if in_slot.is_empty() or in_slot[0].def.ammo_type != pool:
+		return false
+	var ammo: Object = arsenal.call(&"ammo")
+	return ammo == null or int(ammo.call(&"cap", pool)) <= 0 or int(ammo.call(&"count", pool)) < int(ammo.call(&"cap", pool))
 
 
 ## The best drop within [param radius] of [param position]; with [param arsenal], only one whose slot is empty.
@@ -198,12 +224,16 @@ func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = nu
 	var id := StringName(state["id"])
 	var def: Object = arsenal.get(&"catalogue").call(&"get_def", id)
 	var swapped: Dictionary = {}
+	var was_current := false
 	if def != null and arsenal.call(&"has_slot", def.get(&"slot")):
 		var slot_no: int = def.get(&"slot")
 		if bool(arsenal.call(&"carries", id)):
 			return _replace_same(arsenal, best, def, taker_id) if held and keyed else _unload(arsenal, best, def, taker_id)
 		var in_slot: Array = arsenal.call(&"weapons_in", slot_no)
 		if in_slot.size() >= int(arsenal.call(&"slot_capacity")):
+			if keyed and not held and r != null and r.swap_hold:
+				return _unload(arsenal, best, def, taker_id) if in_slot[0].def.ammo_type == def.get(&"ammo_type") else 0
+			was_current = int(arsenal.call(&"current_slot")) == slot_no
 			swapped = arsenal.call(&"drop_from_slot", slot_no, keep_slots)
 			if swapped.is_empty():
 				return 0
@@ -214,6 +244,8 @@ func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = nu
 			arsenal.call(&"apply_dropped", swapped)
 		return 0
 	arsenal.call(&"apply_dropped", state)
+	if was_current:
+		arsenal.call(&"bring_to_hand", def.get(&"slot"))
 	var where: Vector3 = (e["body"] as Node3D).global_position
 	_remove(best, taker_id)
 	if not swapped.is_empty():
@@ -221,35 +253,50 @@ func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = nu
 	return best
 
 
-## Holding the use key over the weapon already in hand: its attachments and fire mode trade places with
-## the drop's, while the magazine and reserve in hand stay as they are (ammunition is conserved: the old
-## fitting lands on the floor with the drop's own rounds). Returns the drop id, or 0 when nothing differs.
+## Holding the use key over the weapon already in hand replaces it with the drop's: magazine, fitting and fire
+## mode trade places (the one in hand lands on the floor as it was), while the reserve stays with its owner so
+## ammunition is conserved. Returns the drop id, or 0 when the two are identical.
 func _replace_same(arsenal: Object, best: int, def: Object, taker_id: int) -> int:
 	var state: Dictionary = _entries[best]["state"]
 	var slot_no: int = def.get(&"slot")
 	var front: Array = arsenal.call(&"weapons_in", slot_no)
-	if front.is_empty() or front[0].call(&"id") != def.get(&"id") or arsenal.get(&"attachments") == null:
+	if front.is_empty() or front[0].call(&"id") != def.get(&"id"):
 		return 0
+	var mine: Object = front[0]
+	var held_mag: int = mine.magazine
+	var held_fm: int = mine.fire_mode_index
 	var held_fit: Dictionary = {}
-	var fitting: Object = arsenal.call(&"fitting_at", slot_no)
-	if fitting != null and not bool(fitting.call(&"is_empty")):
-		held_fit = fitting.call(&"to_dictionary")
+	var traded_fit := arsenal.get(&"attachments") != null
+	if traded_fit:
+		var fitting: Object = arsenal.call(&"fitting_at", slot_no)
+		if fitting != null and not bool(fitting.call(&"is_empty")):
+			held_fit = fitting.call(&"to_dictionary")
 	var new_fit: Dictionary = state.get("fit", {}) if state.get("fit", null) is Dictionary else {}
-	if held_fit == new_fit:
+	var new_mag := clampi(int(state.get("magazine", 0)), 0, maxi(int(def.get(&"magazine")), 0))
+	var new_fm := int(state.get("fm", 0))
+	if held_mag == new_mag and held_fm == new_fm and (not traded_fit or held_fit == new_fit):
 		return 0
-	var incoming := DotWeaponFitting.make(def.get(&"id"))
-	if not new_fit.is_empty():
-		var parsed := DotWeaponFitting.from_dictionary(new_fit)
-		if not parsed.ok:
+	if traded_fit and held_fit != new_fit:
+		var incoming := DotWeaponFitting.make(def.get(&"id"))
+		if not new_fit.is_empty():
+			var parsed := DotWeaponFitting.from_dictionary(new_fit)
+			if not parsed.ok:
+				return 0
+			incoming = parsed.value
+		var applied: Object = arsenal.call(&"fit", slot_no, incoming)
+		if applied == null or not bool(applied.get(&"ok")):
 			return 0
-		incoming = parsed.value
-	var applied: Object = arsenal.call(&"fit", slot_no, incoming)
-	if applied == null or not bool(applied.get(&"ok")):
-		return 0
-	if held_fit.is_empty():
-		state.erase("fit")
+		if held_fit.is_empty():
+			state.erase("fit")
+		else:
+			state["fit"] = held_fit
+	mine.magazine = new_mag
+	mine.fire_mode_index = clampi(new_fm, 0, maxi(mine.def.allowed_fire_modes().size() - 1, 0))
+	state["magazine"] = held_mag
+	if held_fm != 0:
+		state["fm"] = held_fm
 	else:
-		state["fit"] = held_fit
+		state.erase("fm")
 	ammo_changed.emit(best, state)
 	return best
 
@@ -300,10 +347,30 @@ func tick(delta: float) -> void:
 			else:
 				e["still"] = 0.0
 			e["moving"] = float(e.get("moving", 0.0)) + delta
-			if float(e["still"]) >= rules.sleep_time or float(e["moving"]) >= SETTLE_MAX_SEC:
+			if float(e["still"]) >= rules.sleep_time and rules.lie_flat and _topple(e, body):
+				e["still"] = 0.0
+			elif float(e["still"]) >= rules.sleep_time or float(e["moving"]) >= SETTLE_MAX_SEC:
 				_rest(id, e, body)
 		elif body.global_position.y < -200.0:
 			_remove(id, 0)
+
+
+## Nudges a drop propped on end or edge (its long axis steeper than about 20 degrees) so it falls over before it sleeps.
+## Returns true when it nudged; gives up after a few tries so a drop wedged in a corner still sleeps.
+func _topple(e: Dictionary, body: RigidBody3D) -> bool:
+	if int(e.get("topples", 0)) >= 4:
+		return false
+	var size: Vector3 = e["size"]
+	var axis := 0 if size.x >= size.y and size.x >= size.z else (1 if size.y >= size.z else 2)
+	var long_world: Vector3 = body.global_transform.basis[axis].normalized()
+	if absf(long_world.y) < 0.35:
+		return false
+	e["topples"] = int(e.get("topples", 0)) + 1
+	var away := Vector3(long_world.x, 0.0, long_world.z)
+	away = away.normalized() if away.length() > 0.01 else Vector3.RIGHT
+	body.apply_torque_impulse(Vector3.UP.cross(away) * body.mass * 0.6)
+	body.sleeping = false
+	return true
 
 
 ## Freezes a drop in place. The solver leaves a thin box a few centimetres inside the floor
@@ -572,7 +639,7 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
 	_order += 1
 	_entries[id] = {"body": body, "state": state, "age": 0.0, "life": life, "delay": delay,
-		"still": 0.0, "rest": false, "owner": owner_id, "order": _order, "team": team}
+		"still": 0.0, "rest": false, "size": size, "owner": owner_id, "order": _order, "team": team}
 	DotLog.debug(CHANNEL, "weapon dropped", {"id": id, "weapon": String(state.get("id", &""))})
 
 

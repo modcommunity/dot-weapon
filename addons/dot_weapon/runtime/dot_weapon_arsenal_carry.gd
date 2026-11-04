@@ -107,6 +107,12 @@ func drop_from_slot(slot_number: int, keep_slots: Array[int] = []) -> Dictionary
 	return state
 
 
+## Brings [param slot] into hand at once, with no holster or deploy delay: a pickup that replaced the weapon in hand puts the new one there, not the next slot's.
+func bring_to_hand(slot: int) -> void:
+	if _slots.has(slot):
+		_force_select(slot)
+
+
 ## Puts the ammunition, attachments and fire mode of a [method drop_current] state back on the weapon
 ## [param state] names, which must already be carried (given with `full = false`).
 func apply_dropped(state: Dictionary) -> void:

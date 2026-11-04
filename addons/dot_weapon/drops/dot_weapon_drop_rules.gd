@@ -43,8 +43,12 @@ var swap: bool = true
 ## Seconds the drop key must be held before the weapon is thrown; 0 throws on the press (see [DotWeaponDropKey]).
 var key_hold: float = 0.0
 
-## Seconds the use key is held over a dropped weapon of another type to swap it with the one in hand; a tap never swaps.
+## Seconds the use key is held over a dropped weapon to replace the one in hand with it (see [member swap_hold]).
 var hold_time: float = 0.6
+## Replacing a weapon already in its slot needs the hold; a tap then only takes ammunition from the drop. Off: a tap replaces a different weapon at once.
+var swap_hold: bool = false
+## A dropped weapon comes to rest lying on its side; one propped on end is toppled before it sleeps.
+var lie_flat: bool = true
 ## Shots, blasts and melee push dropped weapons about.
 var shootable: bool = true
 ## Scales the push a shot or melee hit gives a dropped weapon (1 is a bullet's momentum over the weapon's mass).
@@ -82,6 +86,8 @@ const _SPECS := [
 	["sv_weapon_drop_auto", "auto_pickup", "bool", "1 takes a dropped weapon in reach without the use key"],
 	["sv_weapon_drop_use_radius", "use_radius", "float:0.2:8", "How far the use key reaches to a dropped weapon"],
 	["sv_weapon_drop_hold", "hold_time", "float:0.05:5", "Seconds the use key is held over the weapon already in hand to replace it with the dropped one (attachments trade, ammunition stays)"],
+	["sv_weapon_drop_swap_hold", "swap_hold", "bool", "1 makes replacing a weapon in its own slot need a hold of the use key; a tap takes ammunition only"],
+	["sv_weapon_drop_flat", "lie_flat", "bool", "1 lays dropped weapons flat on their side and topples one propped on end"],
 	["sv_weapon_drop_shootable", "shootable", "bool", "1 lets shots, blasts and melee push dropped weapons about"],
 	["sv_weapon_drop_impulse", "impulse_scale", "float:0:20", "Scale of the push a shot or melee hit gives a dropped weapon"],
 	["sv_weapon_drop_blast", "blast_scale", "float:0:20", "Scale of the push an explosion gives a dropped weapon"],
