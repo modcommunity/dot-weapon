@@ -60,10 +60,9 @@ var spread_rules: DotWeaponSpreadRules = null
 ## watches, such as a server's stand-in, sets it false so its untouched weapon ticks with no context.
 var crosshair_cone: bool = true
 
-## Returns a [DotWeaponContext] holding only the carrier's posture (speed, airborne, crouched, sliding,
-## sprinting, and tick and hurt_tick if the flinch should count). Set, an idle tick with spread rules
-## attached feeds that to the behaviour instead of a full context, with the same result and a
-## fraction of the cost.
+## Returns a [DotWeaponContext] holding only the carrier's posture (speed, airborne, crouched,
+## sliding, sprinting, and tick and hurt_tick if the flinch should count). Set, an idle tick
+## with spread rules feeds that to the behaviour instead of a full context, far cheaper.
 var idle_posture: Callable = Callable()
 
 ## Per-weapon recoil patterns (`sv_recoil_*`); null or disabled leaves every gun's flat kick.
