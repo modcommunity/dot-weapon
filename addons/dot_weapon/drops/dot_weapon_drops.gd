@@ -605,10 +605,14 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 	var body: RigidBody3D = null
 	var size := DEFAULT_SIZE
 	var parked: Array = _parked.get(weapon, [])
-	if not parked.is_empty():
+	while not parked.is_empty() and body == null:
 		var spare: Array = parked.pop_back()
+		if spare[0].get_meta(&"draws", false) != draws:
+			(spare[0] as Node).free()
+			continue
 		body = spare[0]
 		size = spare[1]
+	if body != null:
 		_configure(body)
 		add_child(body)
 		body.global_transform = at
@@ -636,6 +640,7 @@ func _build(weapon: StringName, at: Transform3D) -> Array:
 	body.linear_damp = 0.15
 	body.angular_damp = 1.2
 	body.set_meta(&"weapon", weapon)
+	body.set_meta(&"draws", draws)
 	_configure(body)
 	add_child(body)
 	body.global_transform = at
