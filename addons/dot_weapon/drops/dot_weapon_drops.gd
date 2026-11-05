@@ -125,7 +125,7 @@ func take_for(arsenal: Object, position: Vector3, taker_id: int, source: Object 
 func _take_near(arsenal: Object, position: Vector3, taker_id: int, r: DotWeaponDropRules) -> int:
 	if not is_authority or arsenal == null:
 		return 0
-	return _take(arsenal, _nearest(arsenal, position, Vector3.ZERO, r.pickup_radius, _team(taker_id), true), taker_id, r)
+	return _take(arsenal, _nearest(arsenal, position, Vector3.ZERO, r.pickup_radius, _team(taker_id), true), taker_id, r, false, false, position)
 
 
 ## The use key. A tap ([param held] false) takes the drop looked at into a free slot, or unloads its ammunition
@@ -135,7 +135,7 @@ func use(arsenal: Object, position: Vector3, direction: Vector3, taker_id: int, 
 	if not is_authority or arsenal == null:
 		return 0
 	var r := rules.resolve(source)
-	return _take(arsenal, _nearest(arsenal, position, direction, r.use_radius, _team(taker_id)), taker_id, r, held, true)
+	return _take(arsenal, _nearest(arsenal, position, direction, r.use_radius, _team(taker_id)), taker_id, r, held, true, position)
 
 
 ## What a "press use" prompt shows for the drop [param position] looks at: {id, weapon, magazine,
@@ -219,8 +219,8 @@ func drop_team(drop_id: int) -> int:
 
 ## Takes drop [param best] into [param arsenal]. A free slot takes it with its ammunition and attachments as
 ## it lay. The same weapon twice unloads its ammunition into the reserve (the overflow stays), or with
-## [param held] trades fittings. A different weapon already in the slot is swapped out onto the floor.
-func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = null, held: bool = false, keyed: bool = false) -> int:
+## [param held] trades fittings. A different weapon already in the slot is swapped out onto the floor at [param taker_at], where the taker stands, not where the taken weapon lay.
+func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = null, held: bool = false, keyed: bool = false, taker_at: Vector3 = Vector3.INF) -> int:
 	if best == 0:
 		return 0
 	var e: Dictionary = _entries[best]
@@ -250,7 +250,7 @@ func _take(arsenal: Object, best: int, taker_id: int, r: DotWeaponDropRules = nu
 	arsenal.call(&"apply_dropped", state)
 	if was_current:
 		arsenal.call(&"bring_to_hand", def.get(&"slot"))
-	var where: Vector3 = (e["body"] as Node3D).global_position
+	var where: Vector3 = (e["body"] as Node3D).global_position if not taker_at.is_finite() else taker_at
 	_remove(best, taker_id)
 	if not swapped.is_empty():
 		var _back := spawn(swapped, where, Vector3.UP * 1.5, taker_id, r)
