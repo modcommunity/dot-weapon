@@ -15,7 +15,7 @@ const REACH := 0.5
 ## The box of a weapon with no model.
 const DEFAULT_SIZE := Vector3(0.12, 0.14, 0.7)
 ## Spare bodies kept per weapon for reuse.
-const MAX_PARKED := 4
+const MAX_PARKED := 8
 
 ## A weapon left a hand (or a corpse): [param state] is [code]{id, magazine, reserve}[/code].
 signal dropped(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int)
@@ -47,6 +47,7 @@ var _entries: Dictionary = {}   ## int -> Dictionary {body, state, age, rest, ow
 var _fits: Dictionary = {}   ## StringName -> [size, centre] of a weapon's model box
 ## StringName -> Array of [body, size]: bodies out of the tree, reused by the next drop of that weapon (no model rebuilt).
 var _parked: Dictionary = {}
+var _material: PhysicsMaterial = null
 var _next_id: int = 1
 var _order: int = 0
 
@@ -108,6 +109,7 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 	_make(id, state, at, velocity, owner_id, r.lifetime, r.pickup_delay, _team(owner_id))
 	dropped.emit(id, state, at, velocity, owner_id)
 	_enforce_cap(r.max_count)
+	_enforce_active(id)
 	return id
 
 
@@ -560,12 +562,17 @@ func _wake(id: int) -> void:
 		body.freeze = false
 	e["still"] = 0.0
 	e["moving"] = 0.0
+	_enforce_active(id)
+
+
+## Rests the oldest moving drops until no more than [member DotWeaponDropRules.max_active] are awake, never [param keep]. A burst of deaths (a whole team at once) otherwise steps every body together, one physics step costing 200 ms.
+func _enforce_active(keep: int) -> void:
 	var cap := rules.max_active
 	while cap > 0 and active_count() > cap:
 		var oldest := 0
 		var order := 1 << 60
 		for other: int in _entries:
-			if other != id and not bool(_entries[other]["rest"]) and int(_entries[other]["order"]) < order:
+			if other != keep and not bool(_entries[other]["rest"]) and int(_entries[other]["order"]) < order:
 				order = int(_entries[other]["order"])
 				oldest = other
 		if oldest == 0:
@@ -623,6 +630,7 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 		body = built[0]
 		size = built[1]
 	body.name = "Drop%d" % id
+	body.continuous_cd = rules.ccd_speed <= 0.0 or velocity.length() >= rules.ccd_speed
 	body.linear_velocity = velocity
 	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
 	_order += 1
@@ -636,7 +644,6 @@ func _build(weapon: StringName, at: Transform3D) -> Array:
 	var body := RigidBody3D.new()
 	body.collision_layer = 0
 	body.collision_mask = collision_mask
-	body.continuous_cd = true
 	body.linear_damp = 0.15
 	body.angular_damp = 1.2
 	body.set_meta(&"weapon", weapon)
@@ -673,10 +680,12 @@ func _build(weapon: StringName, at: Transform3D) -> Array:
 ## Applies the current rules to a new or reused body, so a cvar changed between drops still takes.
 func _configure(body: RigidBody3D) -> void:
 	body.mass = rules.mass
-	var material := PhysicsMaterial.new()
-	material.friction = rules.friction
-	material.bounce = rules.bounce
-	body.physics_material_override = material
+	# One material per setting, shared by every body, rather than a Resource per drop.
+	if _material == null or _material.friction != rules.friction or _material.bounce != rules.bounce:
+		_material = PhysicsMaterial.new()
+		_material.friction = rules.friction
+		_material.bounce = rules.bounce
+	body.physics_material_override = _material
 
 
 ## Builds [param count] bodies of [param weapon] now and keeps them out of the tree for the next drops, so the first throw does not pay for the model. Call under the loading cover.
