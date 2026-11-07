@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 146
+const CHECKS := 147
 
 
 func _ready() -> void:
@@ -524,8 +524,10 @@ func _test_e_key_rules() -> void:
 	var d4 := drops.spawn({"id": &"rifle", "magazine": 5, "reserve": 0}, at, Vector3.ZERO, 1)
 	drops.tick(1.0)
 	_check(drops.prompt_for(b, at, Vector3.FORWARD).get("mode") == "swap", "different weapon: prompt says swap")
-	_check(drops.use(b, at, Vector3.FORWARD, 2) == d4 and b.carries(&"rifle") and not b.carries(&"pistol"), "different weapon, tap: replaces")
+	var taker_at := at + Vector3(0.4, 0.0, 0.0)
+	_check(drops.use(b, taker_at, Vector3.FORWARD, 2) == d4 and b.carries(&"rifle") and not b.carries(&"pistol"), "different weapon, tap: replaces")
 	_check(drops.count() == 1, "and the old one drops")
+	_check(absf(((drops.snapshot()[0]["at"]) as Transform3D).origin.x - taker_at.x) < 0.01, "at the taker's position, not where the taken gun lay")
 	# Reload state survives: a reload begun before the swap is cancelled, the new gun is not stuck reloading.
 	_check(not b.is_reloading(), "no reload state is left behind by a swap")
 	# Server and client agree: a mirror sees the same prompt.
