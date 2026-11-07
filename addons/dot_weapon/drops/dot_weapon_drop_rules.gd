@@ -57,6 +57,8 @@ var impulse_scale: float = 1.0
 var blast_scale: float = 1.0
 ## Most dropped weapons simulated awake at once; the rest are held still until one sleeps. 0 unlimited.
 var max_active: int = 16
+## Launch speed (m/s) from which a drop uses continuous collision detection; slower drops cannot tunnel a floor and skip its cost. 0 always.
+var ccd_speed: float = 10.0
 ## Seconds a dropped weapon must lie still before it sleeps.
 var sleep_time: float = 0.6
 ## Mass of a dropped weapon, kilograms.
@@ -92,6 +94,7 @@ const _SPECS := [
 	["sv_weapon_drop_impulse", "impulse_scale", "float:0:20", "Scale of the push a shot or melee hit gives a dropped weapon"],
 	["sv_weapon_drop_blast", "blast_scale", "float:0:20", "Scale of the push an explosion gives a dropped weapon"],
 	["sv_weapon_drop_active", "max_active", "int:0:256", "Most dropped weapons simulated awake at once; 0 unlimited"],
+	["sv_weapon_drop_ccd_speed", "ccd_speed", "float:0:100", "Launch speed from which a dropped weapon uses continuous collision detection (slower drops skip its cost); 0 always"],
 	["sv_weapon_drop_sleep", "sleep_time", "float:0.1:10", "Seconds a dropped weapon lies still before it sleeps"],
 	["sv_weapon_drop_mass", "mass", "float:0.1:100", "Mass of a dropped weapon, kilograms"],
 	["sv_weapon_drop_friction", "friction", "float:0:2", "Friction of a dropped weapon"],

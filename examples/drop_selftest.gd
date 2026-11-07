@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 147
+const CHECKS := 151
 
 
 func _ready() -> void:
@@ -26,6 +26,7 @@ func _run() -> void:
 	await _test_blast()
 	await _test_lies_flat()
 	_test_body_reuse()
+	await _test_bench()
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [_sections_entered, _sections_finished, _passed, _failed])
 	for line in _failures:
@@ -68,7 +69,7 @@ func _test_rules() -> void:
 	_check(r.set_cvar("sv_weapon_drop_max", "9999") and r.max_count == 512, "sv_weapon_drop_max clamps")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 26, "twenty-six cvars are described")
+	_check(r.cvar_specs().size() == 27, "twenty-seven cvars are described")
 	_done()
 
 
@@ -660,4 +661,38 @@ func _test_body_reuse() -> void:
 	_check(not (first as RigidBody3D).freeze and (first as RigidBody3D).linear_velocity == Vector3.ZERO, "reused body is live and still")
 	_check(b != a, "with a new id")
 	_drop(drops)
+	_done()
+
+
+## A 16v16 wipe: 32 weapons dropped in one tick, then 100 drop/expire cycles. Prints nodes built, bodies awake and ms per drop.
+func _test_bench() -> void:
+	_section("bench: 32 drops at once, 100 drop cycles")
+	var drops := _drops()
+	drops.rules.max_count = 0
+	var state := {"id": &"rifle", "magazine": 5, "reserve": 0}
+	var n0 := Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
+	var t0 := Time.get_ticks_usec()
+	for i in 32:
+		drops.spawn(state, Vector3(i, 2, 0), Vector3(0, 1, 0), 1)
+	var burst_ms := (Time.get_ticks_usec() - t0) / 1000.0
+	var awake := drops.active_count()
+	await get_tree().physics_frame
+	drops.clear()
+	await get_tree().process_frame
+	var nodes_before := Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
+	var t1 := Time.get_ticks_usec()
+	for i in 100:
+		var id := drops.spawn(state, Vector3(i % 10, 2, 0), Vector3.ZERO, 1)
+		drops.mirror_removed(id)
+	var us := Time.get_ticks_usec() - t1
+	var churn := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT) - nodes_before)
+	print("[bench] 32-drop burst: %.2f ms, %d awake, %d nodes parked or live; 100 cycles: %d net nodes, %.3f ms per drop" % [burst_ms, awake, int(nodes_before - n0), churn, us / 1000.0 / 100.0])
+	_check(awake <= drops.rules.max_active, "a burst of 32 leaves at most max_active awake (%d)" % awake)
+	_check(drops.count() == 0, "cycles leave no drop behind")
+	var slow := drops.spawn(state, Vector3.ZERO, Vector3(0, 3, 0), 1)
+	_check(not (drops.get_child(0) as RigidBody3D).continuous_cd, "a slow drop skips continuous collision detection")
+	drops.mirror_removed(slow)
+	var fast := drops.spawn(state, Vector3.ZERO, Vector3(0, 20, 0), 1)
+	_check((drops.get_child(0) as RigidBody3D).continuous_cd, "a fast throw keeps it")
+	drops.mirror_removed(fast)
 	_done()
