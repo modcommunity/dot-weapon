@@ -50,6 +50,24 @@ func _test_ballistics() -> void:
 	var aim := DotWeaponTrajectory.lead(sniper, Vector3.ZERO, Vector3(0, 0, -300), Vector3(5, 0, 0))
 	_check(aim.x > 1.0 and aim.y > 0.0, "bots lead a mover and hold over for drop", str(aim))
 	_check(is_nan(DotWeaponTrajectory.solve_pitch(carbine, 100000.0)), "out of reach has no solution")
+	_close(DotWeaponTrajectory.holdover(sniper, 100.0, 100.0), 0.0, "holdover is nothing at the zero", 0.00001)
+	var h300 := DotWeaponTrajectory.holdover_mils(sniper, 100.0, 300.0)
+	var h600 := DotWeaponTrajectory.holdover_mils(sniper, 100.0, 600.0)
+	_check(h300 > 0.0 and h600 > h300 * 2.0, "holdover grows with range", "%f %f" % [h300, h600])
+	_check(DotWeaponTrajectory.holdover_mils(sniper, 300.0, 300.0) == 0.0 and DotWeaponTrajectory.holdover_mils(sniper, 300.0, 100.0) < 0.0, "a longer zero holds under for near targets")
+	var marks := DotWeaponTrajectory.holdover_marks(sniper, 100.0, PackedFloat32Array([100.0, 300.0, 100000.0]))
+	_check(marks.size() == 3 and marks[1]["range"] == 300.0 and is_nan(marks[2]["mils"]), "reticle marks per range, NAN out of reach")
+	var rb := DotWeaponBallistics.new()
+	rb.ricochet_chance = 0.5
+	var flat := Vector3.UP
+	var graze := Vector3(1, -0.1, 0).normalized()
+	var r := DotWeaponTrajectory.ricochet(rb, graze, flat, 0.1)
+	_check(r.ricochet and r.dir.y > 0.0 and is_equal_approx(r.dir.x, graze.x) and r.speed_scale < 1.0, "a shallow hit with a low roll bounces and loses speed")
+	_check(not DotWeaponTrajectory.ricochet(rb, graze, flat, 0.9).ricochet, "a high roll does not")
+	_check(not DotWeaponTrajectory.ricochet(rb, Vector3(0.3, -1, 0).normalized(), flat, 0.0).ricochet, "a steep hit never bounces")
+	_check(not DotWeaponTrajectory.ricochet(DotWeaponBallistics.new(), graze, flat, 0.0).ricochet, "chance 0 never bounces")
+	_check(not DotWeaponTrajectory.ricochet(rb, Vector3(1, 0.1, 0).normalized(), flat, 0.0).ricochet, "leaving the surface is not a hit")
+	_check(DotWeaponTrajectory.ricochet(rb, graze, flat, 0.1) == r, "same roll, same bounce")
 	_done()
 
 

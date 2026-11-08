@@ -79,6 +79,58 @@ static func through(b: DotWeaponBallistics, thickness: float, stopping: float = 
 	return 0.0 if need >= b.penetration else 1.0 - need / b.penetration
 
 
+## Scope holdover: radians to aim above the sight line at [param range_m] for a scope zeroed at
+## [param zero_m] (the range where bore and sight cross). 0 at the zero, positive beyond it. NAN
+## when either range is out of reach. Reticle marks are this in mils ([method holdover_mils]).
+static func holdover(b: DotWeaponBallistics, zero_m: float, range_m: float) -> float:
+	var at := solve_pitch(b, range_m)
+	var zero := solve_pitch(b, zero_m)
+	if is_nan(at) or is_nan(zero):
+		return NAN
+	return at - zero
+
+
+## [method holdover] in milliradians (1 mil = 1 m at 1000 m), the unit range-marked reticles use.
+static func holdover_mils(b: DotWeaponBallistics, zero_m: float, range_m: float) -> float:
+	return holdover(b, zero_m, range_m) * 1000.0
+
+
+## Reticle marks for [param ranges]: an array of `{range, mils}` (mils NAN when out of reach).
+static func holdover_marks(b: DotWeaponBallistics, zero_m: float, ranges: PackedFloat32Array) -> Array:
+	var out: Array = []
+	for r in ranges:
+		out.append({"range": r, "mils": holdover_mils(b, zero_m, r)})
+	return out
+
+
+## Grazing angles (radians between the path and the surface) up to this can ricochet.
+const RICOCHET_MAX_ANGLE := 0.35
+
+## Share of speed a ricochet keeps at the shallowest angle; it falls to half that at the limit.
+const RICOCHET_KEEP := 0.7
+
+
+## Ricochet of a bullet travelling along [param dir] off a hard surface with unit [param normal].
+## [param roll] is 0..1 from the caller's seeded stream (never drawn here, so server, client and
+## replay agree). Returns `{ricochet, dir, speed_scale, angle}`: the bullet bounces when the
+## grazing angle is within [constant RICOCHET_MAX_ANGLE] and roll is under ricochet_chance, the
+## chance scaled down towards the limit. The new direction is the mirror about the surface.
+static func ricochet(b: DotWeaponBallistics, dir: Vector3, normal: Vector3, roll: float) -> Dictionary:
+	var d := dir.normalized()
+	var n := normal.normalized()
+	var angle := asin(clampf(absf(d.dot(n)), 0.0, 1.0))
+	var out := {"ricochet": false, "dir": d, "speed_scale": 1.0, "angle": angle}
+	if b == null or b.ricochet_chance <= 0.0 or d.dot(n) >= 0.0 or angle > RICOCHET_MAX_ANGLE:
+		return out
+	var shallow := 1.0 - angle / RICOCHET_MAX_ANGLE
+	if roll >= b.ricochet_chance * (0.5 + 0.5 * shallow):
+		return out
+	out["ricochet"] = true
+	out["dir"] = d.bounce(n)
+	out["speed_scale"] = RICOCHET_KEEP * (0.5 + 0.5 * shallow)
+	return out
+
+
 ## Pitch in radians above the line to the target that lands the bullet on a target [param range_m]
 ## away horizontally and [param height] metres above the muzzle. NAN when out of reach.
 static func solve_pitch(b: DotWeaponBallistics, range_m: float, height: float = 0.0) -> float:
