@@ -63,7 +63,32 @@ var crosshair_cone: bool = true
 ## Returns a [DotWeaponContext] holding only the carrier's posture (speed, airborne, crouched,
 ## sliding, sprinting, and tick and hurt_tick if the flinch should count). Set, an idle tick
 ## with spread rules feeds that to the behaviour instead of a full context, far cheaper.
-var idle_posture: Callable = Callable()
+var idle_posture: Callable = Callable():
+	set(value):
+		idle_posture = value
+		_derive_idle_still()
+
+## Whether the carrier's posture is the settled one (speed 0, grounded, not crouched, sliding, wall running, sprinting or
+## hurt), asked of an idle weapon at rest so its tick is skipped without [member idle_posture]. Must agree with it.
+## A [method DotWeaponPlayerBridge.posture_for] bound to a player in [member idle_posture] sets [method DotWeaponPlayerBridge.still_for].
+var idle_still: Callable = Callable()
+
+## False runs every idle tick through [member idle_posture] as before; the result is identical, it only costs more.
+var idle_rest_skip: bool = true
+
+var _still_derived: bool = false
+
+
+func _derive_idle_still() -> void:
+	if idle_still.is_valid() and not _still_derived:
+		return
+	_still_derived = false
+	idle_still = Callable()
+	if idle_posture.is_valid() and idle_posture.get_method() == &"posture_for" and idle_posture.get_object() == DotWeaponPlayerBridge:
+		var bound := idle_posture.get_bound_arguments()
+		if bound.size() == 1 and bound[0] is Node:
+			idle_still = DotWeaponPlayerBridge.still_for.bind(bound[0])
+			_still_derived = true
 
 ## Per-weapon recoil patterns (`sv_recoil_*`); null or disabled leaves every gun's flat kick.
 var recoil_rules: DotWeaponRecoilRules = null

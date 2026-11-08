@@ -164,6 +164,17 @@ static func _motion_from(controllers: Array) -> Dictionary:
 
 	return {}
 
+## Whether [method posture_for] would return the settled posture: speed 0, on the ground, not crouched, sliding, wall
+## running or sprinting. The cheap question [member DotWeaponArsenal.idle_still] asks; it builds no context.
+static func still_for(player: Node) -> bool:
+	if player == null:
+		return true
+	var motion := _motion_from(_controllers_of(player))
+	return float(motion.get("speed", 0.0)) == 0.0 and bool(motion.get("on_floor", true)) \
+		and not bool(motion.get("crouched", false)) and not bool(motion.get("sliding", false)) \
+		and not bool(motion.get("wall_running", false)) and not bool(motion.get("sprinting", false))
+
+
 ## Parents a view model to the player's weapon mount, if their character has one.
 ##
 ## Returns whether it found somewhere to hang it. False is not an error: a server has no

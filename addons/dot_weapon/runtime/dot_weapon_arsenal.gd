@@ -365,7 +365,13 @@ func crosshair_scale() -> float:
 ## (or the [member idle_posture] one).
 func idle_tick() -> DotWeaponOutcome:
 	_held_ticks = 0
-	current().behaviour.tick(idle_posture.call() as DotWeaponContext if idle_posture.is_valid() else null)
+	var behaviour := current().behaviour
+
+	# A weapon with nothing to recover on a settled carrier changes nothing by ticking: skip the posture and the tick.
+	if idle_rest_skip and idle_still.is_valid() and behaviour.rest_tick(idle_still):
+		return DotWeaponOutcome.nothing("")
+
+	behaviour.tick(idle_posture.call() as DotWeaponContext if idle_posture.is_valid() else null)
 	return DotWeaponOutcome.nothing("")
 
 

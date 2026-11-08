@@ -27,6 +27,9 @@ var _class_key: String = ""
 var _class: String = ""
 ## The cone the last context tick or use computed, for display; -1 before any.
 var _shown: float = -1.0
+## Set by [method rest_tick]: the skipped ticks did not compute the cone, [method spread_now] does it when asked.
+var _shown_stale: bool = false
+var _settled: DotWeaponContext = null
 
 
 func _ballistics() -> DotWeaponBallistics:
@@ -39,6 +42,13 @@ func _tick(ctx: DotWeaponContext) -> void:
 	var b := _ballistics()
 	if b == null:
 		return
+
+	if _shown_stale:
+		# A tick with a context overwrites the cone below; one without keeps it, so settle it before the state moves.
+		if ctx == null:
+			_refresh_shown(b)
+		else:
+			_shown_stale = false
 
 	var since := mini(int(state.get(_SINCE, _NEVER)) + 1, _NEVER)
 	state[_SINCE] = since
@@ -76,14 +86,65 @@ func _tick(ctx: DotWeaponContext) -> void:
 
 ## A crosshair gets the cone the last tick computed, so it cannot disagree with the shot.
 func spread_now() -> float:
+	if _shown_stale:
+		var b := _ballistics()
+		if b != null:
+			_refresh_shown(b)
 	return _shown if _shown >= 0.0 else float(state.get(_NOW, 0.0))
+
+
+## The cone the skipped rest ticks would have computed: the settled posture over today's state, rules and tuning.
+func _refresh_shown(b: DotWeaponBallistics) -> void:
+	_shown_stale = false
+	_shown = _spread_for(b, _settled_ctx())
+
+
+## A carrier that stands still on the ground, unhurt and not aiming: what [member DotWeaponArsenal.idle_still] stands for.
+func _settled_ctx() -> DotWeaponContext:
+	if _settled == null:
+		_settled = DotWeaponContext.new()
+	return _settled
+
+
+## Nothing to recover (no bloom shedding, no motion settling, no spread factor moving, no cone kept for a crosshair) and a
+## settled carrier: a [method tick] with the settled posture would change only the ticks since the last use, which this
+## counts, so the rest of it is skipped. Anything else takes the normal tick.
+func rest_tick(still: Callable) -> bool:
+	var b := _ballistics()
+	if b == null:
+		return true
+
+	if state.has(_MOTION):
+		return false
+
+	if b.bloom > 0.0 and float(state.get(_BLOOM, 0.0)) > 0.0:
+		return false
+
+	var rules_object := _rules_object()
+	if rules_object != null and bool(arsenal.get("crosshair_cone")):
+		return false
+
+	if rules_object != null and rules_object.enabled:
+		if not state.has(_FACTOR) or float(state[_FACTOR]) != rules_object.target_factor(_settled_ctx()):
+			return false
+
+	if not bool(still.call()):
+		return false
+
+	state[_SINCE] = mini(int(state.get(_SINCE, _NEVER)) + 1, _NEVER)
+	_shown_stale = true
+	return true
 
 
 ## Needs a context while enabled spread rules follow the carrier, a crosshair follows an idle player
 ## ([member DotWeaponArsenal.crosshair_cone]) or the cone settles, unless the arsenal has an
 ## [member DotWeaponArsenal.idle_posture] to stand in for it.
 func tick_needs_context() -> bool:
-	if (_rules() != null or _cone_tracked() or float(state.get(_MOTION, 0.0)) > 0.0) and not _posture_provided():
+	var wants := float(state.get(_MOTION, 0.0)) > 0.0
+	if not wants:
+		var rules_object := _rules_object()
+		wants = rules_object != null and (rules_object.enabled or bool(arsenal.get("crosshair_cone")))
+	if wants and not _posture_provided():
 		return true
 	return super.tick_needs_context()
 

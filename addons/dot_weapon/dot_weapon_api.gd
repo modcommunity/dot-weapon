@@ -74,5 +74,7 @@ extends RefCounted
 
 ## 23: [member DotWeaponArsenal.idle_posture], a cheap posture-only context so an idle tick with enabled spread rules builds no full one. OLDEST stays 1.
 
-const LEVEL := 23
+## 24: [member DotWeaponArsenal.idle_still] and [method DotWeaponBehaviour.rest_tick], an idle weapon at rest on a settled carrier skips its tick (identical state; assigning a bridge `posture_for` to `idle_posture` sets it). OLDEST stays 1.
+
+const LEVEL := 24
 const OLDEST := 1

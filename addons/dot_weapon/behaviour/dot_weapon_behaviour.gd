@@ -126,6 +126,12 @@ func tick_needs_context() -> bool:
 	return _needs_context == 1
 
 
+## Takes an idle tick without a posture when the weapon is at rest and [param still] says the carrier is; true if taken.
+## The base has state a tick may change, so it says false. See [member DotWeaponArsenal.idle_still].
+func rest_tick(_still: Callable) -> bool:
+	return false
+
+
 ## The spread cone half-angle this weapon would fire with at its last tick, in degrees, for a crosshair.
 func spread_now() -> float:
 	return 0.0

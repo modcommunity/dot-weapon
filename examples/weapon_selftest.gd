@@ -1,8 +1,8 @@
-extends "selftest/sections_accuracy.gd"
+extends "selftest/sections_rest.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 617
+const CHECKS := 630
 
 
 func _ready() -> void:
@@ -33,6 +33,7 @@ func _run() -> void:
 	_test_idle_tick()
 	_test_idle_tick_with_rules()
 	_test_idle_posture_with_rules()
+	_test_idle_rest_skip()
 	_test_tick_rate()
 	_test_snapshot()
 	_test_loadout_bridge()
