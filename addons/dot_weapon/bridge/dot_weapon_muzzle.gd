@@ -47,6 +47,9 @@ static func attach(
 		flash = spare
 		# Warmed under the node it is attached to: moving a built flash re-enters its whole subtree, which costs as much as building it.
 		flash.process_mode = Node.PROCESS_MODE_INHERIT
+		# The spare is taken: start the next one for this size and view now, a node a frame, so a second gun of the same flash size finds its flash built instead of building it inside its first shot.
+		if parent.is_inside_tree():
+			Callable(DotWeaponMuzzle, "warm").call_deferred(parent, category, def, first_person, suppressed)
 		if flash.get_parent() == parent:
 			return flash
 		if flash.get_parent() != null:
