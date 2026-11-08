@@ -30,6 +30,13 @@ var _shown: float = -1.0
 ## Set by [method rest_tick]: the skipped ticks did not compute the cone, [method spread_now] does it when asked.
 var _shown_stale: bool = false
 var _settled: DotWeaponContext = null
+## A context tick that kept no cone in the state defers computing it: the posture is copied here and [method spread_now]
+## (or the next tick without a context, before the state moves) works it out. Most ticks nobody asks.
+var _lazy: DotWeaponContext = null
+var _lazy_pending: bool = false
+var _lazy_motion: float = 0.0
+var _lazy_factor: float = 1.0
+var _lazy_bloom: float = 0.0
 
 
 func _ballistics() -> DotWeaponBallistics:
@@ -42,6 +49,12 @@ func _tick(ctx: DotWeaponContext) -> void:
 	var b := _ballistics()
 	if b == null:
 		return
+
+	if _lazy_pending:
+		if ctx == null:
+			_flush_lazy(b)
+		else:
+			_lazy_pending = false
 
 	if _shown_stale:
 		# A tick with a context overwrites the cone below; one without keeps it, so settle it before the state moves.
@@ -78,14 +91,40 @@ func _tick(ctx: DotWeaponContext) -> void:
 		var held := float(state.get(_FACTOR, 1.0))
 		state[_FACTOR] = target if target >= held else maxf(target, held - rules.recovery_per_tick(running_tick_rate()))
 
-	_shown = _spread_for(b, ctx)
 	# Only state the idle path would also have: a still gun without rules keeps the cone out of it.
 	if _cone_tracked() or held_motion > 0.0 or motion > 0.0:
+		_shown = _spread_for(b, ctx)
 		state[_NOW] = _shown
+		return
+
+	if _lazy == null:
+		_lazy = DotWeaponContext.new()
+	_lazy.speed = ctx.speed
+	_lazy.airborne = ctx.airborne
+	_lazy.crouched = ctx.crouched
+	_lazy.sliding = ctx.sliding
+	_lazy.sprinting = ctx.sprinting
+	_lazy.wall_running = ctx.wall_running
+	_lazy.aiming = ctx.aiming
+	_lazy.hurt_tick = ctx.hurt_tick
+	_lazy.tick = ctx.tick
+	_lazy_motion = float(state.get(_MOTION, 0.0))
+	_lazy_factor = float(state.get(_FACTOR, 1.0))
+	_lazy_bloom = float(state.get(_BLOOM, 0.0))
+	_lazy_pending = true
+
+
+func _flush_lazy(b: DotWeaponBallistics) -> void:
+	_lazy_pending = false
+	_shown = _spread_for(b, _lazy, _lazy_motion, _lazy_factor, _lazy_bloom)
 
 
 ## A crosshair gets the cone the last tick computed, so it cannot disagree with the shot.
 func spread_now() -> float:
+	if _lazy_pending:
+		var lb := _ballistics()
+		if lb != null:
+			_flush_lazy(lb)
 	if _shown_stale:
 		var b := _ballistics()
 		if b != null:
@@ -96,6 +135,7 @@ func spread_now() -> float:
 ## The cone the skipped rest ticks would have computed: the settled posture over today's state, rules and tuning.
 func _refresh_shown(b: DotWeaponBallistics) -> void:
 	_shown_stale = false
+	_lazy_pending = false
 	_shown = _spread_for(b, _settled_ctx())
 
 
@@ -132,6 +172,7 @@ func rest_tick(still: Callable) -> bool:
 		return false
 
 	state[_SINCE] = mini(int(state.get(_SINCE, _NEVER)) + 1, _NEVER)
+	_lazy_pending = false
 	_shown_stale = true
 	return true
 
@@ -199,9 +240,9 @@ func _rules() -> DotWeaponSpreadRules:
 
 ## The cone for this context: posture, settling motion, hip, flinch and the server rules, plus bloom;
 ## aiming then tightens the whole, and `sv_spread_scale` scales it.
-func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
+func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext, held_motion := -1.0, factor := -1.0, bloom_now := -1.0) -> float:
 	var klass := accuracy_class()
-	var motion := maxf(float(state.get(_MOTION, 0.0)), _motion_of(b, ctx))
+	var motion := maxf(float(state.get(_MOTION, 0.0)) if held_motion < 0.0 else held_motion, _motion_of(b, ctx))
 	var out := b.spread_for_motion(motion, ctx.airborne, ctx.crouched)
 	if not ctx.aiming:
 		out += b.accuracy("spread_hip", klass)
@@ -215,8 +256,8 @@ func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
 		out += b.accuracy("spread_flinch", klass) * clampf(left, 0.0, 1.0)
 	var rules := _rules()
 	if rules != null:
-		out = rules.apply(out, float(state.get(_FACTOR, 1.0)))
-	var bloom := minf(float(state.get(_BLOOM, 0.0)), b.bloom_max)
+		out = rules.apply(out, float(state.get(_FACTOR, 1.0)) if factor < 0.0 else factor)
+	var bloom := minf(float(state.get(_BLOOM, 0.0)) if bloom_now < 0.0 else bloom_now, b.bloom_max)
 	if ctx.crouched:
 		bloom *= b.accuracy("bloom_crouch", klass)
 	out += bloom
@@ -311,6 +352,7 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 			)
 		state[_SINCE] = 0
 		state[_NOW] = _spread_for(b, ctx)
+		_lazy_pending = false
 		_shown = float(state[_NOW])
 
 	return out

@@ -132,6 +132,26 @@ func _test_accuracy_settle_flinch() -> void:
 	var _l := a.simulate_tick(_cmd(false), later, null)
 	_check(flinched > settled + 0.5 and absf(a.spread_now() - settled) < 0.001, "a hit flinches the cone and it passes", "%s %s" % [flinched, a.spread_now()])
 	_drop(a)
+	# The cone is worked out when asked: a twin read every tick and one read only now and then agree.
+	var eager := _heavy_arsenal()
+	var lazy := _heavy_arsenal()
+	var keys := ["still", "run", "walk", "still", "sprint", "crouch", "still", "air", "still"]
+	var same := true
+	for i in range(180):
+		var key: String = keys[(i / 9) % keys.size()]
+		var ce := _posture(key, 10 + i)
+		var cl := _posture(key, 10 + i)
+		if i % 40 > 30:
+			ce.hurt_tick = 10 + i - 3
+			cl.hurt_tick = 10 + i - 3
+		var _e := eager.simulate_tick(_cmd(false), ce, null)
+		var _l2 := lazy.simulate_tick(_cmd(false), cl, null)
+		var seen := eager.spread_now()
+		if i % 13 == 0 or i == 179:
+			same = same and absf(seen - lazy.spread_now()) < 0.00001
+	_check(same, "a cone asked for now and then matches one read every tick")
+	_drop(eager)
+	_drop(lazy)
 	_done()
 
 
