@@ -77,5 +77,7 @@ extends RefCounted
 ## 24: [member DotWeaponArsenal.idle_still] and [method DotWeaponBehaviour.rest_tick], an idle weapon at rest on a settled carrier skips its tick (identical state; assigning a bridge `posture_for` to `idle_posture` sets it). OLDEST stays 1.
 
 ## 25: [method DotWeaponDrops.scan] and the cleanup rules [member DotWeaponDropRules.scan_interval] and [member DotWeaponDropRules.evict] (cvars sv_weapon_drop_scan, sv_weapon_drop_evict); lifetime expiry now runs on the scan, defaults are 120 s and a 10 s scan. OLDEST stays 1.
-const LEVEL := 25
+
+## 26: `view/dot_weapon_iron_sight.gd` (by path, no `class_name`): the sight line measured from a gun mesh and the iron sight built on it, UV spread included; zee-dot-weapons and arena-weapons preload it instead of each carrying a copy. OLDEST stays 1.
+const LEVEL := 26
 const OLDEST := 1
