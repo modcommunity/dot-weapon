@@ -79,5 +79,6 @@ extends RefCounted
 ## 25: [method DotWeaponDrops.scan] and the cleanup rules [member DotWeaponDropRules.scan_interval] and [member DotWeaponDropRules.evict] (cvars sv_weapon_drop_scan, sv_weapon_drop_evict); lifetime expiry now runs on the scan, defaults are 120 s and a 10 s scan. OLDEST stays 1.
 
 ## 26: `view/dot_weapon_iron_sight.gd` (by path, no `class_name`): the sight line measured from a gun mesh and the iron sight built on it, UV spread included; zee-dot-weapons and arena-weapons preload it instead of each carrying a copy. OLDEST stays 1.
-const LEVEL := 26
+## 27: `thrown/` [DotWeaponKnives] (a thrown-knife layer: aim-key throw, flight, bounce, kill-and-stick, pickup, client mirror and drawing; rules `enabled`/`speed`/`pickup`/`damage`, `bind_cvars`) and [DotWeaponKnifeWire] (its event body, over a writer/reader the game passes). OLDEST stays 1.
+const LEVEL := 27
 const OLDEST := 1
