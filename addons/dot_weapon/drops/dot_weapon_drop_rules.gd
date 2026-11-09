@@ -67,7 +67,7 @@ var impulse_scale: float = 1.0
 var blast_scale: float = 1.0
 ## Most dropped weapons simulated awake at once; the rest are held still until one sleeps. 0 unlimited.
 var max_active: int = 16
-## Launch speed (m/s) from which a drop uses continuous collision detection; slower drops cannot tunnel a floor and skip its cost. 0 always.
+## Launch speed (m/s) from which a drop uses continuous collision detection; slower drops skip its cost until one tick's travel passes half the box's thinnest side (falling), then it switches on. 0 always.
 var ccd_speed: float = 10.0
 ## Seconds a dropped weapon must lie still before it sleeps.
 var sleep_time: float = 0.6

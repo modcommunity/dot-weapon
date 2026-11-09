@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 160
+const CHECKS := 161
 
 
 func _ready() -> void:
@@ -745,6 +745,11 @@ func _test_bench() -> void:
 	_check(drops.count() == 0, "cycles leave no drop behind")
 	var slow := drops.spawn(state, Vector3.ZERO, Vector3(0, 3, 0), 1)
 	_check(not (drops.get_child(0) as RigidBody3D).continuous_cd, "a slow drop skips continuous collision detection")
+	# a slow launch that gathers speed falling switches it on once a tick's travel passes half the thinnest side
+	var body := drops.get_child(0) as RigidBody3D
+	body.linear_velocity = Vector3(0, -6, 0)
+	drops.tick(1.0 / 64.0)
+	_check(body.continuous_cd, "a drop falling faster than its thin side per tick gets continuous collision detection")
 	drops.mirror_removed(slow)
 	var fast := drops.spawn(state, Vector3.ZERO, Vector3(0, 20, 0), 1)
 	_check((drops.get_child(0) as RigidBody3D).continuous_cd, "a fast throw keeps it")
