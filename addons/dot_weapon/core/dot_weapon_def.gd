@@ -275,6 +275,21 @@ static func selector_modes(fire: Fire, with_burst: bool = false) -> PackedString
 
 
 ## [constant Fire] for "auto", "semi" or "burst"; -1 for anything else.
+## The mode at [param index] of [method allowed_fire_modes] (clamped), without building the list each call:
+## the held gun asks it every tick. Rebuilt when [member fire_modes] or [member fire_mode] change.
+func fire_mode_at(index: int) -> Fire:
+	if _modes_cache.is_empty() or _modes_from_fire != fire_mode or _modes_from != fire_modes:
+		_modes_cache = allowed_fire_modes()
+		_modes_from = fire_modes.duplicate()
+		_modes_from_fire = fire_mode
+	return _modes_cache[clampi(index, 0, _modes_cache.size() - 1)]
+
+
+var _modes_cache: Array[Fire] = []
+var _modes_from: PackedStringArray = PackedStringArray()
+var _modes_from_fire: int = -1
+
+
 static func fire_mode_named(n: String) -> int:
 	match n.to_lower():
 		"auto":

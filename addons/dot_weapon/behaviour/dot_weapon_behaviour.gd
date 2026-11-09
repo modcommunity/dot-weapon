@@ -201,7 +201,7 @@ func _reloaded(_rounds: int) -> void:
 func running_tick_rate() -> int:
 	if arsenal == null:
 		return 0
-	var v: Variant = arsenal.get("tick_rate")
+	var v: Variant = arsenal.get(&"tick_rate")
 	return int(v) if v is int else 0
 
 

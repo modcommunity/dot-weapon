@@ -45,8 +45,7 @@ func id() -> StringName:
 
 ## The fire mode in effect: the selected one among the definition's allowed modes.
 func fire_mode() -> DotWeaponDef.Fire:
-	var modes := def.allowed_fire_modes()
-	return modes[clampi(fire_mode_index, 0, modes.size() - 1)]
+	return def.fire_mode_at(fire_mode_index)
 
 
 ## Whether the magazine cannot pay for another use.

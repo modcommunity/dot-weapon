@@ -44,7 +44,7 @@ var mult_air: float = 1.5
 
 ## The rules an arsenal carries, or null when absent or off.
 static func of(arsenal: Object) -> DotWeaponRecoilRules:
-	var rules := arsenal.get("recoil_rules") as DotWeaponRecoilRules if arsenal != null else null
+	var rules := arsenal.get(&"recoil_rules") as DotWeaponRecoilRules if arsenal != null else null
 	return rules if rules != null and rules.enabled else null
 
 

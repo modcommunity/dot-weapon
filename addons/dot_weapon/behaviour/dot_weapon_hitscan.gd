@@ -24,6 +24,8 @@ const _MOTION := &"motion"
 const _NEVER := 1 << 20
 
 var _class_key: String = ""
+var _class_id: StringName = &""
+var _class_key_set: bool = false
 var _class: String = ""
 ## The cone the last context tick or use computed, for display; -1 before any.
 var _shown: float = -1.0
@@ -121,7 +123,7 @@ func rest_tick(still: Callable) -> bool:
 		return false
 
 	var rules_object := _rules_object()
-	if rules_object != null and bool(arsenal.get("crosshair_cone")):
+	if rules_object != null and bool(arsenal.get(&"crosshair_cone")):
 		return false
 
 	if rules_object != null and rules_object.enabled:
@@ -143,23 +145,28 @@ func tick_needs_context() -> bool:
 	var wants := float(state.get(_MOTION, 0.0)) > 0.0
 	if not wants:
 		var rules_object := _rules_object()
-		wants = rules_object != null and (rules_object.enabled or bool(arsenal.get("crosshair_cone")))
+		wants = rules_object != null and (rules_object.enabled or bool(arsenal.get(&"crosshair_cone")))
 	if wants and not _posture_provided():
 		return true
 	return super.tick_needs_context()
 
 
 func _posture_provided() -> bool:
-	return arsenal != null and (arsenal.get("idle_posture") as Callable).is_valid()
+	return arsenal != null and (arsenal.get(&"idle_posture") as Callable).is_valid()
 
 
 ## The accuracy class of this weapon (see [DotWeaponAccuracyClass]).
 func accuracy_class() -> String:
 	var b := _ballistics()
-	var key := "%s|%s" % [b.accuracy_class if b != null else "", def.id if def != null else &""]
-	if key != _class_key:
-		_class_key = key
-		_class = DotWeaponAccuracyClass.resolve(b.accuracy_class if b != null else "", def.tags if def != null else [], def.id if def != null else &"")
+	var explicit := b.accuracy_class if b != null else ""
+	var id: StringName = def.id if def != null else &""
+	# Compared field by field, not as one formatted key: every spread read asks this, every tick.
+	if _class_key_set and explicit == _class_key and id == _class_id:
+		return _class
+	_class_key_set = true
+	_class_key = explicit
+	_class_id = id
+	_class = DotWeaponAccuracyClass.resolve(explicit, def.tags if def != null else [], id)
 	return _class
 
 
@@ -185,11 +192,11 @@ func _motion_of(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
 
 
 func _cone_tracked() -> bool:
-	return _rules_object() != null and bool(arsenal.get("crosshair_cone"))
+	return _rules_object() != null and bool(arsenal.get(&"crosshair_cone"))
 
 
 func _rules_object() -> DotWeaponSpreadRules:
-	return arsenal.get("spread_rules") as DotWeaponSpreadRules if arsenal != null else null
+	return arsenal.get(&"spread_rules") as DotWeaponSpreadRules if arsenal != null else null
 
 
 func _rules() -> DotWeaponSpreadRules:
@@ -283,7 +290,7 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 
 	# A simulated bullet is flown by DotWeaponBulletBridge; the shot is deferred so dot-combat only
 	# records its endpoint. Off (the default) this line never runs and the shot is unchanged.
-	if DotWeaponBallisticsRules.simulates(arsenal.get("ballistics_rules") as DotWeaponBallisticsRules if arsenal != null else null, b):
+	if DotWeaponBallisticsRules.simulates(arsenal.get(&"ballistics_rules") as DotWeaponBallisticsRules if arsenal != null else null, b):
 		shot.deferred = true
 		var round_id: StringName = arsenal.call("ammo_of", def.id) if arsenal.has_method("ammo_of") else &""
 		if round_id != &"":
@@ -301,7 +308,7 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 	if b != null:
 		if rr == null:
 			var scale := recoil_posture(b, ctx)
-			var flat := arsenal.get("recoil_rules") as DotWeaponRecoilRules if arsenal != null else null
+			var flat := arsenal.get(&"recoil_rules") as DotWeaponRecoilRules if arsenal != null else null
 			if flat != null:
 				scale *= flat.scale
 			out.recoil = Vector2(b.recoil_pitch, b.recoil_yaw) * scale
