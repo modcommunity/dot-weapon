@@ -179,3 +179,18 @@ func _test_idle_rest_skip() -> void:
 	_drop(walker)
 
 	_done()
+
+
+func _test_reload_shots() -> void:
+	_section("the reload review helper spreads fractions and lays a sheet out")
+	var shots := preload("../../addons/dot_weapon/view/dot_weapon_reload_shots.gd")
+	var f: PackedFloat64Array = shots.fractions(3)
+	_check(f.size() == 3 and is_equal_approx(f[0], 0.25) and is_equal_approx(f[2], 0.75), "three fractions are a quarter apart, none at an end", str(f))
+	_check(shots.fractions(0).is_empty(), "no frames, no fractions")
+	var tiles: Array[Image] = []
+	for i in 5:
+		tiles.append(Image.create_empty(64, 36, false, Image.FORMAT_RGBA8))
+	var sheet: Image = shots.sheet(tiles, 4, Vector2i(32, 18))
+	_check(sheet != null and sheet.get_size() == Vector2i(128, 36), "five tiles at four across make two rows", str(sheet.get_size()) if sheet != null else "null")
+	_check(shots.sheet([] as Array[Image]) == null, "no tiles, no sheet")
+	_done()
