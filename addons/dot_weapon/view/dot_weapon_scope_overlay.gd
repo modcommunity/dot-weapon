@@ -272,15 +272,18 @@ func _draw_corners(centre: Vector2, radius: float, colour: Color) -> void:
 
 
 ## Takes the scope's look from [param view] for this frame: nothing for a weapon without a scope.
+## The view model is duck-typed: one without a `scope_mode` or `scope_clear()` (an older
+## ZeeViewModel) keeps the lens look and no walk-clear.
 func follow(view: Object) -> void:
 	fraction = view.scope_fraction()
 	lens_scale = view.scope_lens_scale()
-	mode = view.scope_mode
-	clear = view.scope_clear()
+	mode = view.scope_mode if "scope_mode" in view else mode
+	clear = view.scope_clear() if view.has_method(&"scope_clear") else 0.0
 	lens_zoom = view.aim_fov_scale()
-	for key: Variant in view.scope_style():
+	var style: Dictionary = view.scope_style()
+	for key: Variant in style:
 		if key is String and key in self:
-			set(key, view.scope_style()[key])
+			set(key, style[key])
 
 
 func describe() -> Dictionary:
