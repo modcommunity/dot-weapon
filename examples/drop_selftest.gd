@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 151
+const CHECKS := 160
 
 
 func _ready() -> void:
@@ -17,6 +17,7 @@ func _run() -> void:
 	_test_pickup_rules()
 	_test_auto_pickup_gate()
 	await _test_lifetime_and_cap()
+	await _test_cleanup_scan()
 	await _test_settle_and_mirror()
 	_test_hold_and_ammo()
 	_test_e_key_rules()
@@ -60,16 +61,18 @@ func _drops(authority: bool = true) -> DotWeaponDrops:
 func _test_rules() -> void:
 	_section("rules and class overrides")
 	var r := DotWeaponDropRules.new()
-	_check(r.lifetime == 60.0 and r.max_count == 32, "defaults: 60 s, 32 on the map")
+	_check(r.lifetime == 120.0 and r.max_count == 32 and r.scan_interval == 10.0 and r.evict == 1, "defaults: 120 s, 32 on the map, 10 s scan, evict idle")
 	var c := r.resolve(_ClassStub.new())
 	_check(c.throw_force == 12.0, "a class sets the throw force")
-	_check(c.lifetime == 60.0 and c.pickup_radius == r.pickup_radius, "and a negative field inherits the rule")
+	_check(c.lifetime == 120.0 and c.pickup_radius == r.pickup_radius, "and a negative field inherits the rule")
 	_check(not c.on_death and r.on_death, "a class turns the death drop off without touching the rules")
 	_check(r.set_cvar("sv_weapon_drop_time", "0") and r.lifetime == 0.0, "sv_weapon_drop_time 0 means never")
 	_check(r.set_cvar("sv_weapon_drop_max", "9999") and r.max_count == 512, "sv_weapon_drop_max clamps")
+	_check(r.set_cvar("sv_weapon_drop_evict", "2") and r.evict == 2 and r.set_cvar("sv_weapon_drop_evict", "9") and r.evict == 2, "sv_weapon_drop_evict is 0..2")
+	_check(r.set_cvar("sv_weapon_drop_scan", "0") and r.scan_interval == 0.0, "sv_weapon_drop_scan 0 scans every tick")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 27, "twenty-seven cvars are described")
+	_check(r.cvar_specs().size() == 29, "twenty-nine cvars are described")
 	_done()
 
 
@@ -156,6 +159,54 @@ func _test_throw_and_swap() -> void:
 	_done()
 
 
+func _test_cleanup_scan() -> void:
+	_section("cleanup scan interval and eviction priority")
+	var drops := _drops()
+	var r := DotWeaponDropRules.new()
+	r.lifetime = 5.0
+	r.max_count = 0
+	r.scan_interval = 10.0
+	drops.rules = r
+	var st := {"id": &"rifle", "magazine": 1, "reserve": 0}
+	var a := drops.spawn(st, Vector3(0, 5, 0), Vector3.ZERO, 1)
+	drops.tick(0.1)
+	var _first := drops.scan()
+	drops.tick(6.0)
+	_check(drops.has_drop(a), "past its lifetime but before the next scan it still lies")
+	drops.tick(5.0)
+	_check(not drops.has_drop(a), "the scan removes it")
+	r.lifetime = 0.0
+	r.max_count = 3
+	r.evict = DotWeaponDropRules.EVICT_OLDEST
+	var ids: Array[int] = []
+	for i in range(3):
+		ids.append(drops.spawn(st, Vector3(i, 5, 0), Vector3.ZERO, 1))
+	drops.tick(1.0)
+	r.max_count = 2
+	_check(drops.count() == 3, "lowering the cap waits for the scan")
+	_check(drops.scan() == 1 and not drops.has_drop(ids[0]), "oldest evicts the first spawned")
+	r.evict = DotWeaponDropRules.EVICT_IDLE
+	r.max_count = 3
+	var late := drops.spawn(st, Vector3(9, 5, 0), Vector3.ZERO, 1)
+	for id: int in [ids[1], ids[2], late]:
+		var body: RigidBody3D = drops._entries[id]["body"]
+		body.linear_velocity = Vector3.ZERO
+		body.angular_velocity = Vector3.ZERO
+	drops.tick(2.0)
+	var _h := drops.hit(ids[1], Vector3(1, 5, 0), Vector3.UP, 1.0)
+	r.max_count = 2
+	var _n := drops.scan()
+	_check(drops.has_drop(ids[1]) and not drops.has_drop(ids[2]), "idle evicts the one untouched longest, not the oldest")
+	r.evict = DotWeaponDropRules.EVICT_RANDOM
+	r.max_count = 1
+	_check(drops.scan() == 1 and drops.count() == 1, "random still holds the cap")
+	r.max_count = 0
+	r.lifetime = 0.0
+	drops.tick(1000.0)
+	_check(drops.count() == 1 and late > 0, "cap 0 and lifetime 0 disable the cleanup")
+	_done()
+
+
 func _test_lifetime_and_cap() -> void:
 	_section("lifetime and the cap")
 	var drops := _drops()
@@ -164,6 +215,8 @@ func _test_lifetime_and_cap() -> void:
 	var r := DotWeaponDropRules.new()
 	r.lifetime = 2.0
 	r.max_count = 3
+	r.scan_interval = 0.0
+	r.evict = DotWeaponDropRules.EVICT_OLDEST
 	drops.rules = r
 	var ids: Array[int] = []
 	for i in range(4):
@@ -217,6 +270,7 @@ func _test_settle_and_mirror() -> void:
 	_check(s.size() == 1 and s[0]["rest"] and absf((s[0]["at"] as Transform3D).origin.y) < 0.5, "resting on the floor")
 	_check(is_equal_approx(client.snapshot()[0]["at"].origin.x, s[0]["at"].origin.x), "and the client snapped to the same place")
 	server.rules.lifetime = 0.5
+	server.rules.scan_interval = 0.0
 	var _later := server.spawn({"id": &"pistol", "magazine": 1, "reserve": 0}, Vector3(3, 1, 0), Vector3.ZERO, 1, server.rules)
 	for i in range(60):
 		await get_tree().physics_frame

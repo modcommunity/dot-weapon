@@ -13,6 +13,11 @@ const CLASS_KEYS := {
 	"drop_key_hold": "key_hold", "drop_throw_force": "throw_force", "drop_throw_up": "throw_up", "drop_pickup_radius": "pickup_radius", "drop_use_radius": "use_radius",
 }
 
+## Eviction picks for [member evict].
+const EVICT_OLDEST := 0
+const EVICT_IDLE := 1
+const EVICT_RANDOM := 2
+
 signal changed
 
 ## A weapon may be dropped (key and death) at all.
@@ -21,10 +26,15 @@ var enabled: bool = true
 var on_death: bool = true
 ## The drop key throws the weapon in hand.
 var key_enabled: bool = true
-## Seconds a weapon lies before it vanishes; 0 never.
-var lifetime: float = 60.0
-## Most dropped weapons on the map; the oldest goes first. 0 is unlimited.
+## Seconds a weapon lies before the cleanup scan removes it; 0 never.
+var lifetime: float = 120.0
+## Most dropped weapons on the map; the cleanup removes the [member evict] pick first. 0 is unlimited.
 var max_count: int = 32
+## Seconds between cleanup scans (lifetime expiry and the cap); 0 scans every tick.
+var scan_interval: float = 10.0
+## Which weapon goes first when the map holds more than [member max_count]: EVICT_OLDEST (spawn order),
+## EVICT_IDLE (longest without being touched or moved: shot, blasted, pushed, ammo taken, or still rolling) or EVICT_RANDOM.
+var evict: int = 1
 ## Metres per second along the aim.
 var throw_force: float = 6.0
 ## Extra upward metres per second, so a throw arcs.
@@ -79,8 +89,10 @@ const _SPECS := [
 	["sv_weapon_drop_death", "on_death", "bool", "1 drops a dead player's weapon"],
 	["sv_weapon_drop_key", "key_enabled", "bool", "1 lets the drop key throw the weapon in hand"],
 	["sv_weapon_drop_key_hold", "key_hold", "float:0:5", "Seconds the drop key is held to throw the weapon in hand; 0 throws on the press"],
-	["sv_weapon_drop_time", "lifetime", "float:0:3600", "Seconds a dropped weapon lies before it vanishes; 0 never"],
-	["sv_weapon_drop_max", "max_count", "int:0:512", "Most dropped weapons on the map, oldest removed first; 0 unlimited"],
+	["sv_weapon_drop_time", "lifetime", "float:0:3600", "Seconds a dropped weapon lies before the cleanup removes it; 0 never"],
+	["sv_weapon_drop_max", "max_count", "int:0:512", "Most dropped weapons on the map; the cleanup removes the sv_weapon_drop_evict pick first; 0 unlimited"],
+	["sv_weapon_drop_scan", "scan_interval", "float:0:600", "Seconds between cleanup scans of lifetime and the cap; 0 scans every tick"],
+	["sv_weapon_drop_evict", "evict", "int:0:2", "Which weapon the cap removes first: 0 oldest by spawn time, 1 least recently touched or moved, 2 random"],
 	["sv_weapon_drop_force", "throw_force", "float:0:40", "Throw speed along the aim"],
 	["sv_weapon_drop_up", "throw_up", "float:0:20", "Extra upward throw speed"],
 	["sv_weapon_drop_radius", "pickup_radius", "float:0.2:6", "Distance within which an empty slot takes a dropped weapon"],

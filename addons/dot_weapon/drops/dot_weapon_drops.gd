@@ -50,6 +50,9 @@ var _parked: Dictionary = {}
 var _material: PhysicsMaterial = null
 var _next_id: int = 1
 var _order: int = 0
+## Seconds this layer has been ticked; stamps `touched`.
+var _clock: float = 0.0
+var _scan_left: float = 0.0
 
 
 func count() -> int:
@@ -108,7 +111,8 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 	var at := Transform3D(basis, origin)
 	_make(id, state, at, velocity, owner_id, r.lifetime, r.pickup_delay, _team(owner_id))
 	dropped.emit(id, state, at, velocity, owner_id)
-	_enforce_cap(r.max_count)
+	# A burst of deaths is held to the cap at once; lifetime waits for the scan.
+	_enforce_cap(r.max_count, id)
 	_enforce_active(id)
 	return id
 
@@ -303,6 +307,7 @@ func _replace_same(arsenal: Object, best: int, def: Object, taker_id: int) -> in
 		state["fm"] = held_fm
 	else:
 		state.erase("fm")
+	_entries[best]["touched"] = _clock
 	ammo_changed.emit(best, state)
 	return best
 
@@ -325,6 +330,7 @@ func _unload(arsenal: Object, best: int, def: Object, taker_id: int) -> int:
 	var from_reserve := mini(added, reserve)
 	state["reserve"] = reserve - from_reserve
 	state["magazine"] = mag - (added - from_reserve)
+	_entries[best]["touched"] = _clock
 	ammo_changed.emit(best, state)
 	return best
 
@@ -337,6 +343,7 @@ func clear() -> void:
 
 ## Ages, settles and expires the drops. Call every physics frame (the node does when added to a tree).
 func tick(delta: float) -> void:
+	_clock += delta
 	for id: int in _entries.keys():
 		var e: Dictionary = _entries[id]
 		e["delay"] = maxf(float(e["delay"]) - delta, 0.0)
@@ -344,14 +351,12 @@ func tick(delta: float) -> void:
 		var body: RigidBody3D = e["body"]
 		if not is_authority:
 			continue
-		if float(e["life"]) > 0.0 and float(e["age"]) >= float(e["life"]):
-			_remove(id, 0)
-			continue
 		if not bool(e["rest"]):
 			if body.linear_velocity.length() < SETTLE_SPEED and body.angular_velocity.length() < SETTLE_SPEED * 2.0:
 				e["still"] = float(e["still"]) + delta
 			else:
 				e["still"] = 0.0
+				e["touched"] = _clock
 			e["moving"] = float(e.get("moving", 0.0)) + delta
 			if float(e["still"]) >= rules.sleep_time and rules.lie_flat and _topple(e, body):
 				e["still"] = 0.0
@@ -359,6 +364,11 @@ func tick(delta: float) -> void:
 				_rest(id, e, body)
 		elif body.global_position.y < -200.0:
 			_remove(id, 0)
+	if is_authority:
+		_scan_left = minf(_scan_left, rules.scan_interval) - delta
+		if _scan_left <= 0.0:
+			_scan_left = rules.scan_interval
+			scan()
 
 
 ## Nudges a drop propped on end or edge (its long axis steeper than about 20 degrees) so it falls over before it sleeps.
@@ -556,6 +566,7 @@ func active_count() -> int:
 
 func _wake(id: int) -> void:
 	var e: Dictionary = _entries[id]
+	e["touched"] = _clock
 	var body: RigidBody3D = e["body"]
 	if bool(e["rest"]):
 		e["rest"] = false
@@ -635,7 +646,7 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
 	_order += 1
 	_entries[id] = {"body": body, "state": state, "age": 0.0, "life": life, "delay": delay,
-		"still": 0.0, "rest": false, "size": size, "owner": owner_id, "order": _order, "team": team}
+		"still": 0.0, "rest": false, "size": size, "owner": owner_id, "order": _order, "team": team, "touched": _clock}
 	DotLog.debug(CHANNEL, "weapon dropped", {"id": id, "weapon": String(state.get("id", &""))})
 
 
@@ -752,15 +763,48 @@ func _bounds(root: Node3D) -> AABB:
 	return out
 
 
-func _enforce_cap(cap: int) -> void:
+## One cleanup pass (server): removes every drop past its lifetime, then the [member DotWeaponDropRules.evict] picks until the cap holds.
+## [method tick] runs it every [member DotWeaponDropRules.scan_interval]; a game may call it too. Returns how many it removed.
+func scan() -> int:
+	if not is_authority:
+		return 0
+	var gone := 0
+	for id: int in _entries.keys():
+		var e: Dictionary = _entries[id]
+		if float(e["life"]) > 0.0 and float(e["age"]) >= float(e["life"]):
+			_remove(id, 0)
+			gone += 1
+	return gone + _enforce_cap(rules.max_count)
+
+
+func _enforce_cap(cap: int, keep: int = 0) -> int:
+	var gone := 0
 	while cap > 0 and _entries.size() > cap:
-		var oldest := 0
-		var order := 1 << 60
-		for id: int in _entries:
-			if int(_entries[id]["order"]) < order:
-				order = int(_entries[id]["order"])
-				oldest = id
-		_remove(oldest, 0)
+		var victim := _victim(keep)
+		if victim == 0:
+			break
+		_remove(victim, 0)
+		gone += 1
+	return gone
+
+
+## The drop the cap removes next under [member DotWeaponDropRules.evict], never [param keep]; 0 when there is none.
+func _victim(keep: int) -> int:
+	var ids: Array = _entries.keys()
+	ids.erase(keep)
+	if ids.is_empty():
+		return 0
+	if rules.evict == DotWeaponDropRules.EVICT_RANDOM:
+		return int(ids[randi() % ids.size()])
+	var best := 0
+	var key := INF
+	for id: int in ids:
+		var e: Dictionary = _entries[id]
+		var k := float(e["order"]) if rules.evict == DotWeaponDropRules.EVICT_OLDEST else float(e["touched"]) + float(e["order"]) * 1e-6
+		if k < key:
+			key = k
+			best = id
+	return best
 
 
 func _remove(id: int, taker_id: int, tell: bool = true) -> void:
