@@ -189,6 +189,13 @@ static func check_classes(classes: Dictionary) -> PackedStringArray:
 			if count(reload) == 0 or count(reload_name(sound_class, &"in")) == 0 or count(&"dry") == 0:
 				bad[sound_class] = true
 				out.append("%s: class %s has no %s or dry sound" % [id, sound_class, reload])
+				continue
+			# Each class has its own reload set (not the generic fallback shared by every gun); a shotgun loads shell by shell.
+			if sound_class != &"shotgun":
+				for stage in [&"out", &"in"]:
+					if reload_name(sound_class, stage) == StringName("reload_" + String(stage)):
+						bad[sound_class] = true
+						out.append("%s: class %s reload %s falls back to the generic set" % [id, sound_class, stage])
 	return out
 
 
