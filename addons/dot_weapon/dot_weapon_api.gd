@@ -81,5 +81,6 @@ extends RefCounted
 ## 26: `view/dot_weapon_iron_sight.gd` (by path, no `class_name`): the sight line measured from a gun mesh and the iron sight built on it, UV spread included; zee-dot-weapons and arena-weapons preload it instead of each carrying a copy. OLDEST stays 1.
 ## 27: `thrown/` [DotWeaponKnives] (a thrown-knife layer: aim-key throw, flight, bounce, kill-and-stick, pickup, client mirror and drawing; rules `enabled`/`speed`/`pickup`/`damage`, `bind_cvars`) and [DotWeaponKnifeWire] (its event body, over a writer/reader the game passes). OLDEST stays 1.
 ## 28: `view/dot_weapon_scope_overlay.gd` and `view/dot_weapon_scope_prefs.gd` (by path, no `class_name`): the scope overlay (circle, reticle, lens and full-screen modes, walk-clear), duck-typed on the view model, and the cl_scope_mode and cl_scope_walk_clear cvars with their statics; arena-weapons and zee-dot-weapons subclass it. OLDEST stays 1.
-const LEVEL := 28
+## 29: `view/dot_weapon_scope_view.gd` (by path, no `class_name`): the scope-view rules (resolve the player's mode against a server pin, lens test, camera FOV scale, walking clear) that arena-weapons and zee-dot-weapons view models call instead of each mirroring them. OLDEST stays 1.
+const LEVEL := 29
 const OLDEST := 1
