@@ -349,13 +349,14 @@ func tick(delta: float) -> void:
 		e["delay"] = maxf(float(e["delay"]) - delta, 0.0)
 		e["age"] = float(e["age"]) + delta
 		var body: RigidBody3D = e["body"]
+		# A slow launch still gathers speed falling; switch CCD on once one tick's travel passes half the box's thinnest side.
+		# Mirrors fall on their own too, so this runs on the client as well.
+		if not bool(e["rest"]) and not body.continuous_cd:
+			var thin: float = minf(minf((e["size"] as Vector3).x, (e["size"] as Vector3).y), (e["size"] as Vector3).z)
+			body.continuous_cd = body.linear_velocity.length() * delta > thin * 0.5
 		if not is_authority:
 			continue
 		if not bool(e["rest"]):
-			# A slow launch still gathers speed falling; switch CCD on once one tick's travel passes half the box's thinnest side.
-			if not body.continuous_cd:
-				var thin: float = minf(minf((e["size"] as Vector3).x, (e["size"] as Vector3).y), (e["size"] as Vector3).z)
-				body.continuous_cd = body.linear_velocity.length() * delta > thin * 0.5
 			if body.linear_velocity.length() < SETTLE_SPEED and body.angular_velocity.length() < SETTLE_SPEED * 2.0:
 				e["still"] = float(e["still"]) + delta
 			else:
