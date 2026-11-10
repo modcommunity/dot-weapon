@@ -28,6 +28,8 @@ static func schema() -> Array:
 		f.call("ricochet_materials", "string", ""),
 		f.call("ricochet_angle", "float", 0.0, {"min": 0.0, "max": 90.0}),
 		f.call("ricochet_keep", "float", 0.6, {"min": 0.0, "max": 1.0}),
+		f.call("speed", "float", 0.0, {"min": 0.0, "max": 5000.0}),
+		f.call("reference_speed", "float", 0.0, {"min": 0.0, "max": 5000.0}),
 		f.call("guns", "string", ""),
 		f.call("default", "bool", false),
 	]

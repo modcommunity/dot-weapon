@@ -374,6 +374,12 @@ func _ammo_profile_files() -> void:
 	var pen: DotPenetration = belt.make_penetration() if belt != null else null
 	_check(pen != null and pen.ricochets(&"metal", 10.0) and not pen.ricochets(&"metal", 20.0) and not pen.ricochets(&"glass", 10.0), "ricochet fields reach the DotPenetration")
 	_check(pen != null and is_equal_approx(pen.ricochet_keep, 0.4), "and the kept share")
+	_check(pen != null and pen.speed == 0.0 and pen.reference_speed == 0.0 and is_equal_approx(pen.speed_factor(0.5), 1.0), "speed fields default to off")
+	var fast := DotWeaponAmmoType.from_flat(&"fast", {"penetration": 1.0, "speed": 800.0, "reference_speed": 400.0})
+	var fpen := fast.make_penetration()
+	_check(fpen != null and is_equal_approx(fpen.speed, 800.0) and is_equal_approx(fpen.reference_speed, 400.0), "speed and reference_speed reach the DotPenetration")
+	_check(fpen != null and is_equal_approx(fpen.speed_factor(1.0), 0.5), "a round at twice the reference speed pays half")
+	_check(DotWeaponAmmoType.from_flat(&"neg", {"speed": -5.0}).speed == 0.0, "a negative speed clamps to off")
 	set.clear_cache()
 
 
@@ -384,7 +390,7 @@ func _test_ammo_hitzones() -> void:
 	types.add(ap)
 	types.add(DotWeaponAmmoType.from_flat(&"ball", {}))
 	_check(ap.armour_pierce == 1.0 and types.ids() == [&"ap", &"ball"], "pierce clamps, ids sorted")
-	_check(DotWeaponAmmoTypes.schema().size() == 18 and DotWeaponAmmoTypes.profile_schemas().has("ammo"), "ammo is a profile kind")
+	_check(DotWeaponAmmoTypes.schema().size() == 20 and DotWeaponAmmoTypes.profile_schemas().has("ammo"), "ammo is a profile kind")
 	_check(types.get_type(&"nope") == null, "an unknown round is null")
 	var base := DotWeaponBallistics.new()
 	base.muzzle_velocity = 600.0
