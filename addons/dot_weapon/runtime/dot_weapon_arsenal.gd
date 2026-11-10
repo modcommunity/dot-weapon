@@ -295,7 +295,6 @@ func simulate_tick(
 	if not _ready_for_use:
 		return DotWeaponOutcome.nothing("setup() has not been called.")
 
-	ctx.tick = ctx.tick
 	ctx.replayed = _replaying
 	ctx.authority = authority
 	var sprint_blocked := ctx.sprinting and ctx.sprint_blocks_aim
@@ -341,6 +340,25 @@ func is_idle_for(command: DotWeaponCommand, previous: DotWeaponCommand) -> bool:
 
 	var slot := current()
 	return slot != null and not slot.behaviour.tick_needs_context()
+
+
+## Whether [method simulate_tick] with this command and context reads nothing of the context's aim: the attack is
+## held on a weapon inside its cadence, with no switch, charge, burst or release that a behaviour would be handed it for.
+## A rig asks it before working out where the barrel points, which costs physics rays on a tick no shot can leave.
+func is_cooling_for(command: DotWeaponCommand, ctx: DotWeaponContext) -> bool:
+	if not _ready_for_use or disabled or _switch_done_tick >= 0 or ctx.tick >= _next_use_tick:
+		return false
+
+	var wanted := DotWeaponCommand.BUTTON_ATTACK | DotWeaponCommand.BUTTON_FIRE_MODE
+	if (command.buttons & wanted) != DotWeaponCommand.BUTTON_ATTACK or (ctx.sprinting and ctx.sprint_blocks_fire):
+		return false
+
+	var slot := current()
+	if slot == null or slot.behaviour.tick_needs_context():
+		return false
+
+	var mode := slot.fire_mode()
+	return mode != DotWeaponDef.Fire.CHARGE and mode != DotWeaponDef.Fire.BURST
 
 
 ## The spread cone half-angle the weapon in hand would fire with now, for a crosshair; 0 with none.

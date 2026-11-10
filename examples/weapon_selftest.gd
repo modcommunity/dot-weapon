@@ -2,7 +2,7 @@ extends "selftest/sections_rest.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 644
+const CHECKS := 647
 
 
 func _ready() -> void:
@@ -472,6 +472,27 @@ func _test_cadence() -> void:
 		str(fired[1].shots[0].tick - fired[0].shots[0].tick)
 	)
 
+	# Inside the cadence a held trigger reads no aim: every tick is_cooling_for says so is a tick without a use.
+	var cool := _arsenal()
+	cool.give(&"rifle")
+	var cooling := 0
+	var used_while_cooling := 0
+	var before: DotWeaponCommand = null
+	for t in 60:
+		var c := _cmd(true)
+		var ctx := _ctx(t)
+		var said := cool.is_cooling_for(c, ctx)
+		var o := cool.simulate_tick(c, ctx, before)
+		before = c
+		if said:
+			cooling += 1
+			if o.used:
+				used_while_cooling += 1
+	_check(cooling == 50 and used_while_cooling == 0, "a held automatic is cooling on the ticks between its uses, and only there", "%d cooling, %d used" % [cooling, used_while_cooling])
+	_check(not cool.is_cooling_for(_cmd(false), _ctx(61)), "a released trigger is not cooling: its release may read the aim")
+	_check(not burst.is_cooling_for(_cmd(true), _ctx(11)), "a burst is never cooling: its shots leave between presses")
+
+	_drop(cool)
 	_drop(auto)
 	_drop(semi)
 	_drop(burst)

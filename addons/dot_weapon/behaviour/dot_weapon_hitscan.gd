@@ -64,25 +64,28 @@ func _tick(ctx: DotWeaponContext) -> void:
 
 	var target_motion := _motion_of(b, ctx)
 	var held_motion := float(state.get(_MOTION, 0.0))
-	var settle := _class_ticks(b.settle_ticks, "settle")
 	var motion := target_motion
-	if target_motion < held_motion and settle > 0:
-		motion = maxf(target_motion, held_motion - 1.0 / float(settle))
+	if target_motion < held_motion:
+		var settle := _class_ticks(b.settle_ticks, "settle")
+		if settle > 0:
+			motion = maxf(target_motion, held_motion - 1.0 / float(settle))
 	# A still carrier leaves no key, so this tick's state equals the idle path's (which never sees a ctx).
 	if motion > 0.0:
 		state[_MOTION] = motion
 	else:
 		state.erase(_MOTION)
 
-	var rules := _rules()
+	# Read from the arsenal once a tick: the factor, the cone and the tracking below all ask for the same rules.
+	var rules_object := _rules_object()
+	var rules := rules_object if rules_object != null and rules_object.enabled else null
 	if rules != null:
 		var target := rules.target_factor(ctx)
 		var held := float(state.get(_FACTOR, 1.0))
 		state[_FACTOR] = target if target >= held else maxf(target, held - rules.recovery_per_tick(running_tick_rate()))
 
-	_shown = _spread_for(b, ctx)
+	_shown = _spread_with(b, ctx, rules)
 	# Only state the idle path would also have: a still gun without rules keeps the cone out of it.
-	if _cone_tracked() or held_motion > 0.0 or motion > 0.0:
+	if (rules_object != null and bool(arsenal.get(&"crosshair_cone"))) or held_motion > 0.0 or motion > 0.0:
 		state[_NOW] = _shown
 
 
@@ -207,6 +210,11 @@ func _rules() -> DotWeaponSpreadRules:
 ## The cone for this context: posture, settling motion, hip, flinch and the server rules, plus bloom;
 ## aiming then tightens the whole, and `sv_spread_scale` scales it.
 func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
+	return _spread_with(b, ctx, _rules())
+
+
+## [method _spread_for] under [param rules] (null for none), for a caller that already holds them.
+func _spread_with(b: DotWeaponBallistics, ctx: DotWeaponContext, rules: DotWeaponSpreadRules) -> float:
 	var klass := accuracy_class()
 	var motion := maxf(float(state.get(_MOTION, 0.0)), _motion_of(b, ctx))
 	var out := b.spread_for_motion(motion, ctx.airborne, ctx.crouched)
@@ -220,7 +228,6 @@ func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
 		var rate := float(maxi(running_tick_rate(), 1)) if running_tick_rate() > 0 else 64.0
 		var left := 1.0 - float(ctx.tick - ctx.hurt_tick) / (DotWeaponAccuracyClass.FLINCH_SEC * rate)
 		out += b.accuracy("spread_flinch", klass) * clampf(left, 0.0, 1.0)
-	var rules := _rules()
 	if rules != null:
 		out = rules.apply(out, float(state.get(_FACTOR, 1.0)))
 	var bloom := minf(float(state.get(_BLOOM, 0.0)), b.bloom_max)
