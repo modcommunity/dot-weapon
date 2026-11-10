@@ -34,6 +34,10 @@ var ricochet_materials: PackedStringArray = PackedStringArray()
 var ricochet_angle: float = 0.0
 ## Share of power a bounce keeps.
 var ricochet_keep: float = 0.6
+## Muzzle speed in m/s for the penetration velocity pass (dot-combat `DotPenetration.speed`); 0 leaves the pass off.
+var speed: float = 0.0
+## Speed at which wall and body costs are the plain ones (`DotPenetration.reference_speed`); 0 leaves the pass off.
+var reference_speed: float = 0.0
 ## Weapon ids this round is the default for (a profile can serve several guns).
 var guns: PackedStringArray = PackedStringArray()
 ## The round every weapon that no profile lists uses.
@@ -83,6 +87,8 @@ static func from_flat(p_id: StringName, c: Dictionary) -> DotWeaponAmmoType:
 		t.ricochet_materials.append(m.strip_edges())
 	t.ricochet_angle = clampf(float(c.get("ricochet_angle", 0.0)), 0.0, 90.0)
 	t.ricochet_keep = clampf(float(c.get("ricochet_keep", 0.6)), 0.0, 1.0)
+	t.speed = maxf(0.0, float(c.get("speed", 0.0)))
+	t.reference_speed = maxf(0.0, float(c.get("reference_speed", 0.0)))
 	for g in String(c.get("guns", "")).split(",", false):
 		t.guns.append(g.strip_edges())
 	t.is_default = bool(c.get("default", false))
@@ -107,6 +113,8 @@ func make_penetration() -> DotPenetration:
 	p.ricochet_materials = ricochet_materials
 	p.ricochet_angle = ricochet_angle
 	p.ricochet_keep = ricochet_keep
+	p.speed = speed
+	p.reference_speed = reference_speed
 	return p
 
 
