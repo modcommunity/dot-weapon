@@ -78,5 +78,9 @@ static func resolve(explicit: String, tags: Array, id: StringName) -> String:
 
 ## The preset [param key] for [param klass] (the neutral row for an unknown class).
 static func preset(klass: String, key: String) -> float:
-	var row: Dictionary = PRESETS.get(klass, PRESETS[""])
-	return float(row.get(key, (PRESETS[""] as Dictionary).get(key, 0.0)))
+	# Every spread read lands here: look the neutral row up only when it is needed.
+	var row: Variant = PRESETS.get(klass)
+	var value: Variant = (row as Dictionary).get(key) if row != null else null
+	if value == null:
+		value = (PRESETS[""] as Dictionary).get(key, 0.0)
+	return float(value)

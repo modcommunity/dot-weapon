@@ -56,7 +56,7 @@ func _tick(ctx: DotWeaponContext) -> void:
 	state[_SINCE] = since
 	if b.bloom > 0.0:
 		var now := float(state.get(_BLOOM, 0.0))
-		if now > 0.0 and since >= bloom_delay_ticks():
+		if now > 0.0 and since >= _bloom_delay_of(b):
 			state[_BLOOM] = maxf(0.0, now - scaled_per_tick(b.bloom_recovery))
 
 	if ctx == null:
@@ -66,7 +66,7 @@ func _tick(ctx: DotWeaponContext) -> void:
 	var held_motion := float(state.get(_MOTION, 0.0))
 	var motion := target_motion
 	if target_motion < held_motion:
-		var settle := _class_ticks(b.settle_ticks, "settle")
+		var settle := _class_ticks_of(b, b.settle_ticks, "settle")
 		if settle > 0:
 			motion = maxf(target_motion, held_motion - 1.0 / float(settle))
 	# A still carrier leaves no key, so this tick's state equals the idle path's (which never sees a ctx).
@@ -83,7 +83,7 @@ func _tick(ctx: DotWeaponContext) -> void:
 		var held := float(state.get(_FACTOR, 1.0))
 		state[_FACTOR] = target if target >= held else maxf(target, held - rules.recovery_per_tick(running_tick_rate()))
 
-	_shown = _spread_with(b, ctx, rules)
+	_shown = _spread_with(b, ctx, rules, rules_object)
 	# Only state the idle path would also have: a still gun without rules keeps the cone out of it.
 	if (rules_object != null and bool(arsenal.get(&"crosshair_cone"))) or held_motion > 0.0 or motion > 0.0:
 		state[_NOW] = _shown
@@ -160,7 +160,11 @@ func _posture_provided() -> bool:
 
 ## The accuracy class of this weapon (see [DotWeaponAccuracyClass]).
 func accuracy_class() -> String:
-	var b := _ballistics()
+	return _class_of(_ballistics())
+
+
+# Takes the ballistics the caller already holds: a tick asks for the class up to three times.
+func _class_of(b: DotWeaponBallistics) -> String:
 	var explicit := b.accuracy_class if b != null else ""
 	var id: StringName = def.id if def != null else &""
 	# Compared field by field, not as one formatted key: every spread read asks this, every tick.
@@ -175,19 +179,26 @@ func accuracy_class() -> String:
 
 ## Running ticks after a use before bloom sheds: the class or own delay, never inside the use interval.
 func bloom_delay_ticks() -> int:
-	var b := _ballistics()
-	var own := _class_ticks(b.bloom_delay_ticks, "bloom_delay") if b != null else 0
+	return _bloom_delay_of(_ballistics())
+
+
+func _bloom_delay_of(b: DotWeaponBallistics) -> int:
+	var own := _class_ticks_of(b, b.bloom_delay_ticks, "bloom_delay") if b != null else 0
 	var interval := scaled_ticks(def.use_interval_ticks) if def != null else 0
 	return maxi(own, interval + 1)
 
 
 func _class_ticks(own: int, key: String) -> int:
+	return _class_ticks_of(_ballistics(), own, key)
+
+
+func _class_ticks_of(b: DotWeaponBallistics, own: int, key: String) -> int:
 	if own >= 0:
 		return scaled_ticks(own)
 	var rate := running_tick_rate()
 	if rate <= 0:
 		rate = def.authored_tick_rate if def != null and def.authored_tick_rate > 0 else 64
-	return roundi(DotWeaponAccuracyClass.preset(accuracy_class(), key) * float(rate))
+	return roundi(DotWeaponAccuracyClass.preset(_class_of(b), key) * float(rate))
 
 
 func _motion_of(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
@@ -213,9 +224,12 @@ func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
 	return _spread_with(b, ctx, _rules())
 
 
-## [method _spread_for] under [param rules] (null for none), for a caller that already holds them.
-func _spread_with(b: DotWeaponBallistics, ctx: DotWeaponContext, rules: DotWeaponSpreadRules) -> float:
-	var klass := accuracy_class()
+## [method _spread_for] under [param rules] (null for none), for a caller that already holds them;
+## [param every] is [method _rules_object], enabled or not.
+func _spread_with(
+	b: DotWeaponBallistics, ctx: DotWeaponContext, rules: DotWeaponSpreadRules, every: DotWeaponSpreadRules = _rules_object()
+) -> float:
+	var klass := _class_of(b)
 	var motion := maxf(float(state.get(_MOTION, 0.0)), _motion_of(b, ctx))
 	var out := b.spread_for_motion(motion, ctx.airborne, ctx.crouched)
 	if not ctx.aiming:
@@ -225,7 +239,8 @@ func _spread_with(b: DotWeaponBallistics, ctx: DotWeaponContext, rules: DotWeapo
 	elif ctx.sprinting and not ctx.airborne:
 		out *= b.accuracy("spread_sprint", klass)
 	if ctx.hurt_tick >= 0 and ctx.tick >= ctx.hurt_tick:
-		var rate := float(maxi(running_tick_rate(), 1)) if running_tick_rate() > 0 else 64.0
+		var running := running_tick_rate()
+		var rate := float(maxi(running, 1)) if running > 0 else 64.0
 		var left := 1.0 - float(ctx.tick - ctx.hurt_tick) / (DotWeaponAccuracyClass.FLINCH_SEC * rate)
 		out += b.accuracy("spread_flinch", klass) * clampf(left, 0.0, 1.0)
 	if rules != null:
@@ -236,7 +251,6 @@ func _spread_with(b: DotWeaponBallistics, ctx: DotWeaponContext, rules: DotWeapo
 	out += bloom
 	if ctx.aiming:
 		out *= b.accuracy("spread_aim", klass)
-	var every := _rules_object()
 	if every != null:
 		out *= every.scale
 		if every.max_spread > 0.0:

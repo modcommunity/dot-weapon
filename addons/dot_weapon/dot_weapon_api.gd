@@ -84,5 +84,6 @@ extends RefCounted
 ## 29: `view/dot_weapon_scope_view.gd` (by path, no `class_name`): the scope-view rules (resolve the player's mode against a server pin, lens test, camera FOV scale, walking clear) that arena-weapons and zee-dot-weapons view models call instead of each mirroring them. OLDEST stays 1.
 ## 30: `view/dot_weapon_reload_shots.gd` (by path, no `class_name`): the fractions, the wait for a rig to reach one and the contact sheet of a first-person reload review (game-zombie-zone `shot.sh --view=reload`). OLDEST stays 1.
 ## 31: `DotWeaponArsenal.is_cooling_for(command, ctx)`: whether this tick reads nothing of the context's aim (a trigger held inside the cadence), so a rig can skip working the aim out.
-const LEVEL := 31
+## 32: `DotWeaponArsenal.phase_timers`, `phase_us`, `phase_calls`, `PHASES`: opt-in sub-phase timings of simulate_tick and idle_tick for a profiler. OLDEST stays 1.
+const LEVEL := 32
 const OLDEST := 1

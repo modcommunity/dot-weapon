@@ -281,6 +281,14 @@ func is_replaying() -> bool:
 	return _replaying
 
 
+## Microseconds per part of [method simulate_tick] and [method idle_tick], summed while [member phase_timers] is on (a
+## profiler's sub-spans); [member phase_calls] counts full ticks, idle ticks and idle ticks the rest skip ended.
+const PHASES: Array[StringName] = [&"pre", &"behaviour", &"use", &"idle_rest", &"idle_tick"]
+static var phase_us := PackedInt64Array([0, 0, 0, 0, 0])
+static var phase_calls := PackedInt64Array([0, 0, 0])
+static var phase_timers := false
+
+
 ## Runs one tick of one command. The only entry point a game needs.
 ##
 ## [param ctx] carries the carrier's origin, aim and posture for this tick; the arsenal
@@ -303,6 +311,7 @@ func simulate_tick(
 	if disabled:
 		return DotWeaponOutcome.nothing("The arsenal is disabled.")
 
+	var lap := Time.get_ticks_usec() if phase_timers else 0
 	_advance_switch(ctx)
 	_advance_reload(ctx.tick)
 
@@ -314,7 +323,12 @@ func simulate_tick(
 	var wants_mode := command.is_pressed(DotWeaponCommand.BUTTON_FIRE_MODE)
 	if wants_mode and not (previous != null and previous.is_pressed(DotWeaponCommand.BUTTON_FIRE_MODE)):
 		var _changed := cycle_fire_mode()
+	if lap != 0:
+		lap = _lap(0, lap)
 	_run_behaviour_tick(slot, ctx)
+	if lap != 0:
+		lap = _lap(1, lap)
+		phase_calls[0] += 1
 
 	if is_switching():
 		return DotWeaponOutcome.nothing("Switching.")
@@ -322,7 +336,16 @@ func simulate_tick(
 	if command.is_pressed(DotWeaponCommand.BUTTON_RELOAD) and not sprint_blocked:
 		begin_reload(ctx.tick)
 
-	return _advance_use(slot, command, ctx, previous)
+	var out := _advance_use(slot, command, ctx, previous)
+	if lap != 0:
+		_lap(2, lap)
+	return out
+
+
+static func _lap(phase: int, since: int) -> int:
+	var now := Time.get_ticks_usec()
+	phase_us[phase] += now - since
+	return now
 
 
 ## Whether [method simulate_tick] would only tick the weapon in hand: no button, no other slot
@@ -384,12 +407,22 @@ func crosshair_scale() -> float:
 func idle_tick() -> DotWeaponOutcome:
 	_held_ticks = 0
 	var behaviour := current().behaviour
+	var lap := Time.get_ticks_usec() if phase_timers else 0
+	if lap != 0:
+		phase_calls[1] += 1
 
 	# A weapon with nothing to recover on a settled carrier changes nothing by ticking: skip the posture and the tick.
 	if idle_rest_skip and idle_still.is_valid() and behaviour.rest_tick(idle_still):
+		if lap != 0:
+			_lap(3, lap)
+			phase_calls[2] += 1
 		return DotWeaponOutcome.nothing("")
+	if lap != 0:
+		lap = _lap(3, lap)
 
 	behaviour.tick(idle_posture.call() as DotWeaponContext if idle_posture.is_valid() else null)
+	if lap != 0:
+		_lap(4, lap)
 	return DotWeaponOutcome.nothing("")
 
 
