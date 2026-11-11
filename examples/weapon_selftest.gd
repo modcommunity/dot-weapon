@@ -252,7 +252,7 @@ func _names_out_of_text_order(rng: RandomNumberGenerator, prefix: String) -> Dic
 
 
 ## ids() and pools() are lists other programs read: a console's completion offers ids()
-## (game-arena's `give`), and zee-dot-weapons compares ids() with its own id list. They
+## (game-fatal-contact's `give`), and zee-dot-weapons compares ids() with its own id list. They
 ## sorted with sort(), which orders StringNames by where each was interned, not by text,
 ## so the order differed per process.
 ##
