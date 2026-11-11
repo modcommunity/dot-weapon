@@ -70,4 +70,4 @@ The family's two steps ([family CLAUDE.md](../../CLAUDE.md#validating-anything))
 
 ## Consumers
 
-game-arena and game-g2gfast use it directly. game-playground, game-zombie-zone, mg-deathrun, mg-prop-hunt, mg-smash-copter and mg-wipeout use it through zee-dot-weapons (zed-dot-weapons sits on top of zee). game-playground's prop tools (`DotPropTool` subclasses) are not weapons in this sense.
+game-arena and game-g2gfast use it directly. game-playlot, game-zombie-zone, mg-deathrun, mg-prop-hunt, mg-smash-copter and mg-wipeout use it through zee-dot-weapons (zed-dot-weapons sits on top of zee). game-playlot's prop tools (`DotPropTool` subclasses) are not weapons in this sense.
