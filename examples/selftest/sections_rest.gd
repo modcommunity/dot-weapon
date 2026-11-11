@@ -2,8 +2,12 @@ extends "sections_accuracy.gd"
 
 ## The rest skip of an idle hitscan tick (DotWeaponArsenal.idle_still, DotWeaponBehaviour.rest_tick) must change nothing:
 ## the same random stream of commands and postures through an arsenal with the skip and one without, full state compared.
+## The first arsenal also runs with the steady skip of DotWeaponHitscan on and the second with it off, so the same streams
+## prove that one too; the last three modes keep the cone on (as the arena does, where the rest skip never runs) and add
+## flinches, in-place tuning edits (the aimed-tick swap of a weapon rig) and restored snapshots.
 
-const _MODES := ["plain", "rules", "rules_cone_off", "rules_edited", "explicit_still"]
+const _MODES := ["plain", "rules", "rules_cone_off", "rules_edited", "explicit_still", "rules_hurt", "rules_tuning", "rules_restore"]
+const _CONE_MODES := ["rules", "rules_hurt", "rules_tuning", "rules_restore"]
 
 
 ## Eight postures a carrier moves through; index 0 is the settled one.
@@ -39,6 +43,7 @@ func _test_idle_rest_skip() -> void:
 	_section("an idle tick at rest is skipped without changing anything")
 
 	var skipped_total := 0
+	var steady_total := 0
 	var all_same := true
 	var spread_same := true
 	var detail := ""
@@ -52,6 +57,8 @@ func _test_idle_rest_skip() -> void:
 		var rules: Array = []
 		var players: Array = []
 		var controllers: Array = []
+		var hurt := [-1]
+		var now := [0]
 
 		for a: DotWeaponArsenal in [skip, plain]:
 			a.give(&"rifle")
@@ -71,8 +78,15 @@ func _test_idle_rest_skip() -> void:
 				r.recovery = 40.0
 				a.spread_rules = r
 				rules.append(r)
-				a.crosshair_cone = false if mode != "rules" else true
-			if mode == "explicit_still":
+				a.crosshair_cone = mode in _CONE_MODES
+			if mode == "rules_hurt":
+				var p := player
+				a.idle_posture = func() -> DotWeaponContext:
+					var c := DotWeaponPlayerBridge.posture_for(p, now[0])
+					c.hurt_tick = hurt[0]
+					return c
+				a.idle_still = func() -> bool: return DotWeaponPlayerBridge.still_for(p) and (hurt[0] < 0 or now[0] - hurt[0] > 200)
+			elif mode == "explicit_still":
 				var p := player
 				a.idle_posture = func() -> DotWeaponContext: return DotWeaponPlayerBridge.posture_for(p)
 				a.idle_still = func() -> bool: return DotWeaponPlayerBridge.still_for(p)
@@ -92,6 +106,15 @@ func _test_idle_rest_skip() -> void:
 		var slot := 0
 		var previous: DotWeaponCommand = null
 		var skipped := 0
+		var steady := 0
+		var saved: Array = [{}, {}]
+		var rifle := cat.get_def(&"rifle").tuning as DotWeaponBallistics
+		if mode in ["rules_hurt", "rules_tuning", "rules_restore"]:
+			rifle.spread_flinch = 1.5
+			rifle.spread = 1.0
+			rifle.spread_moving = 2.0
+			rifle.spread_hip = 0.5
+		var held_spread := rifle.spread
 
 		for tick in range(2400):
 			if posture_left <= 0:
@@ -119,27 +142,55 @@ func _test_idle_rest_skip() -> void:
 						0: r.mult_stand = value
 						1: r.mult_hip = value
 						2: r.walk_speed = 0.0 if value > 1.2 else 0.5
+			if mode == "rules_hurt" and rng.randf() < 0.004:
+				hurt[0] = tick
+			if mode == "rules_tuning":
+				# A rig swaps the shared tuning for one aimed tick and puts it back; now and then an edit stays.
+				if tick % 97 == 40:
+					held_spread = rifle.spread
+					rifle.spread = held_spread * 1.5
+				elif tick % 97 == 41:
+					rifle.spread = held_spread
+				elif tick % 300 == 299:
+					match rng.randi_range(0, 3):
+						0: rifle.spread = rng.randf_range(0.5, 2.0)
+						1: rifle.spread_moving = rng.randf_range(0.5, 4.0)
+						2: rifle.bloom_max = rng.randf_range(1.0, 6.0)
+						3: rifle.spread_hip = rng.randf_range(0.0, 2.0)
+			now[0] = tick
 
 			var results: Array = []
 			var states: Array = []
 			var spreads: Array = []
 			for i in range(2):
 				var a: DotWeaponArsenal = skip if i == 0 else plain
+				DotWeaponHitscan.steady_skip = i == 0
+				if mode == "rules_restore":
+					if tick % 211 == 100:
+						saved[i] = a.snapshot()
+					elif tick % 211 == 160 and not (saved[i] as Dictionary).is_empty():
+						a.restore(saved[i])
 				(controllers[i] as StubController).motion_data = _posture_data(posture)
 				var cmd := DotWeaponCommand.new()
 				cmd.buttons = buttons
 				cmd.slot = slot
 				var out: DotWeaponOutcome
+				var was_steady: bool = a.current() != null and a.current().behaviour.get("_steady") == true
+				var hit := _rest_ctx(players[i], tick)
+				hit.hurt_tick = hurt[0]
 				if a.is_idle_for(cmd, previous):
 					out = a.idle_tick()
 					if i == 0 and a.current().behaviour.get("_shown_stale") == true:
 						skipped += 1
 				else:
-					out = a.simulate_tick(cmd, _rest_ctx(players[i], tick), previous)
+					out = a.simulate_tick(cmd, hit, previous)
+				if i == 0 and was_steady and a.current().behaviour.get("_steady") == true:
+					steady += 1
 				results.append("%s|%s|%s" % [out.used, out.kind, out.refusal])
 				states.append(var_to_str(a.snapshot()) + var_to_str(a.current().behaviour.state))
 				spreads.append(a.spread_now())
 
+			DotWeaponHitscan.steady_skip = true
 			previous = DotWeaponCommand.new()
 			previous.buttons = buttons
 			previous.slot = slot
@@ -153,7 +204,10 @@ func _test_idle_rest_skip() -> void:
 				detail = "%s tick %d spread %s" % [mode, tick, spreads]
 
 		skipped_total += skipped
-		_check(skipped > 300 or mode == "rules", "%s: the skip ran for much of the stream" % mode, str(skipped))
+		steady_total += steady
+		_check(skipped > 300 or mode in _CONE_MODES, "%s: the skip ran for much of the stream" % mode, str(skipped))
+		if mode in _CONE_MODES:
+			_check(steady > 300, "%s: the steady skip ran for much of the stream" % mode, str(steady))
 		for node in [skip, plain] + players + controllers:
 			_drop(node)
 		if not all_same:
@@ -162,6 +216,7 @@ func _test_idle_rest_skip() -> void:
 	_check(all_same, "outcomes, snapshots and behaviour state agree on every tick of every stream", detail)
 	_check(spread_same, "and so does the crosshair cone", detail)
 	_check(skipped_total > 1000, "the skip took over a thousand ticks in all", str(skipped_total))
+	_check(steady_total > 1000, "the steady skip took over a thousand ticks in all", str(steady_total))
 
 	# A settled posture is the only one that skips: a walking carrier is asked about and refused.
 	var cat2 := _catalogue()

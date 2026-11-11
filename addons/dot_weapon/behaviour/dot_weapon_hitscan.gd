@@ -33,6 +33,31 @@ var _shown: float = -1.0
 var _shown_stale: bool = false
 var _settled: DotWeaponContext = null
 
+## Off: every context tick computes the cone, for an A/B of the steady skip (see [method _steady_holds]); results agree.
+static var steady_skip: bool = true
+
+# The last context tick that was a fixed point: everything it read, and the cone it computed.
+var _steady: bool = false
+var _steady_b: DotWeaponBallistics = null
+var _steady_rules: DotWeaponSpreadRules = null
+var _steady_cone: bool = false
+var _steady_airborne: bool = false
+var _steady_crouched: bool = false
+var _steady_aiming: bool = false
+var _steady_sliding: bool = false
+var _steady_sprinting: bool = false
+var _steady_wall: bool = false
+var _steady_motion: float = 0.0
+var _steady_bloom: float = 0.0
+var _steady_write_now: bool = false
+var _steady_shown: float = 0.0
+var _steady_enabled: bool = false
+var _steady_scale: float = 1.0
+var _steady_max: float = 0.0
+var _steady_factor: float = 1.0
+var _steady_class: String = ""
+var _steady_tuning := PackedFloat64Array()
+
 
 func _ballistics() -> DotWeaponBallistics:
 	if def != null and def.tuning is DotWeaponBallistics:
@@ -62,7 +87,15 @@ func _tick(ctx: DotWeaponContext) -> void:
 	if ctx == null:
 		return
 
+	# Read from the arsenal once a tick: the steady check, the factor, the cone and the tracking below all ask for the same rules.
+	var rules_object := _rules_object()
+	var cone := rules_object != null and bool(arsenal.get(&"crosshair_cone"))
+	if steady_skip and _steady and _steady_holds(b, ctx, rules_object, cone):
+		_shown = _steady_shown
+		return
+
 	var target_motion := _motion_of(b, ctx)
+	var had_motion := state.has(_MOTION)
 	var held_motion := float(state.get(_MOTION, 0.0))
 	var motion := target_motion
 	if target_motion < held_motion:
@@ -75,18 +108,101 @@ func _tick(ctx: DotWeaponContext) -> void:
 	else:
 		state.erase(_MOTION)
 
-	# Read from the arsenal once a tick: the factor, the cone and the tracking below all ask for the same rules.
-	var rules_object := _rules_object()
 	var rules := rules_object if rules_object != null and rules_object.enabled else null
+	var factor_still := true
 	if rules != null:
 		var target := rules.target_factor(ctx)
+		var had_factor := state.has(_FACTOR)
 		var held := float(state.get(_FACTOR, 1.0))
-		state[_FACTOR] = target if target >= held else maxf(target, held - rules.recovery_per_tick(running_tick_rate()))
+		var factor := target if target >= held else maxf(target, held - rules.recovery_per_tick(running_tick_rate()))
+		state[_FACTOR] = factor
+		factor_still = had_factor and factor == held
 
 	_shown = _spread_with(b, ctx, rules, rules_object)
 	# Only state the idle path would also have: a still gun without rules keeps the cone out of it.
-	if (rules_object != null and bool(arsenal.get(&"crosshair_cone"))) or held_motion > 0.0 or motion > 0.0:
+	var write_now := cone or held_motion > 0.0 or motion > 0.0
+	var now_still := true
+	if write_now:
+		now_still = state.has(_NOW) and float(state[_NOW]) == _shown
 		state[_NOW] = _shown
+
+	# This tick left the state as it found it (only the ticks since the last use moved): keep what it read, so the next
+	# tick with the same inputs skips the work. A flinch fades with the tick, so a tick inside one is never a fixed point.
+	_steady = false
+	if steady_skip and factor_still and now_still and motion == held_motion and had_motion == (motion > 0.0) and not _flinching(ctx):
+		_steady_keep(b, ctx, rules_object, cone, motion)
+
+
+## A context tick with the inputs of the kept fixed point: the same ballistics, rules and tuning, the same posture, a
+## state still at that point (motion, factor, bloom and the shown cone) and no flinch. Its [method _tick] would write the
+## values already there and compute the kept cone, so only the ticks since the last use (counted above) move.
+func _steady_holds(b: DotWeaponBallistics, ctx: DotWeaponContext, rules_object: DotWeaponSpreadRules, cone: bool) -> bool:
+	if b != _steady_b or rules_object != _steady_rules or cone != _steady_cone:
+		return false
+	if ctx.airborne != _steady_airborne or ctx.crouched != _steady_crouched or ctx.aiming != _steady_aiming:
+		return false
+	if ctx.sliding != _steady_sliding or ctx.sprinting != _steady_sprinting or ctx.wall_running != _steady_wall:
+		return false
+	if _motion_of(b, ctx) != _steady_motion or float(state.get(_MOTION, 0.0)) != _steady_motion:
+		return false
+	if state.has(_MOTION) != (_steady_motion > 0.0) or float(state.get(_BLOOM, 0.0)) != _steady_bloom:
+		return false
+	if _steady_write_now and not (state.has(_NOW) and float(state[_NOW]) == _steady_shown):
+		return false
+	if rules_object != null:
+		if rules_object.enabled != _steady_enabled or rules_object.scale != _steady_scale or rules_object.max_spread != _steady_max:
+			return false
+		if _steady_enabled:
+			if not state.has(_FACTOR) or float(state[_FACTOR]) != _steady_factor or rules_object.target_factor(ctx) != _steady_factor:
+				return false
+	if _flinching(ctx) or not _tuning_same(b):
+		return false
+	return _class_of(b) == _steady_class
+
+
+func _steady_keep(b: DotWeaponBallistics, ctx: DotWeaponContext, rules_object: DotWeaponSpreadRules, cone: bool, motion: float) -> void:
+	_steady = true
+	_steady_b = b
+	_steady_rules = rules_object
+	_steady_cone = cone
+	_steady_airborne = ctx.airborne
+	_steady_crouched = ctx.crouched
+	_steady_aiming = ctx.aiming
+	_steady_sliding = ctx.sliding
+	_steady_sprinting = ctx.sprinting
+	_steady_wall = ctx.wall_running
+	_steady_motion = motion
+	_steady_bloom = float(state.get(_BLOOM, 0.0))
+	_steady_write_now = cone or motion > 0.0
+	_steady_shown = _shown
+	_steady_enabled = rules_object != null and rules_object.enabled
+	_steady_scale = rules_object.scale if rules_object != null else 1.0
+	_steady_max = rules_object.max_spread if rules_object != null else 0.0
+	_steady_factor = float(state.get(_FACTOR, 1.0))
+	_steady_class = _class_of(b)
+	_steady_tuning = PackedFloat64Array([
+		b.spread, b.spread_moving, b.spread_speed_ref, b.spread_airborne, b.spread_crouched, b.bloom_max,
+		b.spread_hip, b.spread_slide, b.spread_sprint, b.spread_flinch, b.bloom_crouch, b.spread_aim,
+	])
+
+
+## Every ballistics number the cone reads, against the kept ones: a tuning edited in place (a console, a scaled aim) is seen.
+func _tuning_same(b: DotWeaponBallistics) -> bool:
+	var t := _steady_tuning
+	return (
+		t[0] == b.spread and t[1] == b.spread_moving and t[2] == b.spread_speed_ref and t[3] == b.spread_airborne
+		and t[4] == b.spread_crouched and t[5] == b.bloom_max and t[6] == b.spread_hip and t[7] == b.spread_slide
+		and t[8] == b.spread_sprint and t[9] == b.spread_flinch and t[10] == b.bloom_crouch and t[11] == b.spread_aim
+	)
+
+
+## Whether the flinch term of [method _spread_with] is above zero at this context's tick.
+func _flinching(ctx: DotWeaponContext) -> bool:
+	if ctx.hurt_tick < 0 or ctx.tick < ctx.hurt_tick:
+		return false
+	var running := running_tick_rate()
+	var rate := float(maxi(running, 1)) if running > 0 else 64.0
+	return 1.0 - float(ctx.tick - ctx.hurt_tick) / (DotWeaponAccuracyClass.FLINCH_SEC * rate) > 0.0
 
 
 ## A crosshair gets the cone the last tick computed, so it cannot disagree with the shot.
