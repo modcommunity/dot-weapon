@@ -2,7 +2,7 @@ extends "selftest/sections_rest.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 662
+const CHECKS := 663
 
 
 func _ready() -> void:
@@ -62,6 +62,7 @@ func _run() -> void:
 	_test_accuracy_classes()
 	_test_accuracy_bloom()
 	_test_accuracy_settle_flinch()
+	_test_accuracy_cone_reads()
 	_test_accuracy_scale_profile()
 	_test_accuracy_recoil()
 	_test_accuracy_prediction()
