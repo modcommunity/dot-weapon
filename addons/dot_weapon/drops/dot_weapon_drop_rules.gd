@@ -69,6 +69,9 @@ var blast_scale: float = 1.0
 var max_active: int = 16
 ## Launch speed (m/s) from which a drop uses continuous collision detection; slower drops skip its cost until one tick's travel passes half the box's thinnest side (falling), then it switches on. 0 always.
 var ccd_speed: float = 10.0
+## A moving drop whose centre passes down through a floor (the solver let it tunnel) is put back on top of it, and one that falls
+## [constant DotWeaponDrops.RESCUE_DEPTH] below where it was dropped is put back there once, then removed.
+var rescue: bool = true
 ## Seconds a dropped weapon must lie still before it sleeps.
 var sleep_time: float = 0.6
 ## Mass of a dropped weapon, kilograms.
@@ -106,6 +109,7 @@ const _SPECS := [
 	["sv_weapon_drop_impulse", "impulse_scale", "float:0:20", "Scale of the push a shot or melee hit gives a dropped weapon"],
 	["sv_weapon_drop_blast", "blast_scale", "float:0:20", "Scale of the push an explosion gives a dropped weapon"],
 	["sv_weapon_drop_active", "max_active", "int:0:256", "Most dropped weapons simulated awake at once; 0 unlimited"],
+	["sv_weapon_drop_rescue", "rescue", "bool", "1 puts a dropped weapon that fell through a floor back on top of it"],
 	["sv_weapon_drop_ccd_speed", "ccd_speed", "float:0:100", "Launch speed from which a dropped weapon uses continuous collision detection (slower drops skip its cost); 0 always"],
 	["sv_weapon_drop_sleep", "sleep_time", "float:0.1:10", "Seconds a dropped weapon lies still before it sleeps"],
 	["sv_weapon_drop_mass", "mass", "float:0.1:100", "Mass of a dropped weapon, kilograms"],
