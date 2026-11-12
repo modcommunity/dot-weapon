@@ -16,10 +16,10 @@ const REACH := 0.5
 const DEFAULT_SIZE := Vector3(0.12, 0.14, 0.7)
 ## Spare bodies kept per weapon for reuse.
 const MAX_PARKED := 8
-## A moving drop this far below where it was dropped or last pushed is put back there once, then removed: it fell through
-## the world, and [constant SETTLE_MAX_SEC] would otherwise freeze it in mid-air.
+## A moving drop this far below where it was dropped or last pushed fell through the world: it goes back on the floor
+## under that point (frozen there the second time), or, with no floor there, to the point once and is then removed.
 const RESCUE_DEPTH := 40.0
-## Times one drop is put back on a floor it fell through before it is frozen where it was put.
+## Times one drop is put back on a floor it fell through before it is frozen on that floor.
 const RESCUE_MAX := 3
 
 ## A weapon left a hand (or a corpse): [param state] is [code]{id, magazine, reserve}[/code].
@@ -383,49 +383,95 @@ func tick(delta: float) -> void:
 			scan()
 
 
-## Puts a moving drop back on the floor its centre passed down through since the last tick (the solver tunnelled it, about
-## once in 3000 drops on a bumpy trimesh floor), or at its drop point once it fell [constant RESCUE_DEPTH]
-## below it. [code]last[/code] stays above a floor the centre is only slightly into (contact slop). Returns true when it moved or removed it.
+## Puts a moving drop back on the floor its centre passed down through since the last tick (the solver tunnelled it, a few
+## in a hundred drops on a bumpy trimesh floor under Jolt), or, once it fell [constant RESCUE_DEPTH] below its drop point,
+## on the floor under that point. [code]last[/code] stays above a floor the centre is only slightly into (contact slop).
+## Returns true when it moved or removed it.
 func _rescue(id: int, e: Dictionary, body: RigidBody3D) -> bool:
 	var pos := body.global_position
 	var last: Vector3 = e["last"]
 	if pos.y < (e["origin"] as Vector3).y - RESCUE_DEPTH:
-		if is_authority and int(e.get("lost", 0)) >= 1:
-			_remove(id, 0)
-			return true
-		e["lost"] = int(e.get("lost", 0)) + 1
-		_place(id, e, body, Transform3D(body.global_basis, e["origin"]))
-		return true
+		return _rescue_lost(id, e, body)
 	if pos.distance_squared_to(last) < 0.000001 or not is_inside_tree():
 		return false
-	var q := PhysicsRayQueryParameters3D.create(last, pos, collision_mask)
-	q.hit_back_faces = false
+	var hit := _floor_hit(last, pos)
+	if hit.is_empty():
+		e["last"] = pos
+		return false
+	var n: Vector3 = hit["normal"]
+	var floor_at: Vector3 = hit["position"]
+	if (floor_at - pos).dot(n) <= _support(body, n) + 0.02:
+		return false
+	var count := int(e.get("rescued", 0)) + 1
+	e["rescued"] = count
+	DotLog.debug(CHANNEL, "drop fell through a floor; put back", {"id": id, "times": count})
+	if count > RESCUE_MAX and is_authority:
+		_place(id, e, body, _on_floor(body, floor_at, n, 0.005))
+		_rest(id, e, body)
+	else:
+		_place(id, e, body, _on_floor(body, floor_at, n, 0.15))
+	return true
+
+
+## A drop [constant RESCUE_DEPTH] below its drop point, its tunnel missed: it goes back on the floor straight under the drop
+## point, and the second time it is frozen on it. With no floor there it goes back to the point once and is then
+## removed (it left the world).
+func _rescue_lost(id: int, e: Dictionary, body: RigidBody3D) -> bool:
+	var lost := int(e.get("lost", 0)) + 1
+	e["lost"] = lost
+	var origin: Vector3 = e["origin"]
+	var hit: Dictionary = {}
+	if is_inside_tree():
+		hit = _floor_hit(origin, origin + Vector3.DOWN * RESCUE_DEPTH)
+	DotLog.debug(CHANNEL, "drop fell out of the world; put back", {"id": id, "times": lost, "floor": not hit.is_empty()})
+	if hit.is_empty():
+		if is_authority and lost >= 2:
+			_remove(id, 0)
+		else:
+			_place(id, e, body, Transform3D(body.global_basis, origin))
+		return true
+	if lost >= 2 and is_authority:
+		_place(id, e, body, _on_floor(body, hit["position"], hit["normal"], 0.005))
+		_rest(id, e, body)
+	else:
+		_place(id, e, body, _on_floor(body, hit["position"], hit["normal"], 0.15))
+	return true
+
+
+## The first floor (an upward face of a static body) the ray [param from] to [param to] passes down through, as
+## [code]{position, normal}[/code] with the normal turned towards [param from]; empty for none. Back faces count: a
+## trimesh wound the other way is still a floor, and a front-faces-only ray missed every tunnel on one. Walls,
+## ceilings and moving bodies are passed through.
+func _floor_hit(from: Vector3, to: Vector3) -> Dictionary:
+	var q := PhysicsRayQueryParameters3D.create(from, to, collision_mask)
+	q.hit_back_faces = true
+	var dir := (to - from).normalized()
 	var space := get_world_3d().direct_space_state
-	for _i in 3:
+	for _i in 6:
 		var hit := space.intersect_ray(q)
 		if hit.is_empty():
-			break
+			return {}
 		var n: Vector3 = hit["normal"]
+		if n.dot(dir) > 0.0:
+			n = -n
 		var other: Object = hit["collider"]
-		if other is CharacterBody3D or other is RigidBody3D or other is AnimatableBody3D or n.y < 0.3:
+		if other is CharacterBody3D or other is RigidBody3D or other is AnimatableBody3D:
 			var skip: Array[RID] = q.exclude
 			skip.append(hit["rid"])
 			q.exclude = skip
 			continue
-		var floor_at: Vector3 = hit["position"]
-		var reach := _support(body, n)
-		if (floor_at - pos).dot(n) <= reach + 0.02:
-			return false
-		var count := int(e.get("rescued", 0)) + 1
-		e["rescued"] = count
-		var at := Transform3D(body.global_basis, floor_at + n * (reach + 0.15) - body.global_basis * _centre(body))
-		DotLog.debug(CHANNEL, "drop fell through a floor; put back", {"id": id, "times": count})
-		_place(id, e, body, at)
-		if count > RESCUE_MAX and is_authority:
-			_rest(id, e, body)
-		return true
-	e["last"] = pos
-	return false
+		if n.y < 0.3:
+			q.from = (hit["position"] as Vector3) + dir * 0.002
+			if (to - q.from).dot(dir) <= 0.0:
+				return {}
+			continue
+		return {"position": hit["position"], "normal": n}
+	return {}
+
+
+## Where [param body], in its current pose, lies [param gap] above [param floor_at] along [param n].
+func _on_floor(body: RigidBody3D, floor_at: Vector3, n: Vector3, gap: float) -> Transform3D:
+	return Transform3D(body.global_basis, floor_at + n * (_support(body, n) + gap) - body.global_basis * _centre(body))
 
 
 ## Moves a moving drop to [param at], still, and tells clients.

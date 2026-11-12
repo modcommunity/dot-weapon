@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 168
+const CHECKS := 172
 
 
 func _ready() -> void:
@@ -455,7 +455,41 @@ func _test_rescue() -> void:
 	for _i in DotWeaponDrops.RESCUE_MAX + 1:
 		many.global_position = Vector3(2, -1.5, 0)
 		drops.tick(0.0)
-	_check(bool(drops._entries[bumps]["rest"]) and many.global_position.y > 0.0, "a drop that keeps tunnelling is frozen on top after a few tries")
+	_check(bool(drops._entries[bumps]["rest"]) and many.global_position.y > 0.0 and many.global_position.y < 0.2, "a drop that keeps tunnelling is frozen lying on top after a few tries", str(many.global_position))
+	var deep := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(4, 0.6, 0), Vector3.ZERO, 1)
+	var sunk: RigidBody3D = drops._entries[deep]["body"]
+	sunk.global_position = Vector3(4, 0.6 - DotWeaponDrops.RESCUE_DEPTH - 1.0, 0)
+	drops.tick(0.0)
+	_check(drops.has_drop(deep) and not bool(drops._entries[deep]["rest"]) and sunk.global_position.y > 0.0 and sunk.global_position.y < 0.6 and absf(sunk.global_position.x - 4.0) < 0.01,
+		"a drop whose tunnel was missed goes back on the floor under its drop point", str(sunk.global_position))
+	sunk.global_position = Vector3(4, 0.6 - DotWeaponDrops.RESCUE_DEPTH - 1.0, 0)
+	drops.tick(0.0)
+	_check(drops.has_drop(deep) and bool(drops._entries[deep]["rest"]) and sunk.global_position.y > 0.0 and sunk.global_position.y < 0.2,
+		"and the second time it is frozen lying on that floor, not removed", str(sunk.global_position))
+	# A trimesh floor whose faces point down (front faces seen from below): a sweep that skipped back faces missed every tunnel.
+	var mesh_body := StaticBody3D.new()
+	var mesh_shape := CollisionShape3D.new()
+	var tri := ConcavePolygonShape3D.new()
+	tri.set_faces(PackedVector3Array([Vector3(25, 0, -5), Vector3(35, 0, -5), Vector3(25, 0, 5), Vector3(35, 0, -5), Vector3(35, 0, 5), Vector3(25, 0, 5)]))
+	tri.backface_collision = true
+	mesh_shape.shape = tri
+	mesh_body.add_child(mesh_shape)
+	add_child(mesh_body)
+	var flip := PhysicsRayQueryParameters3D.create(Vector3(30, 1, 0), Vector3(30, -1, 0), 1)
+	flip.hit_back_faces = false
+	var front := PhysicsRayQueryParameters3D.create(Vector3(30, -1, 0), Vector3(30, 1, 0), 1)
+	front.hit_back_faces = false
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var space := mesh_body.get_world_3d().direct_space_state
+	_check(space.intersect_ray(flip).is_empty() or space.intersect_ray(front).is_empty(), "the test trimesh is one-sided to a front-faces-only ray")
+	var tm := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(30, 0.6, 0), Vector3.ZERO, 1)
+	await get_tree().physics_frame
+	var through: RigidBody3D = drops._entries[tm]["body"]
+	through.global_position = Vector3(30, -1.5, 0)
+	drops.tick(0.0)
+	_check(through.global_position.y > 0.0 and absf(through.global_position.x - 30.0) < 0.5, "a drop through a trimesh floor of either winding is back on top", str(through.global_position))
+	_drop(mesh_body)
 	_drop(drops)
 	_drop(air)
 	_drop(floor_body)
