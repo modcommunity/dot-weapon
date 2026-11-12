@@ -75,7 +75,7 @@ maps:                       # per-map blocks, same keys; id or glob, the more li
         respawn: 20
 ```
 
-The parser (`DotYaml`) has no inline mappings (`{a: 1}` is an error); lists of scalars may be inline (`[a, b]`). A site's fields come from, weakest first: the marker or entity, `sites:` in the file, the matching `maps:` blocks. Site keys accept `respawn`/`max`/`lifetime` as short names. A filter is `tags_any`, `tags_all`, `tags_none`, `ids` (lists or `"a, b"`); weight 0 removes an entry.
+The parser (`DotYaml`, dot-core v0.1.46 or later) reads one-line flow mappings (`{a: 1}`) and lists (`[a, b]`). A site's fields come from, weakest first: the marker or entity, `sites:` in the file, the matching `maps:` blocks. Site keys accept `respawn`/`max`/`lifetime` as short names. A filter is `tags_any`, `tags_all`, `tags_none`, `ids` (lists or `"a, b"`); weight 0 removes an entry.
 
 ### Scalars through dot-map's per-map files
 
@@ -143,4 +143,4 @@ game:                   # free-form block for the game
       primary: 500
 ```
 
-DotYaml has no inline mappings: write every mapping in block style (lists of scalars may stay inline).
+DotYaml (dot-core v0.1.46 or later) reads one-line flow mappings as well as block style; an older dot-core refuses `{a: 1}`, so block style is the portable form.
