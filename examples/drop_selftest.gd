@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 161
+const CHECKS := 168
 
 
 func _ready() -> void:
@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_swap_hold()
 	_test_drop_key_hold()
 	await _test_physics()
+	await _test_rescue()
 	await _test_blast()
 	await _test_lies_flat()
 	_test_body_reuse()
@@ -72,7 +73,7 @@ func _test_rules() -> void:
 	_check(r.set_cvar("sv_weapon_drop_scan", "0") and r.scan_interval == 0.0, "sv_weapon_drop_scan 0 scans every tick")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 29, "twenty-nine cvars are described")
+	_check(r.cvar_specs().size() == 30, "thirty cvars are described")
 	_done()
 
 
@@ -405,6 +406,59 @@ func _test_physics() -> void:
 	client.mirror_drop(d, {"id": &"rifle", "magazine": 5, "reserve": 0}, Transform3D(Basis.IDENTITY, Vector3(0, 5, 0)), Vector3.ZERO, 0.0, true)
 	client.mirror_pushed(d, Transform3D(Basis.IDENTITY, Vector3(1, 5, 0)), Vector3(0, 0, -3), Vector3.ZERO)
 	_check(client.active_count() == 1 and absf(client.snapshot()[0]["at"].origin.x - 1.0) < 0.01, "a client wakes the drop at the authority's pose")
+	_done()
+
+
+func _test_rescue() -> void:
+	_section("a drop that tunnels through the floor is put back")
+	var floor_body := StaticBody3D.new()
+	var floor_shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(20, 1, 20)
+	floor_shape.shape = box
+	floor_body.add_child(floor_shape)
+	floor_body.position = Vector3(0, -0.5, 0)
+	add_child(floor_body)
+	var drops := _drops()
+	drops.collision_mask = 1
+	drops.rules.lifetime = 0.0
+	var seen: Array = []
+	drops.pushed.connect(func(id: int, at: Transform3D, _v: Vector3, _s: Vector3) -> void: seen.append([id, at.origin]))
+	var d := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(0, 0.6, 0), Vector3.ZERO, 1)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var body: RigidBody3D = drops._entries[d]["body"]
+	body.global_position = Vector3(0, -1.5, 0)
+	drops.tick(0.0)
+	_check(body.global_position.y > 0.0 and absf(body.global_position.x) < 0.5, "a drop whose centre went through the floor is back on top", str(body.global_position))
+	_check(seen.size() == 1 and int(seen[0][0]) == d and (seen[0][1] as Vector3).y > 0.0, "and clients are told where")
+	body.global_position = Vector3(0, -0.02, 0)
+	drops.tick(0.0)
+	_check(seen.size() == 1, "a drop only slightly into the floor (contact slop) is left to the solver")
+	drops.rules.rescue = false
+	body.global_position = Vector3(0, -1.5, 0)
+	drops.tick(0.0)
+	_check(body.global_position.y < -1.0, "sv_weapon_drop_rescue 0 leaves it")
+	drops.rules.rescue = true
+	var air := _drops()
+	air.rules.lifetime = 0.0
+	var a := air.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(0, 5, 0), Vector3.ZERO, 1)
+	var fell: RigidBody3D = air._entries[a]["body"]
+	fell.global_position = Vector3(0, 5.0 - DotWeaponDrops.RESCUE_DEPTH - 1.0, 0)
+	air.tick(0.0)
+	_check(air.has_drop(a) and absf(fell.global_position.y - 5.0) < 0.01, "a drop that fell out of the world goes back to its drop point once")
+	fell.global_position = Vector3(0, 5.0 - DotWeaponDrops.RESCUE_DEPTH - 1.0, 0)
+	air.tick(0.0)
+	_check(not air.has_drop(a), "and the second time it is removed")
+	var bumps := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(2, 0.6, 0), Vector3.ZERO, 1)
+	var many: RigidBody3D = drops._entries[bumps]["body"]
+	for _i in DotWeaponDrops.RESCUE_MAX + 1:
+		many.global_position = Vector3(2, -1.5, 0)
+		drops.tick(0.0)
+	_check(bool(drops._entries[bumps]["rest"]) and many.global_position.y > 0.0, "a drop that keeps tunnelling is frozen on top after a few tries")
+	_drop(drops)
+	_drop(air)
+	_drop(floor_body)
 	_done()
 
 

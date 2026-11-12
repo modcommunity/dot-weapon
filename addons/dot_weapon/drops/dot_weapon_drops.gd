@@ -16,6 +16,11 @@ const REACH := 0.5
 const DEFAULT_SIZE := Vector3(0.12, 0.14, 0.7)
 ## Spare bodies kept per weapon for reuse.
 const MAX_PARKED := 8
+## A moving drop this far below where it was dropped or last pushed is put back there once, then removed: it fell through
+## the world, and [constant SETTLE_MAX_SEC] would otherwise freeze it in mid-air.
+const RESCUE_DEPTH := 40.0
+## Times one drop is put back on a floor it fell through before it is frozen where it was put.
+const RESCUE_MAX := 3
 
 ## A weapon left a hand (or a corpse): [param state] is [code]{id, magazine, reserve}[/code].
 signal dropped(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int)
@@ -354,6 +359,8 @@ func tick(delta: float) -> void:
 		if not bool(e["rest"]) and not body.continuous_cd:
 			var thin: float = minf(minf((e["size"] as Vector3).x, (e["size"] as Vector3).y), (e["size"] as Vector3).z)
 			body.continuous_cd = body.linear_velocity.length() * delta > thin * 0.5
+		if not bool(e["rest"]) and rules.rescue and _rescue(id, e, body):
+			continue
 		if not is_authority:
 			continue
 		if not bool(e["rest"]):
@@ -374,6 +381,70 @@ func tick(delta: float) -> void:
 		if _scan_left <= 0.0:
 			_scan_left = rules.scan_interval
 			scan()
+
+
+## Puts a moving drop back on the floor its centre passed down through since the last tick (the solver tunnelled it, about
+## once in 3000 drops on a bumpy trimesh floor), or at its drop point once it fell [constant RESCUE_DEPTH]
+## below it. [code]last[/code] stays above a floor the centre is only slightly into (contact slop). Returns true when it moved or removed it.
+func _rescue(id: int, e: Dictionary, body: RigidBody3D) -> bool:
+	var pos := body.global_position
+	var last: Vector3 = e["last"]
+	if pos.y < (e["origin"] as Vector3).y - RESCUE_DEPTH:
+		if is_authority and int(e.get("lost", 0)) >= 1:
+			_remove(id, 0)
+			return true
+		e["lost"] = int(e.get("lost", 0)) + 1
+		_place(id, e, body, Transform3D(body.global_basis, e["origin"]))
+		return true
+	if pos.distance_squared_to(last) < 0.000001 or not is_inside_tree():
+		return false
+	var q := PhysicsRayQueryParameters3D.create(last, pos, collision_mask)
+	q.hit_back_faces = false
+	var space := get_world_3d().direct_space_state
+	for _i in 3:
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			break
+		var n: Vector3 = hit["normal"]
+		var other: Object = hit["collider"]
+		if other is CharacterBody3D or other is RigidBody3D or other is AnimatableBody3D or n.y < 0.3:
+			var skip: Array[RID] = q.exclude
+			skip.append(hit["rid"])
+			q.exclude = skip
+			continue
+		var floor_at: Vector3 = hit["position"]
+		var reach := _support(body, n)
+		if (floor_at - pos).dot(n) <= reach + 0.02:
+			return false
+		var count := int(e.get("rescued", 0)) + 1
+		e["rescued"] = count
+		var at := Transform3D(body.global_basis, floor_at + n * (reach + 0.15) - body.global_basis * _centre(body))
+		DotLog.debug(CHANNEL, "drop fell through a floor; put back", {"id": id, "times": count})
+		_place(id, e, body, at)
+		if count > RESCUE_MAX and is_authority:
+			_rest(id, e, body)
+		return true
+	e["last"] = pos
+	return false
+
+
+## Moves a moving drop to [param at], still, and tells clients.
+func _place(id: int, e: Dictionary, body: RigidBody3D, at: Transform3D) -> void:
+	body.global_transform = at
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3.ZERO
+	e["last"] = at.origin
+	e["still"] = 0.0
+	e["moving"] = 0.0
+	if is_authority:
+		_announce_push(id)
+
+
+## Half the drop's box measured along [param n], in its current pose.
+func _support(body: RigidBody3D, n: Vector3) -> float:
+	var half := _half_extents(body)
+	var b := body.global_basis
+	return absf(b.x.normalized().dot(n)) * half.x + absf(b.y.normalized().dot(n)) * half.y + absf(b.z.normalized().dot(n)) * half.z
 
 
 ## Nudges a drop propped on end or edge (its long axis steeper than about 20 degrees) so it falls over before it sleeps.
@@ -459,6 +530,8 @@ func mirror_pushed(drop_id: int, at: Transform3D, velocity: Vector3, spin: Vecto
 	body.linear_velocity = velocity
 	body.angular_velocity = spin
 	e["rest"] = false
+	e["origin"] = at.origin
+	e["last"] = at.origin
 
 
 ## The state, pose and rest flag of a drop, for re-announcing it: {state, at, velocity, rest}, or empty.
@@ -578,6 +651,8 @@ func _wake(id: int) -> void:
 		body.freeze = false
 	e["still"] = 0.0
 	e["moving"] = 0.0
+	e["origin"] = body.global_position
+	e["last"] = body.global_position
 	_enforce_active(id)
 
 
@@ -651,7 +726,8 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
 	_order += 1
 	_entries[id] = {"body": body, "state": state, "age": 0.0, "life": life, "delay": delay,
-		"still": 0.0, "rest": false, "size": size, "owner": owner_id, "order": _order, "team": team, "touched": _clock}
+		"still": 0.0, "rest": false, "size": size, "owner": owner_id, "order": _order, "team": team, "touched": _clock,
+		"origin": at.origin, "last": at.origin}
 	DotLog.debug(CHANNEL, "weapon dropped", {"id": id, "weapon": String(state.get("id", &""))})
 
 
