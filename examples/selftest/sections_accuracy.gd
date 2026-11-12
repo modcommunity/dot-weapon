@@ -75,6 +75,71 @@ func _test_accuracy_classes() -> void:
 	_done()
 
 
+## API 35: the cone reads each accuracy term as the field or the class preset kept with the class, not through
+## DotWeaponBallistics.accuracy by name. Every class, preset and own fields, every posture: the same float as by name.
+func _test_accuracy_cone_reads() -> void:
+	_section("the cone's kept class presets equal accuracy() by name")
+	var a := _heavy_arsenal()
+	var beh := a.current().behaviour as DotWeaponHitscan
+	var b := a.current().def.tuning as DotWeaponBallistics
+	var classes: Array = DotWeaponAccuracyClass.PRESETS.keys()
+	var cases := 0
+	var wrong: Array = []
+	for own in [false, true]:
+		b.spread_hip = 0.7 if own else -1.0
+		b.spread_slide = 1.3 if own else -1.0
+		b.spread_sprint = 1.6 if own else -1.0
+		b.spread_flinch = 2.0 if own else -1.0
+		b.bloom_crouch = 0.5 if own else -1.0
+		b.spread_aim = 0.4 if own else -1.0
+		b.settle_ticks = 9 if own else -1
+		for klass: String in classes:
+			b.accuracy_class = klass
+			beh.state[&"bloom"] = 1.2
+			if beh._settle_ticks_of(b) != beh._class_ticks_of(b, b.settle_ticks, "settle"):
+				wrong.append("settle %s own=%s" % [klass, own])
+			for bits in range(128):
+				var c := _ctx(100)
+				c.aiming = bits & 1 != 0
+				c.crouched = bits & 2 != 0
+				c.sliding = bits & 4 != 0
+				c.sprinting = bits & 8 != 0
+				c.airborne = bits & 16 != 0
+				c.hurt_tick = 97 if bits & 32 != 0 else -1
+				c.speed = 3.3 if bits & 64 != 0 else 0.0
+				cases += 1
+				if beh._spread_with(b, c, null, null) != _cone_by_name(beh, b, c):
+					wrong.append("%s own=%s bits=%d" % [klass, own, bits])
+	_check(wrong.is_empty() and cases == 2 * classes.size() * 128, "%d postures over %d classes, own fields and presets, settle too" % [cases, classes.size()], str(wrong.slice(0, 5)))
+	_drop(a)
+	_done()
+
+
+## The cone of DotWeaponHitscan._spread_with before API 35 (no rules), every term through accuracy() by name.
+func _cone_by_name(beh: DotWeaponHitscan, b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
+	var klass := beh.accuracy_class()
+	var motion := maxf(float(beh.state.get(&"motion", 0.0)), clampf(ctx.speed / maxf(0.001, b.spread_speed_ref), 0.0, 1.0))
+	var out := b.spread_for_motion(motion, ctx.airborne, ctx.crouched)
+	if not ctx.aiming:
+		out += b.accuracy("spread_hip", klass)
+	if ctx.sliding or ctx.wall_running:
+		out *= b.accuracy("spread_slide", klass)
+	elif ctx.sprinting and not ctx.airborne:
+		out *= b.accuracy("spread_sprint", klass)
+	if ctx.hurt_tick >= 0 and ctx.tick >= ctx.hurt_tick:
+		var running := beh.running_tick_rate()
+		var rate := float(maxi(running, 1)) if running > 0 else 64.0
+		var left := 1.0 - float(ctx.tick - ctx.hurt_tick) / (DotWeaponAccuracyClass.FLINCH_SEC * rate)
+		out += b.accuracy("spread_flinch", klass) * clampf(left, 0.0, 1.0)
+	var bloom := minf(float(beh.state.get(&"bloom", 0.0)), b.bloom_max)
+	if ctx.crouched:
+		bloom *= b.accuracy("bloom_crouch", klass)
+	out += bloom
+	if ctx.aiming:
+		out *= b.accuracy("spread_aim", klass)
+	return out
+
+
 ## Fires [param shots] at full auto in [param key]; returns every shot's cone.
 func _burst_cones(key: String, shots: int, aim: bool = false) -> Array:
 	var a := _heavy_arsenal()

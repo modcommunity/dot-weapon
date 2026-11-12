@@ -87,5 +87,6 @@ extends RefCounted
 ## 32: `DotWeaponArsenal.phase_timers`, `phase_us`, `phase_calls`, `PHASES`: opt-in sub-phase timings of simulate_tick and idle_tick for a profiler. OLDEST stays 1.
 ## 33: ammo profiles `speed` and `reference_speed` (m/s, 0 = off) reach `DotPenetration.speed`/`reference_speed` through `make_penetration`; dot-combat scales wall and body costs by them. OLDEST stays 1.
 ## 34: `DotWeaponHitscan.steady_skip` (static, on): a hitscan weapon whose idle tick left its spread state at a fixed point skips the spread work on the next tick with the same inputs (posture, motion, rules, cone, tuning, no flinch), identical state; off for A/B. OLDEST stays 1.
-const LEVEL := 34
+## 35: `DotWeaponHitscan` reads the cone's accuracy terms as the field or the class preset kept with the class (no by-name `accuracy()` lookups), and a slowing carrier's settle the same way: an idle moving carrier's tick is cheaper, identical cone (`_test_accuracy_cone_reads`). OLDEST stays 1.
+const LEVEL := 35
 const OLDEST := 1

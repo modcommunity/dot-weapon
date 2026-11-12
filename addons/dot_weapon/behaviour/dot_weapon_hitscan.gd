@@ -27,6 +27,16 @@ var _class_key: String = ""
 var _class_id: StringName = &""
 var _class_key_set: bool = false
 var _class: String = ""
+## The class presets of [member _class] that every cone and settle reads, set with it in [method _class_of]:
+## [constant DotWeaponAccuracyClass.PRESETS] is a constant, so they hold until the class changes. A ballistics field of 0
+## or more still wins over its preset and is read each time, as [method DotWeaponBallistics.accuracy] does.
+var _pre_hip: float = 0.0
+var _pre_slide: float = 1.0
+var _pre_sprint: float = 1.0
+var _pre_flinch: float = 0.0
+var _pre_crouch: float = 1.0
+var _pre_aim: float = 1.0
+var _pre_settle: float = 0.0
 ## The cone the last context tick or use computed, for display; -1 before any.
 var _shown: float = -1.0
 ## Set by [method rest_tick]: the skipped ticks did not compute the cone, [method spread_now] does it when asked.
@@ -99,7 +109,7 @@ func _tick(ctx: DotWeaponContext) -> void:
 	var held_motion := float(state.get(_MOTION, 0.0))
 	var motion := target_motion
 	if target_motion < held_motion:
-		var settle := _class_ticks_of(b, b.settle_ticks, "settle")
+		var settle := _settle_ticks_of(b)
 		if settle > 0:
 			motion = maxf(target_motion, held_motion - 1.0 / float(settle))
 	# A still carrier leaves no key, so this tick's state equals the idle path's (which never sees a ctx).
@@ -290,6 +300,13 @@ func _class_of(b: DotWeaponBallistics) -> String:
 	_class_key = explicit
 	_class_id = id
 	_class = DotWeaponAccuracyClass.resolve(explicit, def.tags if def != null else [], id)
+	_pre_hip = DotWeaponAccuracyClass.preset(_class, "spread_hip")
+	_pre_slide = DotWeaponAccuracyClass.preset(_class, "spread_slide")
+	_pre_sprint = DotWeaponAccuracyClass.preset(_class, "spread_sprint")
+	_pre_flinch = DotWeaponAccuracyClass.preset(_class, "spread_flinch")
+	_pre_crouch = DotWeaponAccuracyClass.preset(_class, "bloom_crouch")
+	_pre_aim = DotWeaponAccuracyClass.preset(_class, "spread_aim")
+	_pre_settle = DotWeaponAccuracyClass.preset(_class, "settle")
 	return _class
 
 
@@ -315,6 +332,17 @@ func _class_ticks_of(b: DotWeaponBallistics, own: int, key: String) -> int:
 	if rate <= 0:
 		rate = def.authored_tick_rate if def != null and def.authored_tick_rate > 0 else 64
 	return roundi(DotWeaponAccuracyClass.preset(_class_of(b), key) * float(rate))
+
+
+## _class_ticks_of(b, b.settle_ticks, "settle") with the kept preset: a slowing carrier asks it every tick.
+func _settle_ticks_of(b: DotWeaponBallistics) -> int:
+	if b.settle_ticks >= 0:
+		return scaled_ticks(b.settle_ticks)
+	var rate := running_tick_rate()
+	if rate <= 0:
+		rate = def.authored_tick_rate if def != null and def.authored_tick_rate > 0 else 64
+	_class_of(b)
+	return roundi(_pre_settle * float(rate))
 
 
 func _motion_of(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
@@ -345,28 +373,30 @@ func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
 func _spread_with(
 	b: DotWeaponBallistics, ctx: DotWeaponContext, rules: DotWeaponSpreadRules, every: DotWeaponSpreadRules = _rules_object()
 ) -> float:
-	var klass := _class_of(b)
+	# Each term is b.accuracy(key, class) without its by-name lookups (an idle moving carrier computes this every tick):
+	# the field when 0 or more, else the class preset _class_of keeps.
+	_class_of(b)
 	var motion := maxf(float(state.get(_MOTION, 0.0)), _motion_of(b, ctx))
 	var out := b.spread_for_motion(motion, ctx.airborne, ctx.crouched)
 	if not ctx.aiming:
-		out += b.accuracy("spread_hip", klass)
+		out += b.spread_hip if b.spread_hip >= 0.0 else _pre_hip
 	if ctx.sliding or ctx.wall_running:
-		out *= b.accuracy("spread_slide", klass)
+		out *= b.spread_slide if b.spread_slide >= 0.0 else _pre_slide
 	elif ctx.sprinting and not ctx.airborne:
-		out *= b.accuracy("spread_sprint", klass)
+		out *= b.spread_sprint if b.spread_sprint >= 0.0 else _pre_sprint
 	if ctx.hurt_tick >= 0 and ctx.tick >= ctx.hurt_tick:
 		var running := running_tick_rate()
 		var rate := float(maxi(running, 1)) if running > 0 else 64.0
 		var left := 1.0 - float(ctx.tick - ctx.hurt_tick) / (DotWeaponAccuracyClass.FLINCH_SEC * rate)
-		out += b.accuracy("spread_flinch", klass) * clampf(left, 0.0, 1.0)
+		out += (b.spread_flinch if b.spread_flinch >= 0.0 else _pre_flinch) * clampf(left, 0.0, 1.0)
 	if rules != null:
 		out = rules.apply(out, float(state.get(_FACTOR, 1.0)))
 	var bloom := minf(float(state.get(_BLOOM, 0.0)), b.bloom_max)
 	if ctx.crouched:
-		bloom *= b.accuracy("bloom_crouch", klass)
+		bloom *= b.bloom_crouch if b.bloom_crouch >= 0.0 else _pre_crouch
 	out += bloom
 	if ctx.aiming:
-		out *= b.accuracy("spread_aim", klass)
+		out *= b.spread_aim if b.spread_aim >= 0.0 else _pre_aim
 	if every != null:
 		out *= every.scale
 		if every.max_spread > 0.0:

@@ -87,6 +87,25 @@ func _run() -> void:
 		_time("is_idle_for + idle_tick, rest skip", rounds, func() -> void:
 			if a.is_idle_for(cmd, null):
 				a.idle_tick())
+		# A moving carrier (a bot running about, never firing): the speed changes every tick, so neither the rest skip
+		# nor the steady skip holds and every idle tick computes the cone.
+		var step := [0]
+		_time("is_idle_for + idle_tick, moving", rounds, func() -> void:
+			step[0] += 1
+			player.ctrl.velocity = Vector3(3.0 + float(step[0] % 50) * 0.05, 0.0, 0.0)
+			if a.is_idle_for(cmd, null):
+				a.idle_tick())
+		var b: DotWeaponBallistics = a.current().def.tuning
+		var moving := DotWeaponPlayerBridge.posture_for(player, 5)
+		_time("behaviour.tick(moving ctx)", rounds, func() -> void:
+			step[0] += 1
+			moving.speed = 3.0 + float(step[0] % 50) * 0.05
+			beh.tick(moving))
+		_time("  _spread_with (moving)", rounds, func() -> void: beh._spread_with(b, moving, beh._rules()))
+		_time("  ballistics.accuracy(spread_hip)", rounds, func() -> void: b.accuracy("spread_hip", "rifle"))
+		_time("  _class_ticks_of(settle)", rounds, func() -> void: beh._class_ticks_of(b, b.settle_ticks, "settle"))
+		_time("  _settle_ticks_of", rounds, func() -> void: beh._settle_ticks_of(b))
+		player.ctrl.velocity = Vector3.ZERO
 		_time("(empty callable call)", rounds, func() -> void: pass)
 
 	get_tree().quit(0)
