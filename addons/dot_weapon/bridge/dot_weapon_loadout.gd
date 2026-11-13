@@ -48,6 +48,7 @@ static func fill(
 
 	var given := 0
 	var skipped: Array[String] = []
+	var parts: Array[Dictionary] = []
 
 	for row: Variant in resolved:
 		if not (row is Dictionary):
@@ -65,7 +66,10 @@ static func fill(
 		)
 
 		if not arsenal.catalogue.has(weapon_id):
-			skipped.append(String(item_id))
+			if arsenal.attachments != null and arsenal.attachments.for_item(item_id) != null:
+				parts.append({"item": item_id, "slot": int(entry.get("arsenal_slot", 0))})
+			else:
+				skipped.append(String(item_id))
 			continue
 
 		var res := arsenal.give(weapon_id)
@@ -81,7 +85,44 @@ static func fill(
 			% (", ".join(skipped) if not skipped.is_empty() else "nothing"),
 		)
 
+	_fit_parts(arsenal, parts)
 	return DotResult.success(given)
+
+
+## Fits attachment rows after the weapons: on the row's `arsenal_slot`, or with none on the first
+## carried weapon it fits. One that does not fit is dropped, never an error (a saved loadout from
+## another version should degrade).
+static func _fit_parts(arsenal: DotWeaponArsenal, parts: Array[Dictionary]) -> void:
+	for part in parts:
+		var att := arsenal.attachments.for_item(part["item"])
+		var targets: Array[int] = arsenal.slots()
+		if int(part["slot"]) > 0:
+			targets = [int(part["slot"])]
+		for slot in targets:
+			if not arsenal.has_slot(slot):
+				continue
+			var fitting := arsenal.fitting_at(slot)
+			var def := arsenal.catalogue.get_def(fitting.weapon_id)
+			if fitting.attachment_on(att.mount) != &"" or not att.fits(def):
+				continue
+			var res := arsenal.attachments.toggle(def, fitting, att.mount, att.id)
+			if res.ok and arsenal.fit(slot, res.value).ok:
+				break
+
+
+## The attachment rows to save for what is fitted now: `{arsenal_slot, item}` per attachment, by
+## slot then mount, so a loadout keeps them through [method fill].
+static func fitted_rows(arsenal: DotWeaponArsenal) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if arsenal == null or arsenal.attachments == null:
+		return out
+	for slot in arsenal.slots():
+		var fitting := arsenal.fitting_at(slot)
+		for m in fitting.mounts():
+			var att := arsenal.attachments.get_attachment(fitting.attachment_on(m))
+			if att != null:
+				out.append({"arsenal_slot": slot, "item": String(att.item())})
+	return out
 
 
 ## Whether an arsenal could be filled from a loadout, without changing anything.

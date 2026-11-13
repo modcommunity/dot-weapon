@@ -1,0 +1,15 @@
+name: "Suppressor"
+description: "Quieter and no flash; a little less damage at range."
+mount: "muzzle"
+model: "res://examples/attach_models/suppressor.tscn"
+item: "item_suppressor"
+fits_tags: "rifle,smg,pistol"
+excludes_tags: "shotgun"
+tags_added: "quiet"
+scale:
+  damage: 0.9
+  recoil_pitch: 0.85
+  falloff_start: 0.8
+params:
+  suppressed: true
+  muzzle_flash: "none"

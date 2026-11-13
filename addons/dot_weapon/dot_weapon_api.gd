@@ -90,5 +90,6 @@ extends RefCounted
 ## 35: `DotWeaponHitscan` reads the cone's accuracy terms as the field or the class preset kept with the class (no by-name `accuracy()` lookups), and a slowing carrier's settle the same way: an idle moving carrier's tick is cheaper, identical cone (`_test_accuracy_cone_reads`). OLDEST stays 1.
 ## 36: [member DotWeaponDropRules.rescue] (cvar sv_weapon_drop_rescue, on): a moving drop whose centre passed down through a floor since the last tick is put back on top of it, and one that fell [constant DotWeaponDrops.RESCUE_DEPTH] below its drop point goes back there once, then is removed. OLDEST stays 1.
 ## 37: the drop rescue finds floors by back faces too (a trimesh wound the other way was missed, so its tunnels fell 40 m), and a drop [constant DotWeaponDrops.RESCUE_DEPTH] below its drop point goes back on the floor under that point, frozen there the second time; only a drop with no floor under its point is removed. OLDEST stays 1.
-const LEVEL := 37
+## 38: attachments as items with a server-side request: `DotWeaponAttachment` fits_slots/excludes_tags/blocks/item_id/model and `params.` fields, `DotWeaponAttachments` KIND/schema/load_set/for_item/toggle/stat_delta, `DotWeaponAttachRequest`, `DotWeaponAttachMenu`, `DotWeaponAttachmentModels`, loadout attachment rows; a fitted slot's behaviour now fires the fitted def. OLDEST stays 1.
+const LEVEL := 38
 const OLDEST := 1

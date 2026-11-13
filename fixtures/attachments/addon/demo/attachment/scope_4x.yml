@@ -1,0 +1,12 @@
+name: "4x Scope"
+description: "Magnified optic; slower to aim."
+mount: "optic"
+model: "res://examples/attach_models/scope_4x.tscn"
+fits_slots: "1"
+blocks: "side"
+scale:
+  spread: 0.9
+  params.ads_seconds: 1.5
+params:
+  optic_zoom: 4.0
+  optic_reticle: "mil_dot"
