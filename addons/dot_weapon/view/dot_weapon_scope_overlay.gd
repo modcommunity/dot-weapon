@@ -10,12 +10,14 @@ extends Control
 ## sets [member fraction] each frame from the view model's `aim_fraction()` whenever
 ## it `is_scoped()` — or from its own rule.
 
-## How visible, 0 to 1. Faded rather than switched so the cut from the weapon to the scope
+## How visible, 0 to 1 (this and the other drawn setters redraw only on a change: [method follow] sets them every frame). Faded rather than switched so the cut from the weapon to the scope
 ## is not a flash of black.
 @export_range(0.0, 1.0, 0.01) var fraction: float = 0.0:
 	set(value):
-		fraction = clampf(value, 0.0, 1.0)
-		queue_redraw()
+		var next: float = clampf(value, 0.0, 1.0)
+		if next != fraction:
+			fraction = next
+			queue_redraw()
 
 ## The circle's diameter as a fraction of the screen's shorter side.
 @export_range(0.2, 1.0, 0.01) var circle: float = 0.9
@@ -23,8 +25,10 @@ extends Control
 ## The lens's size as a share of [member circle] while the scope comes up: it grows toward 1.
 @export_range(0.05, 1.0, 0.01) var lens_scale: float = 1.0:
 	set(value):
-		lens_scale = clampf(value, 0.05, 1.0)
-		queue_redraw()
+		var next: float = clampf(value, 0.05, 1.0)
+		if next != lens_scale:
+			lens_scale = next
+			queue_redraw()
 
 @export var surround_colour: Color = Color(0.0, 0.0, 0.0, 1.0)
 @export var reticle_colour: Color = Color(0.0, 0.0, 0.0, 0.9)
@@ -55,8 +59,10 @@ extends Control
 ## 2: the scope fills the screen: the lens is the main camera's own zoomed view and everything outside the circle is black.
 @export_range(1, 2, 1) var mode: int = 1:
 	set(value):
-		mode = clampi(value, 1, 2)
-		queue_redraw()
+		var next: int = clampi(value, 1, 2)
+		if next != mode:
+			mode = next
+			queue_redraw()
 
 ## Mode 1: the lens's diameter as a fraction of the screen's shorter side.
 @export_range(0.15, 0.9, 0.01) var lens_circle: float = 0.46
@@ -64,8 +70,10 @@ extends Control
 ## How much of the picture is clear (0 solid, 1 not drawn), for a scope looked through on the move; [method follow] sets it.
 @export_range(0.0, 1.0, 0.01) var clear: float = 0.0:
 	set(value):
-		clear = clampf(value, 0.0, 1.0)
-		queue_redraw()
+		var next: float = clampf(value, 0.0, 1.0)
+		if next != clear:
+			clear = next
+			queue_redraw()
 
 ## Mode 1: the lens picture's side in pixels at most; it is also scaled down to the lens's size on screen.
 @export_range(64, 2048, 1) var lens_pixels: int = 768
