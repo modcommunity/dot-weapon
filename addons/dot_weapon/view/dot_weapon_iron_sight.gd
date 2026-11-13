@@ -314,42 +314,59 @@ static func spans(faces: PackedVector3Array, forward: Vector3, fractions: Array)
 		return out
 	# A vertical ray can only meet a triangle whose footprint (x and z extent, a hair wider) holds its x and z:
 	# the same Geometry3D test as [method span], run on those triangles alone, so the answers are the same.
-	var count := faces.size() / 3
-	var lo_x := PackedFloat32Array()
-	var hi_x := PackedFloat32Array()
-	var lo_z := PackedFloat32Array()
-	var hi_z := PackedFloat32Array()
-	lo_x.resize(count)
-	hi_x.resize(count)
-	lo_z.resize(count)
-	hi_z.resize(count)
-	for t in count:
-		var a := faces[t * 3]
-		var b := faces[t * 3 + 1]
-		var c := faces[t * 3 + 2]
-		lo_x[t] = minf(a.x, minf(b.x, c.x)) - FOOTPRINT_SLACK
-		hi_x[t] = maxf(a.x, maxf(b.x, c.x)) + FOOTPRINT_SLACK
-		lo_z[t] = minf(a.z, minf(b.z, c.z)) - FOOTPRINT_SLACK
-		hi_z[t] = maxf(a.z, maxf(b.z, c.z)) + FOOTPRINT_SLACK
+	# One pass over the mesh keeps, per fraction, the triangles under the box of its 15 rays; the rays then
+	# walk only those (each ray walking every triangle was ~35 ms a weapon of hand reach).
 	var centre := (s_min + s_max) * 0.5
 	var width := s_max - s_min
+	var rays: Array = []
+	var boxes: Array[Rect2] = []
+	var near: Array[PackedInt32Array] = []
+	var feet: Array[PackedFloat32Array] = []
 	for k in fractions.size():
-		var low := INF
-		var high := -INF
+		var at_k: Array[Vector3] = []
+		var box := Rect2()
 		for shift: float in [0.0, -0.02, 0.02, -0.04, 0.04]:
 			for lateral: float in [0.0, -0.15, 0.15]:
 				var at := f * (lerpf(t_min, t_max, float(fractions[k])) + shift * length) + side * (centre + lateral * width)
-				var from_below := at + Vector3.DOWN * (at.y - y_min + 1.0)
-				var from_above := at + Vector3.UP * (y_max - at.y + 1.0)
-				for t in count:
-					if at.x < lo_x[t] or at.x > hi_x[t] or at.z < lo_z[t] or at.z > hi_z[t]:
-						continue
-					var up: Variant = Geometry3D.ray_intersects_triangle(from_below, Vector3.UP, faces[t * 3], faces[t * 3 + 1], faces[t * 3 + 2])
-					if up != null:
-						low = minf(low, (up as Vector3).y)
-					var down: Variant = Geometry3D.ray_intersects_triangle(from_above, Vector3.DOWN, faces[t * 3], faces[t * 3 + 1], faces[t * 3 + 2])
-					if down != null:
-						high = maxf(high, (down as Vector3).y)
+				box = Rect2(at.x, at.z, 0.0, 0.0) if at_k.is_empty() else box.expand(Vector2(at.x, at.z))
+				at_k.append(at)
+		rays.append(at_k)
+		# Grown a hair so float rounding cannot drop a triangle the ray's own test below would keep.
+		boxes.append(box.grow(0.00001))
+		near.append(PackedInt32Array())
+		feet.append(PackedFloat32Array())
+	for t in faces.size() / 3:
+		var a := faces[t * 3]
+		var b := faces[t * 3 + 1]
+		var c := faces[t * 3 + 2]
+		var lo_x := minf(a.x, minf(b.x, c.x)) - FOOTPRINT_SLACK
+		var hi_x := maxf(a.x, maxf(b.x, c.x)) + FOOTPRINT_SLACK
+		var lo_z := minf(a.z, minf(b.z, c.z)) - FOOTPRINT_SLACK
+		var hi_z := maxf(a.z, maxf(b.z, c.z)) + FOOTPRINT_SLACK
+		for k in boxes.size():
+			var box := boxes[k]
+			if box.end.x < lo_x or box.position.x > hi_x or box.end.y < lo_z or box.position.y > hi_z:
+				continue
+			near[k].append(t)
+			feet[k].append_array([lo_x, hi_x, lo_z, hi_z])
+	for k in fractions.size():
+		var low := INF
+		var high := -INF
+		var list := near[k]
+		var foot := feet[k]
+		for at: Vector3 in rays[k]:
+			var from_below := at + Vector3.DOWN * (at.y - y_min + 1.0)
+			var from_above := at + Vector3.UP * (y_max - at.y + 1.0)
+			for i in list.size():
+				if at.x < foot[i * 4] or at.x > foot[i * 4 + 1] or at.z < foot[i * 4 + 2] or at.z > foot[i * 4 + 3]:
+					continue
+				var t := list[i] * 3
+				var up: Variant = Geometry3D.ray_intersects_triangle(from_below, Vector3.UP, faces[t], faces[t + 1], faces[t + 2])
+				if up != null:
+					low = minf(low, (up as Vector3).y)
+				var down: Variant = Geometry3D.ray_intersects_triangle(from_above, Vector3.DOWN, faces[t], faces[t + 1], faces[t + 2])
+				if down != null:
+					high = maxf(high, (down as Vector3).y)
 		if low != INF and high != -INF:
 			out[k] = {"low": low, "high": high, "length": length}
 	return out
