@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 172
+const CHECKS := 176
 
 
 func _ready() -> void:
@@ -25,6 +25,7 @@ func _run() -> void:
 	_test_drop_key_hold()
 	await _test_physics()
 	await _test_rescue()
+	await _test_capped_in_air()
 	await _test_blast()
 	await _test_lies_flat()
 	_test_body_reuse()
@@ -406,6 +407,41 @@ func _test_physics() -> void:
 	client.mirror_drop(d, {"id": &"rifle", "magazine": 5, "reserve": 0}, Transform3D(Basis.IDENTITY, Vector3(0, 5, 0)), Vector3.ZERO, 0.0, true)
 	client.mirror_pushed(d, Transform3D(Basis.IDENTITY, Vector3(1, 5, 0)), Vector3(0, 0, -3), Vector3.ZERO)
 	_check(client.active_count() == 1 and absf(client.snapshot()[0]["at"].origin.x - 1.0) < 0.01, "a client wakes the drop at the authority's pose")
+	_done()
+
+
+func _test_capped_in_air() -> void:
+	_section("a drop the active cap rests in mid-air goes down onto the floor first")
+	var floor_body := StaticBody3D.new()
+	var floor_shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(20, 1, 20)
+	floor_shape.shape = box
+	floor_body.add_child(floor_shape)
+	floor_body.position = Vector3(100, -0.5, 0)
+	add_child(floor_body)
+	var drops := _drops()
+	drops.collision_mask = 1
+	drops.rules.lifetime = 0.0
+	drops.rules.max_active = 1
+	var settled: Dictionary = {}
+	drops.settled.connect(func(id: int, at: Transform3D) -> void: settled[id] = at)
+	var a := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(100, 6, 0), Vector3.ZERO, 1)
+	await get_tree().physics_frame
+	var body: RigidBody3D = drops._entries[a]["body"]
+	body.global_basis = Basis(Vector3.RIGHT, PI * 0.5)
+	var _b := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(104, 6, 0), Vector3.ZERO, 1)
+	_check(bool(drops._entries[a]["rest"]) and settled.has(a), "the oldest flying drop is rested by the cap")
+	var at: Transform3D = settled.get(a, Transform3D())
+	_check(at.origin.y > -0.05 and at.origin.y < 0.3 and absf(at.origin.x - 100.0) < 0.01, "on the floor under it, not 6 m up where it flew", str(at.origin))
+	_check(absf(at.basis.z.normalized().y) < 0.05, "laid flat, not standing on its muzzle", str(at.basis.z))
+	var c := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(108, 0.2, 0), Vector3.ZERO, 1)
+	await get_tree().physics_frame
+	var low: Vector3 = (drops._entries[c]["body"] as RigidBody3D).global_position
+	var _d := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(112, 6, 0), Vector3.ZERO, 1)
+	_check(settled.has(c) and absf((settled[c] as Transform3D).origin.y - low.y) < 0.1, "one already down by the floor rests where it is", "%s vs %s" % [settled.get(c), low])
+	drops.queue_free()
+	floor_body.queue_free()
 	_done()
 
 
