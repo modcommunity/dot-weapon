@@ -161,7 +161,9 @@ static func push(source: Object, arsenal: DotWeaponArsenal, with_fire_mode: bool
 	if base == null or arsenal.attachments.code_bits(base) > FITTED_BITS:
 		return
 	var code := int(source.get(&"net_fitted"))
-	if code != arsenal.attachments.encode(base, arsenal.fitting_at(arsenal.current_slot())):
+	# Every snapshot per remote carrier: compare against the slot's own fitting, no copy.
+	var fitted := arsenal.fitting_ref(arsenal.current_slot())
+	if code != (0 if fitted == null else arsenal.attachments.encode(base, fitted)):
 		arsenal.fit(arsenal.current_slot(), arsenal.attachments.decode(base, code))
 
 

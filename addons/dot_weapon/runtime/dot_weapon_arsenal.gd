@@ -719,6 +719,13 @@ func fitting_at(slot: int) -> DotWeaponFitting:
 	return s.fitting.duplicate_fitting()
 
 
+## [method fitting_at] without the copy, for a reader comparing every snapshot: the slot's own
+## fitting, or null when nothing is fitted. Read only; change a fitting through [method fit].
+func fitting_ref(slot: int) -> DotWeaponFitting:
+	var s: DotWeaponSlot = _slots.get(slot, null)
+	return null if s == null else s.fitting
+
+
 ## Everything that has to travel and everything a rollback has to restore, behaviours' own state included.
 func snapshot() -> Dictionary:
 	return _Io.snapshot(self)
