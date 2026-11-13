@@ -11,7 +11,7 @@ Attachments are items of their own: a scope, a suppressor, a laser, an extended 
 | `DotWeaponAttachments` | the catalogue: `load_set` (the `attachment` profile kind), `choices_for`, `toggle`, `apply` (copy-on-apply), `stat_delta`, `for_item`, the packed wire code |
 | `DotWeaponAttachRequest` | a client's ask `[slot, mount, id]`; only the server applies it |
 | `DotWeaponAttachMenu` | the attach/detach menu (keyboard, pad, touch); emits `requested`, changes nothing |
-| `DotWeaponAttachmentModels` | `dress(weapon_model, catalogue, fitting)` puts each attachment's scene under `mount_<mount>` |
+| `DotWeaponAttachmentModels` | `dress(weapon_model, catalogue, fitting)` puts each attachment's scene under `socket_<mount>` |
 | `DotWeaponLoadoutBridge` | `fill` fits attachment rows after the weapons; `fitted_rows` gives the rows to save |
 
 ## Profiles
@@ -77,6 +77,6 @@ A resolved loadout row whose item is an attachment (`for_item`) is fitted after 
 
 ## Models
 
-A weapon model marks its mounts with nodes named `mount_<mount>` (`mount_muzzle`, `mount_optic`, ...). `DotWeaponAttachmentModels.dress` instances each fitted attachment's `model` there and replaces what it placed earlier. A weapon without the socket shows nothing. `examples/attach_demo.tscn` is the render check (`tools/screenshot.sh out.png res://examples/attach_demo.tscn`).
+A weapon model marks its mounts with nodes named `socket_<mount>` (`socket_muzzle`, `socket_optic`, ...). `DotWeaponAttachmentModels.dress` instances each fitted attachment's `model` there and replaces what it placed earlier. A weapon without the socket shows nothing. `examples/attach_demo.tscn` is the render check (`tools/screenshot.sh out.png res://examples/attach_demo.tscn`).
 
 Meshes must be free (CC0) or our own.

@@ -2,9 +2,9 @@ class_name DotWeaponAttachmentModels
 extends RefCounted
 
 ## Puts the models of a fitting on a weapon model: each attachment's [member DotWeaponAttachment.model]
-## goes under the node named `mount_<mount>`. Pure presentation; a weapon with no such node shows nothing.
+## goes under the node named `socket_<mount>` (the family's socket name). Pure presentation; a weapon with no such node shows nothing.
 
-const SOCKET_PREFIX := "mount_"
+const SOCKET_PREFIX := "socket_"
 const _META := &"dot_attachment_model"
 
 
