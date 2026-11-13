@@ -22,6 +22,8 @@ const RESCUE_DEPTH := 40.0
 ## A drop rested by the active cap or [constant SETTLE_MAX_SEC] further than this above the floor under it (beyond its
 ## own half-thickness) is in the air, and goes down onto that floor first; less is a drop lying on another.
 const GROUND_GAP := 0.25
+## Physics ticks between a cut-short rest and the sweep that puts the drop on the floor ([method _rest_grounded]).
+const GROUND_TICKS := 2
 ## Times one drop is put back on a floor it fell through before it is frozen on that floor.
 const RESCUE_MAX := 3
 
@@ -381,6 +383,11 @@ func tick(delta: float) -> void:
 				_rest_grounded(id, e, body)
 		elif body.global_position.y < -200.0:
 			_remove(id, 0)
+		elif e.has("ground_in"):
+			e["ground_in"] = int(e["ground_in"]) - 1
+			if int(e["ground_in"]) <= 0:
+				e.erase("ground_in")
+				_ground(id, e, body)
 	if is_authority:
 		_scan_left = minf(_scan_left, rules.scan_interval) - delta
 		if _scan_left <= 0.0:
@@ -534,21 +541,61 @@ func _rest(id: int, e: Dictionary, body: RigidBody3D) -> void:
 	settled.emit(id, body.global_transform)
 
 
-## Rests a drop that may still be in flight (the active cap or [constant SETTLE_MAX_SEC] cut it short): one more than
-## [constant GROUND_GAP] above the floor under it is first laid flat on that floor, so no gun is frozen in the air (a blast
-## that woke a dozen drops froze the oldest where they flew). With no floor under it, it rests where it is.
+## Rests a drop that may still be in flight (the active cap or [constant SETTLE_MAX_SEC] cut it short). It freezes at
+## once (the cap is a physics cost), and [constant GROUND_TICKS] ticks later, one more than [constant GROUND_GAP] above
+## the floor under it is laid flat and swept straight down onto it, so no gun is frozen in the air (a blast that woke a
+## dozen drops froze the oldest where they flew). The wait lets level geometry added the same frame reach the physics
+## space; the sweep moves the whole box, so a drop beside a crate or over a ledge stops on it, not inside it.
 func _rest_grounded(id: int, e: Dictionary, body: RigidBody3D) -> void:
-	if is_inside_tree():
-		var pos := body.global_position
-		var hit := _floor_hit(pos + Vector3.UP * (_support(body, Vector3.UP) + 0.05), pos + Vector3.DOWN * RESCUE_DEPTH)
-		if not hit.is_empty():
-			var n: Vector3 = hit["normal"]
-			var floor_at: Vector3 = hit["position"]
-			if (pos - floor_at).dot(n) > _support(body, n) + GROUND_GAP:
-				body.global_basis = _laid_flat(e, body.global_basis)
-				body.global_transform = _on_floor(body, floor_at, n, 0.005)
-				DotLog.debug(CHANNEL, "drop rested in the air; put on the floor under it", {"id": id})
 	_rest(id, e, body)
+	e["ground_in"] = GROUND_TICKS
+
+
+## The deferred half of [method _rest_grounded]: a rested drop with no floor right under it goes down onto it.
+func _ground(id: int, e: Dictionary, body: RigidBody3D) -> void:
+	if not is_inside_tree():
+		return
+	var flat := Transform3D(_laid_flat(e, body.global_basis), body.global_position)
+	var from := flat if not _overlaps(body, flat) else body.global_transform
+	var down := _sweep(body, from, Vector3.DOWN * RESCUE_DEPTH)
+	if down.length() <= GROUND_GAP or down.length() >= RESCUE_DEPTH - 0.01:
+		return
+	body.global_transform = from.translated(down)
+	DotLog.debug(CHANNEL, "drop rested in the air; put on the floor under it", {"id": id, "fell": snappedf(down.length(), 0.01)})
+	settled.emit(id, body.global_transform)
+
+
+## How far [param body] at [param from] moves along [param motion] before it touches the world (other drops ignored).
+func _sweep(body: RigidBody3D, from: Transform3D, motion: Vector3) -> Vector3:
+	var q := PhysicsTestMotionParameters3D.new()
+	q.from = from
+	q.motion = motion
+	q.margin = 0.001
+	q.exclude_bodies = _drop_rids(body)
+	var r := PhysicsTestMotionResult3D.new()
+	if not PhysicsServer3D.body_test_motion(body.get_rid(), q, r):
+		return motion
+	return r.get_travel()
+
+
+## True when [param body] at [param at] is inside the world (other drops ignored).
+func _overlaps(body: RigidBody3D, at: Transform3D) -> bool:
+	var q := PhysicsTestMotionParameters3D.new()
+	q.from = at
+	q.motion = Vector3.ZERO
+	q.margin = 0.001
+	q.recovery_as_collision = true
+	q.exclude_bodies = _drop_rids(body)
+	return PhysicsServer3D.body_test_motion(body.get_rid(), q, PhysicsTestMotionResult3D.new())
+
+
+func _drop_rids(body: RigidBody3D) -> Array[RID]:
+	var out: Array[RID] = []
+	for other: int in _entries:
+		var b: RigidBody3D = _entries[other]["body"]
+		if b != body and is_instance_valid(b):
+			out.append(b.get_rid())
+	return out
 
 
 ## [param b] turned the least way that brings the drop's long axis level.
@@ -732,6 +779,7 @@ func _wake(id: int) -> void:
 	if bool(e["rest"]):
 		e["rest"] = false
 		body.freeze = false
+	e.erase("ground_in")
 	e["still"] = 0.0
 	e["moving"] = 0.0
 	e["origin"] = body.global_position

@@ -432,6 +432,8 @@ func _test_capped_in_air() -> void:
 	body.global_basis = Basis(Vector3.RIGHT, PI * 0.5)
 	var _b := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(104, 6, 0), Vector3.ZERO, 1)
 	_check(bool(drops._entries[a]["rest"]) and settled.has(a), "the oldest flying drop is rested by the cap")
+	for _i in DotWeaponDrops.GROUND_TICKS + 1:
+		await get_tree().physics_frame
 	var at: Transform3D = settled.get(a, Transform3D())
 	_check(at.origin.y > -0.05 and at.origin.y < 0.3 and absf(at.origin.x - 100.0) < 0.01, "on the floor under it, not 6 m up where it flew", str(at.origin))
 	_check(absf(at.basis.z.normalized().y) < 0.05, "laid flat, not standing on its muzzle", str(at.basis.z))
@@ -439,6 +441,8 @@ func _test_capped_in_air() -> void:
 	await get_tree().physics_frame
 	var low: Vector3 = (drops._entries[c]["body"] as RigidBody3D).global_position
 	var _d := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(112, 6, 0), Vector3.ZERO, 1)
+	for _i in DotWeaponDrops.GROUND_TICKS + 1:
+		await get_tree().physics_frame
 	_check(settled.has(c) and absf((settled[c] as Transform3D).origin.y - low.y) < 0.1, "one already down by the floor rests where it is", "%s vs %s" % [settled.get(c), low])
 	drops.queue_free()
 	floor_body.queue_free()
