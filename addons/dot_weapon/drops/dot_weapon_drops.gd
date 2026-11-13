@@ -24,6 +24,11 @@ const RESCUE_DEPTH := 40.0
 const GROUND_GAP := 0.25
 ## Physics ticks between a cut-short rest and the sweep that puts the drop on the floor ([method _rest_grounded]).
 const GROUND_TICKS := 2
+## A grounded drop inside the floor is lifted in steps of this, up to [constant LIFT_MAX], to a clear pose.
+const LIFT_STEP := 0.02
+const LIFT_MAX := 0.3
+## The grounding sweep goes down in legs of this (under the thinnest drop), so it cannot step through a thin edge.
+const SWEEP_LEG := 0.05
 ## Times one drop is put back on a floor it fell through before it is frozen on that floor.
 const RESCUE_MAX := 3
 
@@ -551,18 +556,59 @@ func _rest_grounded(id: int, e: Dictionary, body: RigidBody3D) -> void:
 	e["ground_in"] = GROUND_TICKS
 
 
-## The deferred half of [method _rest_grounded]: a rested drop with no floor right under it goes down onto it.
+## The deferred half of [method _rest_grounded]: a rested drop with no floor right under it goes down onto it, and a
+## drop frozen inside the floor (a stair tread, a crate edge) comes up out of it.
 func _ground(id: int, e: Dictionary, body: RigidBody3D) -> void:
 	if not is_inside_tree():
 		return
+	var start := body.global_transform
 	var flat := Transform3D(_laid_flat(e, body.global_basis), body.global_position)
-	var from := flat if not _overlaps(body, flat) else body.global_transform
-	var down := _sweep(body, from, Vector3.DOWN * RESCUE_DEPTH)
-	if down.length() <= GROUND_GAP or down.length() >= RESCUE_DEPTH - 0.01:
+	var from := flat if not _overlaps(body, flat) else start
+	var at := _lift_clear(body, from)
+	var down := _sweep_down(body, at, RESCUE_DEPTH)
+	if down.length() >= RESCUE_DEPTH - 0.01:
 		return
-	body.global_transform = from.translated(down)
-	DotLog.debug(CHANNEL, "drop rested in the air; put on the floor under it", {"id": id, "fell": snappedf(down.length(), 0.01)})
+	if from.origin.distance_to(at.origin) < 0.001 and down.length() <= GROUND_GAP:
+		return # clear and on the floor already
+	var landed := at.translated(down)
+	if landed.origin.distance_to(start.origin) < 0.002 and landed.basis.is_equal_approx(start.basis):
+		return
+	down = landed.origin - at.origin
+	body.global_transform = landed
+	DotLog.debug(CHANNEL, "drop rested in the air or in the floor; put on the surface", {"id": id, "fell": snappedf(down.length(), 0.01)})
 	settled.emit(id, body.global_transform)
+
+
+## [param from] itself when clear of the world, else lifted straight up in [constant LIFT_STEP] steps (at most
+## [constant LIFT_MAX]) to the first clear pose; the sweep after it brings the drop back down onto the surface.
+func _lift_clear(body: RigidBody3D, from: Transform3D) -> Transform3D:
+	if not _overlaps(body, from):
+		return from
+	var h := LIFT_STEP
+	while h <= LIFT_MAX:
+		var t := from.translated(Vector3.UP * h)
+		if not _overlaps(body, t):
+			return t
+		h += LIFT_STEP
+	return from
+
+
+## [method _sweep] down in short legs, so a thin tread or crate edge cannot be stepped through in one long cast; a leg
+## that ends inside the world is dropped and the sweep stops above it.
+func _sweep_down(body: RigidBody3D, from: Transform3D, depth: float) -> Vector3:
+	var done := 0.0
+	var pos := from
+	while done < depth:
+		var leg := minf(SWEEP_LEG, depth - done)
+		var step := _sweep(body, pos, Vector3.DOWN * leg)
+		if step.length() < leg - 0.0001:
+			return Vector3.DOWN * (done + step.length())
+		var nxt := pos.translated(step)
+		if _overlaps(body, nxt):
+			return Vector3.DOWN * done
+		pos = nxt
+		done += leg
+	return Vector3.DOWN * done
 
 
 ## How far [param body] at [param from] moves along [param motion] before it touches the world (other drops ignored).
