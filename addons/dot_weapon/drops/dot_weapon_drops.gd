@@ -19,6 +19,9 @@ const MAX_PARKED := 8
 ## A moving drop this far below where it was dropped or last pushed fell through the world: it goes back on the floor
 ## under that point (frozen there the second time), or, with no floor there, to the point once and is then removed.
 const RESCUE_DEPTH := 40.0
+## A drop rested by the active cap or [constant SETTLE_MAX_SEC] further than this above the floor under it (beyond its
+## own half-thickness) is in the air, and goes down onto that floor first; less is a drop lying on another.
+const GROUND_GAP := 0.25
 ## Times one drop is put back on a floor it fell through before it is frozen on that floor.
 const RESCUE_MAX := 3
 
@@ -372,8 +375,10 @@ func tick(delta: float) -> void:
 			e["moving"] = float(e.get("moving", 0.0)) + delta
 			if float(e["still"]) >= rules.sleep_time and rules.lie_flat and _topple(e, body):
 				e["still"] = 0.0
-			elif float(e["still"]) >= rules.sleep_time or float(e["moving"]) >= SETTLE_MAX_SEC:
+			elif float(e["still"]) >= rules.sleep_time:
 				_rest(id, e, body)
+			elif float(e["moving"]) >= SETTLE_MAX_SEC:
+				_rest_grounded(id, e, body)
 		elif body.global_position.y < -200.0:
 			_remove(id, 0)
 	if is_authority:
@@ -527,6 +532,38 @@ func _rest(id: int, e: Dictionary, body: RigidBody3D) -> void:
 	e["rest"] = true
 	body.freeze = true
 	settled.emit(id, body.global_transform)
+
+
+## Rests a drop that may still be in flight (the active cap or [constant SETTLE_MAX_SEC] cut it short): one more than
+## [constant GROUND_GAP] above the floor under it is first laid flat on that floor, so no gun is frozen in the air (a blast
+## that woke a dozen drops froze the oldest where they flew). With no floor under it, it rests where it is.
+func _rest_grounded(id: int, e: Dictionary, body: RigidBody3D) -> void:
+	if is_inside_tree():
+		var pos := body.global_position
+		var hit := _floor_hit(pos + Vector3.UP * (_support(body, Vector3.UP) + 0.05), pos + Vector3.DOWN * RESCUE_DEPTH)
+		if not hit.is_empty():
+			var n: Vector3 = hit["normal"]
+			var floor_at: Vector3 = hit["position"]
+			if (pos - floor_at).dot(n) > _support(body, n) + GROUND_GAP:
+				body.global_basis = _laid_flat(e, body.global_basis)
+				body.global_transform = _on_floor(body, floor_at, n, 0.005)
+				DotLog.debug(CHANNEL, "drop rested in the air; put on the floor under it", {"id": id})
+	_rest(id, e, body)
+
+
+## [param b] turned the least way that brings the drop's long axis level.
+func _laid_flat(e: Dictionary, b: Basis) -> Basis:
+	var size: Vector3 = e["size"]
+	var axis := 0 if size.x >= size.y and size.x >= size.z else (1 if size.y >= size.z else 2)
+	var long_world := b[axis].normalized()
+	var level := Vector3(long_world.x, 0.0, long_world.z)
+	if level.length() < 0.01:
+		level = Vector3.RIGHT
+	level = level.normalized()
+	var turn := long_world.cross(level)
+	if turn.length() < 0.0001:
+		return b.orthonormalized()
+	return (Basis(turn.normalized(), long_world.signed_angle_to(level, turn.normalized())) * b.orthonormalized())
 
 
 func _physics_process(delta: float) -> void:
@@ -714,7 +751,7 @@ func _enforce_active(keep: int) -> void:
 				oldest = other
 		if oldest == 0:
 			break
-		_rest(oldest, _entries[oldest], _entries[oldest]["body"])
+		_rest_grounded(oldest, _entries[oldest], _entries[oldest]["body"])
 
 
 func _announce_push(id: int) -> void:
