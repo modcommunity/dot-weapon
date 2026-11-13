@@ -700,6 +700,8 @@ func _apply_fitting(s: DotWeaponSlot, fitting: DotWeaponFitting) -> DotResult:
 	if not res.ok:
 		return res
 	s.def = res.value
+	if s.behaviour != null:
+		s.behaviour.def = s.def  ## The behaviour fires with the fitted numbers, not the ones it was set up with.
 	s.fitting = null if fitting.is_empty() else fitting.duplicate_fitting()
 	if s.def.uses_magazine():
 		s.magazine = mini(s.magazine, s.def.magazine)

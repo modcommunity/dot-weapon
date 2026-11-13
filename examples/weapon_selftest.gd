@@ -1,8 +1,8 @@
-extends "selftest/sections_rest.gd"
+extends "selftest/sections_attach.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 663
+const CHECKS := 714
 
 
 func _ready() -> void:
@@ -42,6 +42,7 @@ func _run() -> void:
 	_test_net_sync()
 	_test_attachments()
 	_test_attachments_wire()
+	_test_attach()
 	_test_extension_point()
 	_test_player_bridge()
 	_test_profiles()

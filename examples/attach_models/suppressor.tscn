@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="CylinderMesh" id="1"]
+top_radius = 0.035
+bottom_radius = 0.035
+height = 0.22
+
+[sub_resource type="StandardMaterial3D" id="2"]
+albedo_color = Color(0.12, 0.12, 0.13, 1)
+metallic = 0.6
+roughness = 0.4
+
+[node name="Suppressor" type="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, -0.11)
+mesh = SubResource("1")
+surface_material_override/0 = SubResource("2")
