@@ -69,8 +69,9 @@ static func measure(weapon: Node, space: Node3D, forward: Vector3) -> Dictionary
 		return {}
 	var centre := (s_min + s_max) * 0.5
 
-	var rear := _top_near(triangles, f, side, centre, lerpf(t_min, t_max, REAR_STATION), length, y_max, width)
-	var front := _top_near(triangles, f, side, centre, lerpf(t_min, t_max, FRONT_STATION), length, y_max, width)
+	var index := _footprints(triangles)
+	var rear := _top_near(index, f, side, centre, lerpf(t_min, t_max, REAR_STATION), length, y_max, width)
+	var front := _top_near(index, f, side, centre, lerpf(t_min, t_max, FRONT_STATION), length, y_max, width)
 	if rear.is_empty() or front.is_empty():
 		return {}
 
@@ -80,7 +81,7 @@ static func measure(weapon: Node, space: Node3D, forward: Vector3) -> Dictionary
 	for i in range(25):
 		var t := lerpf(rear.t, front.t, i / 24.0)
 		for off: float in [-0.2, 0.0, 0.2]:
-			var hit := _top_at(triangles, f, side, centre + off * width, t, y_max)
+			var hit := _top_at(index, f, side, centre + off * width, t, y_max)
 			if not hit.is_empty():
 				top = maxf(top, hit.y)
 
@@ -398,11 +399,61 @@ static func _triangles(node: Node, space: Node3D) -> Array[Dictionary]:
 	return out
 
 
-## The highest face straight down at (lateral [param s], along [param t]), or `{}`.
-static func _top_at(triangles: Array[Dictionary], f: Vector3, side: Vector3, s: float, t: float, y_max: float) -> Dictionary:
-	var from := f * t + side * s + Vector3.UP * (y_max + 1.0)
-	var best := {}
+## Grid cells along the longer side of the footprint in [method _footprints].
+const GRID_CELLS := 24
+
+
+## [param triangles] binned by the cells of a grid over the x-z plane that their footprints (a hair wider,
+## [constant FOOTPRINT_SLACK]) touch, in the triangles' own order: a vertical ray is only tried on the triangles
+## of its own cell, the same Geometry3D test on the same triangles that can hold it, so the answer is the same.
+## `{triangles, cells, x0, z0, size, nx, nz}`.
+static func _footprints(triangles: Array[Dictionary]) -> Dictionary:
+	var lo_x := INF
+	var hi_x := -INF
+	var lo_z := INF
+	var hi_z := -INF
 	for tri: Dictionary in triangles:
+		for p: Vector3 in [tri.a, tri.b, tri.c]:
+			lo_x = minf(lo_x, p.x)
+			hi_x = maxf(hi_x, p.x)
+			lo_z = minf(lo_z, p.z)
+			hi_z = maxf(hi_z, p.z)
+	var size := maxf(maxf(hi_x - lo_x, hi_z - lo_z) / GRID_CELLS, 0.000001)
+	var nx := int((hi_x - lo_x) / size) + 1
+	var nz := int((hi_z - lo_z) / size) + 1
+	var cells := {}
+	for i in triangles.size():
+		var tri: Dictionary = triangles[i]
+		var a: Vector3 = tri.a
+		var b: Vector3 = tri.b
+		var c: Vector3 = tri.c
+		var x0 := clampi(floori((minf(a.x, minf(b.x, c.x)) - FOOTPRINT_SLACK - lo_x) / size), 0, nx - 1)
+		var x1 := clampi(floori((maxf(a.x, maxf(b.x, c.x)) + FOOTPRINT_SLACK - lo_x) / size), 0, nx - 1)
+		var z0 := clampi(floori((minf(a.z, minf(b.z, c.z)) - FOOTPRINT_SLACK - lo_z) / size), 0, nz - 1)
+		var z1 := clampi(floori((maxf(a.z, maxf(b.z, c.z)) + FOOTPRINT_SLACK - lo_z) / size), 0, nz - 1)
+		for cz in range(z0, z1 + 1):
+			for cx in range(x0, x1 + 1):
+				var key := cz * nx + cx
+				var members: PackedInt32Array = cells.get(key, PackedInt32Array())
+				members.append(i)
+				cells[key] = members
+	return {"triangles": triangles, "cells": cells, "x0": lo_x, "z0": lo_z, "size": size, "nx": nx, "nz": nz}
+
+
+## The highest face straight down at (lateral [param s], along [param t]), or `{}`. [param index] is [method _footprints].
+static func _top_at(index: Dictionary, f: Vector3, side: Vector3, s: float, t: float, y_max: float) -> Dictionary:
+	var at := f * t + side * s
+	var nx: int = index.nx
+	var cx := clampi(floori((at.x - float(index.x0)) / float(index.size)), 0, nx - 1)
+	var cz := clampi(floori((at.z - float(index.z0)) / float(index.size)), 0, int(index.nz) - 1)
+	var cells: Dictionary = index.cells
+	var best := {}
+	if not cells.has(cz * nx + cx):
+		return best
+	var from := at + Vector3.UP * (y_max + 1.0)
+	var triangles: Array[Dictionary] = index.triangles
+	for i: int in cells[cz * nx + cx]:
+		var tri: Dictionary = triangles[i]
 		var hit: Variant = Geometry3D.ray_intersects_triangle(from, Vector3.DOWN, tri.a, tri.b, tri.c)
 		if hit == null:
 			continue
@@ -416,11 +467,11 @@ static func _top_at(triangles: Array[Dictionary], f: Vector3, side: Vector3, s: 
 ## has a face under it (a gap between two parts of the model), and failing that the same a
 ## little to either side of the centre line (a gun whose middle is a gap, like a tank and a
 ## barrel side by side). The hit's lateral place is returned as `s`.
-static func _top_near(triangles: Array[Dictionary], f: Vector3, side: Vector3, s: float, t: float, length: float, y_max: float, width: float) -> Dictionary:
+static func _top_near(index: Dictionary, f: Vector3, side: Vector3, s: float, t: float, length: float, y_max: float, width: float) -> Dictionary:
 	for lateral: float in [0.0, -0.12, 0.12, -0.25, 0.25]:
 		for k in range(9):
 			var shift := length * 0.015 * ceilf(k / 2.0) * (1.0 if k % 2 == 1 else -1.0)
-			var hit := _top_at(triangles, f, side, s + lateral * width, t + shift, y_max)
+			var hit := _top_at(index, f, side, s + lateral * width, t + shift, y_max)
 			if not hit.is_empty():
 				return hit
 	return {}
