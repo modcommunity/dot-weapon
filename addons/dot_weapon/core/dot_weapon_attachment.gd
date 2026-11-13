@@ -60,7 +60,7 @@ const PARAMS_PREFIX := "params."
 ## Merged into the definition's params (a zoom the presentation reads, say).
 @export var params_set: Dictionary = {}
 
-## A scene the view puts on the weapon model's `mount_<mount>` node; empty shows nothing.
+## A scene the view puts on the weapon model's `socket_<mount>` node; empty shows nothing.
 @export var model: String = ""
 
 
