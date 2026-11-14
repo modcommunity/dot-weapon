@@ -401,6 +401,24 @@ func _test_attachments_wire() -> void:
 	DotWeaponNetSync.push(fake, no_cat)
 	_check(no_cat.fitting_at(1).is_empty(), "an arsenal with no attachment catalogue ignores the code")
 
+	# The layout is kept between calls (a server encodes twice a player a tick). It must follow a
+	# catalogue that grew and a def edited in place, or the two ends read the same bits differently.
+	var rifle := cat.get_def(&"rifle")
+	var g := DotWeaponFitting.make(&"rifle")
+	g.fit(&"optic", &"scope")
+	var before := c.encode(rifle, g)
+	_check(before != 0 and c.decode(rifle, before).key() == g.key(), "a kept layout decodes what it encoded")
+	var bits_before := c.code_bits(rifle)
+	_check(c.encode(rifle, g) == before and bits_before == 5, "and gives the same code again", str(bits_before))
+	c.add(_att("acog", &"optic"))
+	var after := c.encode(rifle, g)
+	_check(after != before and c.decode(rifle, after).key() == g.key(), "add() lays it out again", "%d %d" % [before, after])
+	_check(c.code_bits(rifle) == bits_before + 1, "with the wider optic field", str(c.code_bits(rifle)))
+	rifle.tags.erase(&"primary")
+	_check(c.encode(rifle, g) == 0, "and so does a def edited in place (the scope no longer fits)")
+	rifle.tags.append(&"primary")
+	_check(c.encode(rifle, g) == after, "and back")
+
 	fake.free()
 	plain.free()
 	_drop(shooter)

@@ -16,6 +16,7 @@ extends RefCounted
 const KIND := "attachment"
 
 var _by_id: Dictionary = {}  ## StringName -> DotWeaponAttachment
+var _layouts: Dictionary = {}  ## [id, slot, mounts, tags] -> [method _layout]'s entry
 
 
 ## Fields of an `attachment` profile; a pack ships these as data. Lists are comma-separated.
@@ -77,6 +78,7 @@ func add(att: DotWeaponAttachment) -> DotResult:
 			String(att.id)
 		)
 	_by_id[att.id] = att
+	_layouts.clear()
 	return DotResult.success(att)
 
 
@@ -252,12 +254,34 @@ func _sorted_mounts(def: DotWeaponDef) -> Array[StringName]:
 	return out
 
 
+## The wire layout of [param def]: [code][mounts in text order, choice list per mount, bits per mount][/code].
+## Kept per value of what [method DotWeaponAttachment.fits] reads (id, slot, mounts, tags), so a
+## def edited in place gets a new entry and two alike share one; [method add] drops them all.
+## A server pulls it twice a player a tick, and building it sorts every id (about 25 us a pull).
+func _layout(def: DotWeaponDef) -> Array:
+	var hit: Array = _layouts.get([def.id, def.slot, def.mounts, def.tags], [])
+	if not hit.is_empty():
+		return hit
+	# Stored with copies: a key that changed under the dictionary would never be found again.
+	var key := [def.id, def.slot, def.mounts.duplicate(), def.tags.duplicate()]
+	var choices := choices_for(def)
+	var mounts := _sorted_mounts(def)
+	var lists: Array = []
+	var bits := PackedInt32Array()
+	for m in mounts:
+		var list: Array = choices[m]
+		lists.append(list)
+		bits.append(_bits_for(list.size()))
+	hit = [mounts, lists, bits]
+	_layouts[key] = hit
+	return hit
+
+
 ## Bits [method encode] uses for [param def]. Compare with [constant DotWeaponNetSync.FITTED_BITS].
 func code_bits(def: DotWeaponDef) -> int:
-	var choices := choices_for(def)
 	var total := 0
-	for m in _sorted_mounts(def):
-		total += _bits_for((choices[m] as Array).size())
+	for bits in (_layout(def)[2] as PackedInt32Array):
+		total += bits
 	return total
 
 
@@ -265,30 +289,33 @@ func code_bits(def: DotWeaponDef) -> int:
 ## 1-based index in [method choices_for] (0 = none), each in just enough bits, first mount in
 ## the low bits. Anything that does not fit is encoded as none.
 func encode(def: DotWeaponDef, fitting: DotWeaponFitting) -> int:
-	var choices := choices_for(def)
+	var layout := _layout(def)
+	var mounts: Array[StringName] = layout[0]
+	var lists: Array = layout[1]
+	var bits: PackedInt32Array = layout[2]
 	var code := 0
 	var shift := 0
-	for m in _sorted_mounts(def):
-		var list: Array = choices[m]
-		var bits := _bits_for(list.size())
-		var index := list.find(fitting.attachment_on(m)) + 1
+	for i in mounts.size():
+		var index := (lists[i] as Array).find(fitting.attachment_on(mounts[i])) + 1
 		code |= index << shift
-		shift += bits
+		shift += bits[i]
 	return code
 
 
 ## The inverse of [method encode]. An index past the choices decodes as none.
 func decode(def: DotWeaponDef, code: int) -> DotWeaponFitting:
-	var choices := choices_for(def)
+	var layout := _layout(def)
+	var mounts: Array[StringName] = layout[0]
+	var lists: Array = layout[1]
+	var bits: PackedInt32Array = layout[2]
 	var out := DotWeaponFitting.make(def.id)
 	var shift := 0
-	for m in _sorted_mounts(def):
-		var list: Array = choices[m]
-		var bits := _bits_for(list.size())
-		var index := (code >> shift) & ((1 << bits) - 1)
-		shift += bits
+	for i in mounts.size():
+		var list: Array = lists[i]
+		var index := (code >> shift) & ((1 << bits[i]) - 1)
+		shift += bits[i]
 		if index >= 1 and index <= list.size():
-			out.fit(m, list[index - 1])
+			out.fit(mounts[i], list[index - 1])
 	return out
 
 
