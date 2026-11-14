@@ -39,6 +39,12 @@ const FEEL := {
 ## Variant counts found on disk, kept because probing is a file lookup per variant.
 static var _counts: Dictionary = {}
 
+## Streams already loaded, sound -> Array of its variants (null until first picked). A [code]load()[/code] of a stream the
+## resource cache has dropped re-reads the file (about 0.3 ms per shot); holding the picked variants keeps it to a lookup.
+## Only variants a game actually plays are held. False loads every pick (the A/B baseline).
+static var keep_streams := true
+static var _streams: Dictionary = {}
+
 
 ## How many variant files [param sound] has (0: dot-audio is not linked or has no such sound).
 static func count(sound: StringName) -> int:
@@ -57,7 +63,16 @@ static func pick(sound: StringName, roll: int = 0) -> AudioStream:
 	var n := count(sound)
 	if n == 0:
 		return null
-	return load("%s%s_%d.ogg" % [DIR, sound, absi(roll) % n]) as AudioStream
+	var i := absi(roll) % n
+	if not keep_streams:
+		return load("%s%s_%d.ogg" % [DIR, sound, i]) as AudioStream
+	var held: Array = _streams.get(sound, [])
+	if held.is_empty():
+		held.resize(n)
+		_streams[sound] = held
+	if held[i] == null:
+		held[i] = load("%s%s_%d.ogg" % [DIR, sound, i]) as AudioStream
+	return held[i]
 
 
 ## The report for a pack's sound class, or null.
