@@ -673,3 +673,22 @@ func _test_profiles() -> void:
 	set.clear_cache()
 	ups.clear_cache()
 	_done()
+
+
+func _test_sound_held() -> void:
+	_section("stock sounds held after the first pick")
+	var held := DotWeaponSound.keep_streams
+	if DotWeaponSound.count(&"light_fire") == 0:
+		_check(DotWeaponSound.pick(&"light_fire", 3) == null, "without dot-audio a pick is null")
+		_done()
+		return
+	var n := DotWeaponSound.count(&"light_fire")
+	for roll in [0, 1, -1, 7, n, 1 << 40]:
+		var want := load("%s%s_%d.ogg" % [DotWeaponSound.DIR, &"light_fire", absi(roll) % n]) as AudioStream
+		DotWeaponSound.keep_streams = true
+		var a := DotWeaponSound.pick(&"light_fire", roll)
+		_check(a == want and DotWeaponSound.pick(&"light_fire", roll) == a, "roll %d picks the variant load() gives" % roll)
+		DotWeaponSound.keep_streams = false
+		_check(DotWeaponSound.pick(&"light_fire", roll) == want, "and the uncached pick agrees")
+	DotWeaponSound.keep_streams = held
+	_done()

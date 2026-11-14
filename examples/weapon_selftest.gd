@@ -2,7 +2,7 @@ extends "selftest/sections_attach.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 714
+const CHECKS := 715
 
 
 func _ready() -> void:
@@ -46,6 +46,7 @@ func _run() -> void:
 	_test_extension_point()
 	_test_player_bridge()
 	_test_profiles()
+	_test_sound_held()
 	_test_overlay()
 	_test_carry()
 	_test_spread_rules()
