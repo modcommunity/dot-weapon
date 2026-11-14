@@ -36,7 +36,7 @@ const _Io := preload("dot_weapon_arsenal_io.gd")
 ## until the cooldown ends. A weapon's own [member DotWeaponDef.fire_buffer_seconds] overrides this.
 @export var fire_buffer_seconds: float = 0.15
 
-@export_range(1, 16, 1) var max_slots: int = 8
+@export_range(1, 16, 1, "or_greater") var max_slots: int = 8
 
 @export_group("Content")
 
