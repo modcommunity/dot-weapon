@@ -31,6 +31,13 @@ const LIFT_MAX := 0.3
 const SWEEP_LEG := 0.05
 ## Times one drop is put back on a floor it fell through before it is frozen on that floor.
 const RESCUE_MAX := 3
+## Seconds between checks that a resting drop still has something under it ([method _check_support]).
+const SUPPORT_EVERY := 0.5
+## A resting drop that could move this far straight down has lost what held it (a prop broken or moved, a door
+## opened, a body gone) and falls again.
+const SUPPORT_GAP := 0.04
+## Times one drop falls again for want of support before it is put on the floor under it and left there.
+const REFALL_MAX := 4
 
 ## A weapon left a hand (or a corpse): [param state] is [code]{id, magazine, reserve}[/code].
 signal dropped(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int)
@@ -68,6 +75,7 @@ var _order: int = 0
 ## Seconds this layer has been ticked; stamps `touched`.
 var _clock: float = 0.0
 var _scan_left: float = 0.0
+var _support_left: float = 0.0
 
 
 func count() -> int:
@@ -394,6 +402,10 @@ func tick(delta: float) -> void:
 				e.erase("ground_in")
 				_ground(id, e, body)
 	if is_authority:
+		_support_left -= delta
+		if _support_left <= 0.0:
+			_support_left = SUPPORT_EVERY
+			var _woke := check_support()
 		_scan_left = minf(_scan_left, rules.scan_interval) - delta
 		if _scan_left <= 0.0:
 			_scan_left = rules.scan_interval
@@ -554,6 +566,38 @@ func _rest(id: int, e: Dictionary, body: RigidBody3D) -> void:
 func _rest_grounded(id: int, e: Dictionary, body: RigidBody3D) -> void:
 	_rest(id, e, body)
 	e["ground_in"] = GROUND_TICKS
+
+
+## Authority: wakes every resting drop with nothing under it any more (the prop, door or body it lay on is gone or
+## moved), so it falls onto what is there now instead of hanging where the support was. [method tick] runs it every
+## [constant SUPPORT_EVERY]; a game that removes level geometry may call it at once. A drop that keeps losing its
+## support ([constant REFALL_MAX] times) is put down on the floor under it instead. Returns how many it woke.
+func check_support() -> int:
+	# Colliding with nothing, a drop has no support to lose (it rests wherever it was put).
+	if not is_authority or not is_inside_tree() or collision_mask == 0:
+		return 0
+	var woke := 0
+	for id: int in _entries.keys():
+		var e: Dictionary = _entries[id]
+		if not bool(e["rest"]) or e.has("ground_in"):
+			continue
+		var body: RigidBody3D = e["body"]
+		if not body.is_inside_tree():
+			continue
+		var at := body.global_transform
+		if _sweep(body, at, Vector3.DOWN * SUPPORT_GAP).length() < SUPPORT_GAP - 0.0001 or _overlaps(body, at.translated(Vector3.DOWN * SUPPORT_GAP)):
+			continue
+		var times := int(e.get("refalls", 0)) + 1
+		e["refalls"] = times
+		DotLog.debug(CHANNEL, "drop lost what it rested on; falls again", {"id": id, "times": times})
+		if times > REFALL_MAX:
+			e["ground_in"] = 1
+			continue
+		_wake(id)
+		body.sleeping = false
+		_announce_push(id)
+		woke += 1
+	return woke
 
 
 ## The deferred half of [method _rest_grounded]: a rested drop with no floor right under it goes down onto it, and a

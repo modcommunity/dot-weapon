@@ -2,7 +2,7 @@ extends "selftest/harness.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 176
+const CHECKS := 185
 
 
 func _ready() -> void:
@@ -26,6 +26,7 @@ func _run() -> void:
 	await _test_physics()
 	await _test_rescue()
 	await _test_capped_in_air()
+	await _test_support_gone()
 	await _test_blast()
 	await _test_lies_flat()
 	_test_body_reuse()
@@ -445,6 +446,66 @@ func _test_capped_in_air() -> void:
 		await get_tree().physics_frame
 	_check(settled.has(c) and absf((settled[c] as Transform3D).origin.y - low.y) < 0.1, "one already down by the floor rests where it is", "%s vs %s" % [settled.get(c), low])
 	drops.queue_free()
+	floor_body.queue_free()
+	_done()
+
+
+func _static_box(size: Vector3, at: Vector3) -> StaticBody3D:
+	var b := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	b.add_child(shape)
+	b.position = at
+	add_child(b)
+	return b
+
+
+## The gap under a drop as the physics sees it (its whole box swept down, other drops ignored).
+func _gap_under(drops: DotWeaponDrops, id: int) -> float:
+	var body: RigidBody3D = drops._entries[id]["body"]
+	return drops._sweep_down(body, body.global_transform, 3.0).length()
+
+
+func _test_support_gone() -> void:
+	_section("a resting drop whose support goes falls again, on the server and its mirror")
+	var floor_body := _static_box(Vector3(20, 1, 20), Vector3(200, -0.5, 0))
+	var crate := _static_box(Vector3(2, 1, 2), Vector3(200, 0.5, 0))
+	var server := _drops()
+	server.collision_mask = 1
+	server.rules.lifetime = 0.0
+	var client := _drops(false)
+	client.collision_mask = 1
+	var pushes: Array = []
+	server.dropped.connect(func(id: int, state: Dictionary, at: Transform3D, v: Vector3, _o: int) -> void: client.mirror_drop(id, state, at, v))
+	server.settled.connect(func(id: int, at: Transform3D) -> void: client.mirror_settled(id, at))
+	server.pushed.connect(func(id: int, at: Transform3D, v: Vector3, spin: Vector3) -> void:
+		pushes.append(id)
+		client.mirror_pushed(id, at, v, spin))
+	var a := server.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(200, 1.6, 0), Vector3.ZERO, 1)
+	for _i in 180:
+		await get_tree().physics_frame
+		if bool(server._entries[a]["rest"]) and not server._entries[a].has("ground_in"):
+			break
+	var on_crate: float = (server._entries[a]["body"] as Node3D).global_position.y
+	_check(bool(server._entries[a]["rest"]) and on_crate > 0.95, "rests on the crate", str(on_crate))
+	_check(_gap_under(server, a) < 0.05, "server pose: ground right under it", str(_gap_under(server, a)))
+	_check(client._entries.has(a) and bool(client._entries[a]["rest"]), "the mirror rests too")
+	_check(_gap_under(client, a) < 0.05, "client pose: ground right under it", str(_gap_under(client, a)))
+	_check(server.check_support() == 0, "a supported drop is left alone")
+	crate.free()
+	_check(server.check_support() == 1 and pushes.has(a), "the crate gone, the drop is woken and announced")
+	_check(not bool(server._entries[a]["rest"]) and not bool(client._entries[a]["rest"]), "both sides fall again")
+	for _i in 300:
+		await get_tree().physics_frame
+		if bool(server._entries[a]["rest"]) and not server._entries[a].has("ground_in"):
+			break
+	var y: float = (server._entries[a]["body"] as Node3D).global_position.y
+	_check(bool(server._entries[a]["rest"]) and y < 0.3, "it lands on the floor, not where the crate was", str(y))
+	_check(_gap_under(server, a) < 0.05 and _gap_under(client, a) < 0.05, "ground under both poses again", "%s %s" % [_gap_under(server, a), _gap_under(client, a)])
+	server.queue_free()
+	client.queue_free()
 	floor_body.queue_free()
 	_done()
 
