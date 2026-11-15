@@ -148,6 +148,9 @@ func _rest_stream(mode: String) -> Dictionary:
 		rifle.spread_hip = 0.5
 	var held := [rifle.spread]
 
+	# The arsenal counts its rest skips while its phase timers run.
+	var timers := DotWeaponArsenal.phase_timers
+	DotWeaponArsenal.phase_timers = true
 	for tick in range(2400):
 		_rest_roll(rng, roll)
 		_rest_edit(mode, tick, rng, st, rifle, held)
@@ -166,11 +169,13 @@ func _rest_stream(mode: String) -> Dictionary:
 			res["same"] = false
 			res["detail"] = "%s tick %d posture %d: %s vs %s" % [mode, tick, roll["posture"], results, states.map(func(s: String) -> int: return s.hash())]
 			break
-		if mode != "rules_edited" and not is_equal_approx(spreads[0], spreads[1]):
+		if mode != "rules_edited" and spreads[0] != spreads[1]:
 			res["spread_same"] = false
 			res["detail"] = "%s tick %d spread %s" % [mode, tick, spreads]
 
-	_check(int(res["skipped"]) > 300 or mode in _CONE_MODES, "%s: the skip ran for much of the stream" % mode, str(res["skipped"]))
+	DotWeaponArsenal.phase_timers = timers
+	# A kept cone skips too, through the steady skip's fixed point for the settled posture.
+	_check(int(res["skipped"]) > 300, "%s: the skip ran for much of the stream" % mode, str(res["skipped"]))
 	if mode in _CONE_MODES:
 		_check(int(res["steady"]) > 300, "%s: the steady skip ran for much of the stream" % mode, str(res["steady"]))
 	for node in st["arsenals"] + st["players"] + st["controllers"]:
@@ -248,8 +253,9 @@ func _rest_pair_tick(mode: String, tick: int, st: Dictionary, roll: Dictionary, 
 		var hit := _rest_ctx(st["players"][i], tick)
 		hit.hurt_tick = st["hurt"][0]
 		if a.is_idle_for(cmd, previous):
+			var rests := DotWeaponArsenal.phase_calls[2]
 			out = a.idle_tick()
-			if i == 0 and a.current().behaviour.get("_shown_stale") == true:
+			if i == 0 and DotWeaponArsenal.phase_calls[2] != rests:
 				res["skipped"] += 1
 		else:
 			out = a.simulate_tick(cmd, hit, previous)

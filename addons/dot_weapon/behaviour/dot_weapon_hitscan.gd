@@ -240,9 +240,10 @@ func _settled_ctx() -> DotWeaponContext:
 	return _settled
 
 
-## Nothing to recover (no bloom shedding, no motion settling, no spread factor moving, no cone kept for a crosshair) and a
-## settled carrier: a [method tick] with the settled posture would change only the ticks since the last use, which this
-## counts, so the rest of it is skipped. Anything else takes the normal tick.
+## Nothing to recover (no bloom shedding, no motion settling, no spread factor moving) and a settled carrier: a
+## [method tick] with the settled posture would change only the ticks since the last use, which this counts, so the rest
+## of it is skipped. A cone kept for a crosshair skips too when the steady skip holds its fixed point for the settled
+## posture: that tick would only show the kept cone. Anything else takes the normal tick.
 func rest_tick(still: Callable) -> bool:
 	var b := _ballistics()
 	if b == null:
@@ -255,10 +256,12 @@ func rest_tick(still: Callable) -> bool:
 		return false
 
 	var rules_object := _rules_object()
-	if rules_object != null and bool(arsenal.get(&"crosshair_cone")):
-		return false
-
-	if rules_object != null and rules_object.enabled:
+	var cone := rules_object != null and bool(arsenal.get(&"crosshair_cone"))
+	if cone:
+		# _steady_holds checks the factor too. Asked before the carrier: a crouched or aiming fixed point fails it cheaply.
+		if not (steady_skip and _steady and _steady_holds(b, _settled_ctx(), rules_object, true)):
+			return false
+	elif rules_object != null and rules_object.enabled:
 		if not state.has(_FACTOR) or float(state[_FACTOR]) != rules_object.target_factor(_settled_ctx()):
 			return false
 
@@ -266,7 +269,12 @@ func rest_tick(still: Callable) -> bool:
 		return false
 
 	state[_SINCE] = mini(int(state.get(_SINCE, _NEVER)) + 1, _NEVER)
-	_shown_stale = true
+	if cone:
+		# What _tick's steady path does with the settled posture after counting the tick (no bloom to shed, checked above).
+		_shown_stale = false
+		_shown = _steady_shown
+	else:
+		_shown_stale = true
 	return true
 
 
@@ -274,13 +282,14 @@ func rest_tick(still: Callable) -> bool:
 ## ([member DotWeaponArsenal.crosshair_cone]) or the cone settles, unless the arsenal has an
 ## [member DotWeaponArsenal.idle_posture] to stand in for it.
 func tick_needs_context() -> bool:
+	# A provided posture answers every want below, so a server (which sets one) skips the arsenal reads.
+	if _posture_provided():
+		return super.tick_needs_context()
 	var wants := float(state.get(_MOTION, 0.0)) > 0.0
 	if not wants:
 		var rules_object := _rules_object()
 		wants = rules_object != null and (rules_object.enabled or bool(arsenal.get(&"crosshair_cone")))
-	if wants and not _posture_provided():
-		return true
-	return super.tick_needs_context()
+	return wants or super.tick_needs_context()
 
 
 func _posture_provided() -> bool:

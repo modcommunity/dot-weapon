@@ -1,7 +1,8 @@
 extends "selftest/harness.gd"
 
-## Micro-benchmark of an idle hitscan carrier, the way a server's stand-in is ticked (spread rules on, crosshair_cone off,
-## idle_posture bound to DotWeaponPlayerBridge.posture_for): microseconds per call of each piece.
+## Micro-benchmark of an idle hitscan carrier, the way a server's stand-in is ticked (idle_posture bound to
+## DotWeaponPlayerBridge.posture_for), with spread rules on, off, and on with crosshair_cone as FC runs it: microseconds per
+## call of each piece.
 ## Run: godot --headless --path . res://examples/idle_bench.tscn -- --rounds=20000
 
 class FakePlayer extends Node3D:
@@ -59,17 +60,18 @@ func _run() -> void:
 	add_child(player)
 	player.add_child(player.ctrl)
 
-	for rules_on in [true, false]:
+	for mode: String in ["on", "off", "on, crosshair_cone"]:
+		var rules_on := mode != "off"
 		var cat := _catalogue()
 		var a := _arsenal(cat)
 		a.give(&"rifle")
-		a.crosshair_cone = false
+		a.crosshair_cone = mode == "on, crosshair_cone"
 		if rules_on:
 			a.spread_rules = DotWeaponSpreadRules.new()
 			a.spread_rules.enabled = true
 		a.idle_posture = DotWeaponPlayerBridge.posture_for.bind(player)
 		var cmd := DotWeaponCommand.new()
-		print("-- spread rules %s" % ("on" if rules_on else "off"))
+		print("-- spread rules %s" % mode)
 		_time("is_idle_for", rounds, func() -> void: a.is_idle_for(cmd, null))
 		_time("posture_for (provider)", rounds, func() -> void: DotWeaponPlayerBridge.posture_for(player, 5))
 		var beh := a.current().behaviour
@@ -105,6 +107,7 @@ func _run() -> void:
 		_time("  ballistics.accuracy(spread_hip)", rounds, func() -> void: b.accuracy("spread_hip", "rifle"))
 		_time("  _class_ticks_of(settle)", rounds, func() -> void: beh._class_ticks_of(b, b.settle_ticks, "settle"))
 		_time("  _settle_ticks_of", rounds, func() -> void: beh._settle_ticks_of(b))
+		_time("  tick_needs_context", rounds, func() -> void: beh.tick_needs_context())
 		player.ctrl.velocity = Vector3.ZERO
 		_time("(empty callable call)", rounds, func() -> void: pass)
 
