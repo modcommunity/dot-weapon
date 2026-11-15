@@ -11,11 +11,25 @@ const GROUND_TICKS := 2
 ## A weapon came to rest at [param at]; clients snap to it.
 signal settled(drop_id: int, at: Transform3D)
 var is_authority: bool = false
+## The drops' own random stream: a drop's roll and spin, a blast's tumble and the random eviction pick. Randomised when the
+## layer is made (live play); [method seed_rng] makes a match or a bot sim repeat itself drop for drop. Never the global stream.
+var rng: RandomNumberGenerator = _fresh_rng()
 ## Seconds this layer has been ticked; stamps `touched`.
 var _clock: float = 0.0
 ## Optional [code]func(from: Vector3, to: Vector3) -> bool[/code] that says whether an explosion at [code]from[/code]
 ## reaches [code]to[/code]; a game assigns its combat trace's [code]line_of_sight[/code] so walls shield drops as they do players.
 var can_see: Callable = Callable()
+
+
+## Seeds [member rng] from a match or sim seed: the same seed and the same calls give the same drops, rolls and evictions.
+func seed_rng(value: int) -> void:
+	rng.seed = value
+
+
+static func _fresh_rng() -> RandomNumberGenerator:
+	var r := RandomNumberGenerator.new()
+	r.randomize()
+	return r
 
 
 ## The drop a segment from [param from] to [param to] crosses first, as {id, point, distance}, or empty.
@@ -91,7 +105,7 @@ func blast(centre: Vector3, radius: float, strength: float) -> int:
 		var dir := (offset / d if d > 0.01 else Vector3.UP) + Vector3.UP * 0.35
 		_wake(id)
 		body.linear_velocity += dir.normalized() * strength * fall * rules.blast_scale / body.mass
-		body.angular_velocity += Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * strength * fall * 0.5 / body.mass
+		body.angular_velocity += Vector3(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * strength * fall * 0.5 / body.mass
 		_announce_push(id)
 		n += 1
 	return n

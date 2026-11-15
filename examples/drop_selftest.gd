@@ -2,7 +2,7 @@ extends "res://examples/drop_selftest_physics.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 186
+const CHECKS := 190
 
 
 func _ready() -> void:
@@ -29,6 +29,7 @@ func _run() -> void:
 	await _test_support_gone()
 	await _test_blast()
 	await _test_lies_flat()
+	await _test_seeded_rng()
 	_test_body_reuse()
 	await _test_bench()
 	print("")

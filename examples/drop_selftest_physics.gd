@@ -272,3 +272,60 @@ func _test_blast() -> void:
 	var _m := drops.blast(centre, 6.0, 10.0)
 	_check(hidden.linear_velocity.length() > 0.5, "with no sight check set, behaviour is as before")
 	_done()
+
+
+## Same seed, same drops: the roll and spin each starts with, where it rests after a blast, and the random cap's
+## eviction order; the global stream is scrambled between runs, so a layer that still read it would differ.
+func _test_seeded_rng() -> void:
+	_section("a seeded drop layer repeats itself drop for drop")
+	var floor_body := _static_box(Vector3(40, 1, 40), Vector3(0, -0.5, 0))
+	var a: Array = await _seeded_run(0x5eed, 1, true)
+	var b: Array = await _seeded_run(0x5eed, 2, true)
+	var c: Array = await _seeded_run(0x5eed + 1, 1, false)
+	_check(a[0].size() == 4 and a[0] == b[0], "same seed: every drop starts with the same roll and spin", "%s vs %s" % [a[0], b[0]])
+	var apart := 0.0
+	for i in mini(a[1].size(), b[1].size()):
+		apart = maxf(apart, (a[1][i] as Vector3).distance_to(b[1][i]))
+	_check(a[1].size() == 4 and b[1].size() == 4 and apart < 0.001, "and rests in the same place after the same blast", "%.5f m apart" % apart)
+	_check(a[2].size() == 3 and a[2] == b[2], "and the random cap evicts in the same order", "%s vs %s" % [a[2], b[2]])
+	_check(a[0] != c[0], "another seed rolls and spins them differently")
+	_drop(floor_body)
+	_done()
+
+
+## One match's drops on a layer seeded [param value], with the global stream seeded [param noise]: [starts as
+## [roll, spin] per drop, rest origins (empty unless [param settle]), evicted ids in order].
+func _seeded_run(value: int, noise: int, settle: bool) -> Array:
+	seed(noise)
+	var drops := _drops()
+	drops.collision_mask = 1
+	drops.seed_rng(value)
+	drops.rules.lifetime = 0.0
+	drops.rules.max_count = 0
+	drops.rules.evict = DotWeaponDropRules.EVICT_RANDOM
+	var starts: Array = []
+	for i in 4:
+		var id := drops.spawn({"id": &"rifle", "magazine": 5, "reserve": 0}, Vector3(i * 4.0, 1.2, 0), Vector3(1.5, 2.0, -1.0), 1)
+		var body: RigidBody3D = drops._entries[id]["body"]
+		starts.append([body.global_transform, body.angular_velocity])
+	var rests: Array = []
+	if settle:
+		await _until_still(drops)
+		var _n := drops.blast(Vector3(6.0, 0.2, 1.0), 12.0, 4.0)
+		await _until_still(drops)
+		for s: Dictionary in drops.snapshot():
+			rests.append((s["at"] as Transform3D).origin)
+	var evicted: Array = []
+	drops.removed.connect(func(id: int, _taker: int) -> void: evicted.append(id))
+	drops.rules.max_count = 1
+	var _gone := drops.scan()
+	_drop(drops)
+	return [starts, rests, evicted]
+
+
+func _until_still(drops: DotWeaponDrops) -> void:
+	await get_tree().physics_frame
+	for _i in int((DotWeaponDrops.SETTLE_MAX_SEC + 3.0) * 60.0):
+		if drops.active_count() == 0:
+			return
+		await get_tree().physics_frame

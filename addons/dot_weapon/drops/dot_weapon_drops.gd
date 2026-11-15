@@ -99,7 +99,7 @@ func spawn(state: Dictionary, origin: Vector3, velocity: Vector3, owner_id: int,
 	var up := Vector3.FORWARD if absf(facing.dot(Vector3.UP)) > 0.999 else Vector3.UP
 	var basis := Basis.looking_at(facing, up)
 	if r.lie_flat:
-		basis = basis.rotated(facing, deg_to_rad(90.0 + randf_range(-25.0, 25.0)))
+		basis = basis.rotated(facing, deg_to_rad(90.0 + rng.randf_range(-25.0, 25.0)))
 	var at := Transform3D(basis, origin)
 	_make(id, state, at, velocity, owner_id, r.lifetime, r.pickup_delay, _team(owner_id))
 	dropped.emit(id, state, at, velocity, owner_id)
@@ -616,7 +616,7 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 	body.name = "Drop%d" % id
 	body.continuous_cd = rules.ccd_speed <= 0.0 or velocity.length() >= rules.ccd_speed
 	body.linear_velocity = velocity
-	body.angular_velocity = Vector3(randf_range(-2.0, 2.0), randf_range(-1.0, 1.0), randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
+	body.angular_velocity = Vector3(rng.randf_range(-2.0, 2.0), rng.randf_range(-1.0, 1.0), rng.randf_range(-2.0, 2.0)) if is_authority else Vector3.ZERO
 	_order += 1
 	_entries[id] = {"body": body, "state": state, "age": 0.0, "life": life, "delay": delay,
 		"still": 0.0, "rest": false, "size": size, "owner": owner_id, "order": _order, "team": team, "touched": _clock,
@@ -664,7 +664,7 @@ func _victim(keep: int) -> int:
 	if ids.is_empty():
 		return 0
 	if rules.evict == DotWeaponDropRules.EVICT_RANDOM:
-		return int(ids[randi() % ids.size()])
+		return int(ids[rng.randi() % ids.size()])
 	var best := 0
 	var key := INF
 	for id: int in ids:

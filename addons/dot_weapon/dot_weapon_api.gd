@@ -90,5 +90,6 @@ extends RefCounted
 ## 36: [member DotWeaponDropRules.rescue] (cvar sv_weapon_drop_rescue, on): a moving drop whose centre passed down through a floor since the last tick is put back on top of it, and one that fell [constant DotWeaponDrops.RESCUE_DEPTH] below its drop point goes back there once, then is removed. OLDEST stays 1.
 ## 37: the drop rescue finds floors by back faces too (a trimesh wound the other way was missed, so its tunnels fell 40 m), and a drop [constant DotWeaponDrops.RESCUE_DEPTH] below its drop point goes back on the floor under that point, frozen there the second time; only a drop with no floor under its point is removed. OLDEST stays 1.
 ## 38: attachments as items with a server-side request: `DotWeaponAttachment` fits_slots/excludes_tags/blocks/item_id/model and `params.` fields, `DotWeaponAttachments` KIND/schema/load_set/for_item/toggle/stat_delta, `DotWeaponAttachRequest`, `DotWeaponAttachMenu`, `DotWeaponAttachmentModels`, loadout attachment rows; a fitted slot's behaviour now fires the fitted def. OLDEST stays 1.
-const LEVEL := 38
+## 39: [member DotWeaponDrops.rng] and [method DotWeaponDrops.seed_rng]: drops roll, spin, tumble and evict on their own stream, randomised per layer (live play as before) or seeded from a match or sim seed so a bot sim repeats; nothing in drops reads the global stream. OLDEST stays 1.
+const LEVEL := 39
 const OLDEST := 1
