@@ -1,14 +1,9 @@
 @tool
 extends Control
 
-## What a player sees through a scope: the world through a circle, black around it, and a
-## reticle. Draws itself, so it ships no texture and a game restyles it from these exports.
-##
-## [b]A Control a game places, not something the view model adds.[/b] The view model is a
-## 3D node under the camera and knows nothing about the HUD's canvas layer, its scaling or
-## what else is drawn over the world. The game puts one of these in its HUD, full-rect, and
-## sets [member fraction] each frame from the view model's `aim_fraction()` whenever
-## it `is_scoped()` — or from its own rule.
+## What a player sees through a scope: the world through a circle, black around it, and a reticle; drawn, no texture.
+## [b]A Control a game places, not something the view model adds[/b] (that is a 3D node that knows nothing of the HUD): put
+## one in the HUD full-rect and set [member fraction] each frame from `aim_fraction()` while `is_scoped()`, or by your own rule.
 
 ## How visible, 0 to 1 (this and the other drawn setters redraw only on a change: [method follow] sets them every frame). Faded rather than switched so the cut from the weapon to the scope
 ## is not a flash of black.

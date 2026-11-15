@@ -1,13 +1,9 @@
 class_name DotWeaponAttachMenu
 extends PanelContainer
 
-## The attach/detach menu: one row per mount of the weapon in hand, a button per attachment that fits
-## and one to take it off, with what each changes. Built in code, so a game only themes it.
-##
-## [b]It changes nothing itself.[/b] A press emits [signal requested]; the game sends a
-## [DotWeaponAttachRequest] to the server and calls [method show_fitting] with what comes back.
-## Pad: focus moves with ui_up/down/left/right, ui_accept presses; number keys pick a mount row.
-## Touch: every button is at least [member min_button_size].
+## The attach/detach menu: a row per mount of the weapon in hand, a button per fitting attachment plus one to take it off, built in code.
+## [b]It changes nothing itself:[/b] a press emits [signal requested]; the game sends a [DotWeaponAttachRequest] and calls [method show_fitting].
+## Pad: ui_up/down/left/right move focus, ui_accept presses, number keys pick a row. Touch: buttons are at least [member min_button_size].
 
 ## Asks for [param id] on [param mount]; an empty id takes it off.
 signal requested(mount: StringName, id: StringName)

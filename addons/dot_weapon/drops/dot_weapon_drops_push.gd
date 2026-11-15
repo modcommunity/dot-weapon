@@ -7,6 +7,9 @@ extends "dot_weapon_drops_bodies.gd"
 signal pushed(drop_id: int, at: Transform3D, velocity: Vector3, spin: Vector3)
 ## Physics ticks between a cut-short rest and the sweep that puts the drop on the floor ([method _rest_grounded]).
 const GROUND_TICKS := 2
+
+## A weapon came to rest at [param at]; clients snap to it.
+signal settled(drop_id: int, at: Transform3D)
 var is_authority: bool = false
 ## Seconds this layer has been ticked; stamps `touched`.
 var _clock: float = 0.0
@@ -121,3 +124,45 @@ func _wake(id: int) -> void:
 func _announce_push(id: int) -> void:
 	var body: RigidBody3D = _entries[id]["body"]
 	pushed.emit(id, body.global_transform, body.linear_velocity, body.angular_velocity)
+
+
+## Freezes a drop in place. The solver leaves a thin box a few centimetres inside the floor
+## (contact slop), so the penetration is resolved first and the drop freezes on the surface.
+func _rest(id: int, e: Dictionary, body: RigidBody3D) -> void:
+	var hit := KinematicCollision3D.new()
+	for _i in 4:
+		if not body.test_move(body.global_transform, Vector3.ZERO, hit, 0.001, true, 4):
+			break
+		var out := hit.get_travel()
+		if out.length() < 0.0005:
+			break
+		body.global_position += out
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3.ZERO
+	e["rest"] = true
+	body.freeze = true
+	settled.emit(id, body.global_transform)
+
+
+## Rests a drop that may still be in flight (the active cap or [constant SETTLE_MAX_SEC] cut it short):
+## it freezes at once, and [constant GROUND_TICKS] ticks later one above the floor is swept down onto it,
+## so no gun is frozen in the air. The wait lets geometry added the same frame reach the physics space.
+func _rest_grounded(id: int, e: Dictionary, body: RigidBody3D) -> void:
+	_rest(id, e, body)
+	e["ground_in"] = GROUND_TICKS
+
+
+## Rests the oldest moving drops until no more than [member DotWeaponDropRules.max_active] are awake,
+## never [param keep]. A burst of deaths otherwise steps every body together (one physics step, 200 ms).
+func _enforce_active(keep: int) -> void:
+	var cap := rules.max_active
+	while cap > 0 and active_count() > cap:
+		var oldest := 0
+		var order := 1 << 60
+		for other: int in _entries:
+			if other != keep and not bool(_entries[other]["rest"]) and int(_entries[other]["order"]) < order:
+				order = int(_entries[other]["order"])
+				oldest = other
+		if oldest == 0:
+			break
+		_rest_grounded(oldest, _entries[oldest], _entries[oldest]["body"])

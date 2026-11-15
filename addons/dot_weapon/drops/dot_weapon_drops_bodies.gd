@@ -27,10 +27,9 @@ var _material: PhysicsMaterial = null
 var _rids: Array[RID] = []
 
 
-## The first floor (an upward face of a static body) the ray [param from] to [param to] passes down through, as
-## [code]{position, normal}[/code] with the normal turned towards [param from]; empty for none. Back faces count: a
-## trimesh wound the other way is still a floor, and a front-faces-only ray missed every tunnel on one. Walls,
-## ceilings and moving bodies are passed through.
+## The first floor (an upward face of a static body) the ray [param from]->[param to] passes down through, as [code]{position,
+## normal}[/code] with the normal towards [param from]; empty for none. Back faces count (a trimesh wound the other way is still a
+## floor; front-faces-only rays missed every tunnel). Walls, ceilings and moving bodies are passed through.
 func _floor_hit(from: Vector3, to: Vector3) -> Dictionary:
 	var q := PhysicsRayQueryParameters3D.create(from, to, collision_mask)
 	q.hit_back_faces = true

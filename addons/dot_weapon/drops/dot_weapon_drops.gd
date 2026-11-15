@@ -34,8 +34,6 @@ const REFALL_MAX := 4
 signal dropped(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int)
 ## Ammunition moved between a dropped weapon and a carrier; [param state] is what still lies there.
 signal ammo_changed(drop_id: int, state: Dictionary)
-## A weapon came to rest at [param at]; clients snap to it.
-signal settled(drop_id: int, at: Transform3D)
 ## A weapon left the world: [param taker_id] is who took it, or 0 for expiry and the cap.
 signal removed(drop_id: int, taker_id: int)
 
@@ -386,10 +384,9 @@ func tick(delta: float) -> void:
 			scan()
 
 
-## Puts a moving drop back on the floor its centre passed down through since the last tick (the solver tunnelled it, a few
-## in a hundred drops on a bumpy trimesh floor under Jolt), or, once it fell [constant RESCUE_DEPTH] below its drop point,
-## on the floor under that point. [code]last[/code] stays above a floor the centre is only slightly into (contact slop).
-## Returns true when it moved or removed it.
+## Puts a moving drop back on the floor its centre passed down through since the last tick (the solver tunnels a few in a
+## hundred on a bumpy trimesh under Jolt), or, once [constant RESCUE_DEPTH] below its drop point, on the floor under that point.
+## [code]last[/code] stays above a floor the centre is only slightly into (contact slop). Returns true when it moved or removed it.
 func _rescue(id: int, e: Dictionary, body: RigidBody3D) -> bool:
 	var pos := body.global_position
 	var last: Vector3 = e["last"]
@@ -469,28 +466,9 @@ func _topple(e: Dictionary, body: RigidBody3D) -> bool:
 	return true
 
 
-## Freezes a drop in place. The solver leaves a thin box a few centimetres inside the floor
-## (contact slop), so the penetration is resolved first and the drop freezes on the surface.
-func _rest(id: int, e: Dictionary, body: RigidBody3D) -> void:
-	var hit := KinematicCollision3D.new()
-	for _i in 4:
-		if not body.test_move(body.global_transform, Vector3.ZERO, hit, 0.001, true, 4):
-			break
-		var out := hit.get_travel()
-		if out.length() < 0.0005:
-			break
-		body.global_position += out
-	body.linear_velocity = Vector3.ZERO
-	body.angular_velocity = Vector3.ZERO
-	e["rest"] = true
-	body.freeze = true
-	settled.emit(id, body.global_transform)
-
-
-## Authority: wakes every resting drop with nothing under it any more (the prop, door or body it lay on is gone or
-## moved), so it falls onto what is there now instead of hanging where the support was. [method tick] runs it every
-## [constant SUPPORT_EVERY]; a game that removes level geometry may call it at once. A drop that keeps losing its
-## support ([constant REFALL_MAX] times) is put down on the floor under it instead. Returns how many it woke.
+## Authority: wakes every resting drop whose support is gone or moved, so it falls onto what is there now. [method tick]
+## runs it every [constant SUPPORT_EVERY] (a game removing level geometry may call it at once); a drop losing its support
+## [constant REFALL_MAX] times is put down on the floor under it instead. Returns how many it woke.
 func check_support() -> int:
 	# Colliding with nothing, a drop has no support to lose (it rests wherever it was put).
 	if not is_authority or not is_inside_tree() or collision_mask == 0:
@@ -608,7 +586,6 @@ func mirror_ammo(drop_id: int, state: Dictionary) -> void:
 		_entries[drop_id]["state"] = state
 
 
-
 func mirror_removed(drop_id: int) -> void:
 	_remove(drop_id, -1, false)
 
@@ -712,28 +689,3 @@ func _remove(id: int, taker_id: int, tell: bool = true) -> void:
 		_park(body, body.get_meta(&"weapon", &""), e["size"])
 	if tell:
 		removed.emit(id, taker_id)
-
-
-## Rests a drop that may still be in flight (the active cap or [constant SETTLE_MAX_SEC] cut it short). It freezes at
-## once (the cap is a physics cost), and [constant GROUND_TICKS] ticks later, one more than [constant GROUND_GAP] above
-## the floor under it is laid flat and swept straight down onto it, so no gun is frozen in the air (a blast that woke a
-## dozen drops froze the oldest where they flew). The wait lets level geometry added the same frame reach the physics
-## space; the sweep moves the whole box, so a drop beside a crate or over a ledge stops on it, not inside it.
-func _rest_grounded(id: int, e: Dictionary, body: RigidBody3D) -> void:
-	_rest(id, e, body)
-	e["ground_in"] = GROUND_TICKS
-
-
-## Rests the oldest moving drops until no more than [member DotWeaponDropRules.max_active] are awake, never [param keep]. A burst of deaths (a whole team at once) otherwise steps every body together, one physics step costing 200 ms.
-func _enforce_active(keep: int) -> void:
-	var cap := rules.max_active
-	while cap > 0 and active_count() > cap:
-		var oldest := 0
-		var order := 1 << 60
-		for other: int in _entries:
-			if other != keep and not bool(_entries[other]["rest"]) and int(_entries[other]["order"]) < order:
-				order = int(_entries[other]["order"])
-				oldest = other
-		if oldest == 0:
-			break
-		_rest_grounded(oldest, _entries[oldest], _entries[oldest]["body"])

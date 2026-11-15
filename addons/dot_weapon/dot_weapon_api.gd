@@ -42,10 +42,9 @@ extends RefCounted
 ## 10: carry weight ([DotWeaponCarry], `DotWeaponDef.weight`, `weight` profile key; arsenal `carry`, `backpack_tier`,
 ## `cycle_slot`, `weapons_in`, `carried_weight`, `capacity`, `enforce_limit`). Off unless a game sets `carry`. OLDEST stays 1.
 
-## 11: selectable fire modes: [member DotWeaponDef.fire_modes] (and the `fire_modes` profile key),
-## [method DotWeaponArsenal.cycle_fire_mode], `set_fire_mode`, `fire_mode`, `fire_modes_available`, the
-## [signal DotWeaponArsenal.fire_mode_changed] signal and [constant DotWeaponCommand.BUTTON_FIRE_MODE]
-## (the command is one bit wider). OLDEST stays 1.
+## 11: selectable fire modes: [member DotWeaponDef.fire_modes] (and the `fire_modes` profile key), [method
+## DotWeaponArsenal.cycle_fire_mode], `set_fire_mode`, `fire_mode`, `fire_modes_available`, [signal DotWeaponArsenal.fire_mode_changed]
+## and [constant DotWeaponCommand.BUTTON_FIRE_MODE] (the command is one bit wider). OLDEST stays 1.
 
 ## 12: [DotWeaponMuzzle] and the `muzzle_flash` key under `extra:`. OLDEST stays 1.
 

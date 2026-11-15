@@ -1,15 +1,9 @@
 class_name DotWeaponAttachRequest
 extends RefCounted
 
-## A player's ask to put an attachment on, or take one off, a carried weapon.
-##
-## [b]Only the server applies one.[/b] A client sends [method to_wire]; the server reads it with
-## [method from_wire], runs [method apply] against its own arsenal, and the fitting reaches every
-## machine through net sync. So hit registration and lag compensation only ever see a server fitting.
-##
-## Failure codes: [code]CODE_INVALID[/code] malformed, empty slot or unknown attachment,
-## [code]CODE_FORBIDDEN[/code] not owned or does not fit, [code]CODE_CONFLICT[/code] wrong mount
-## or blocked, [code]CODE_STATE[/code] no attachment catalogue.
+## A player's ask to put an attachment on, or take one off, a carried weapon. [b]Only the server applies one:[/b]
+## a client sends [method to_wire], the server runs [method from_wire] then [method apply] on its own arsenal, and net sync
+## carries the fitting. Codes: CODE_INVALID, CODE_FORBIDDEN (not owned/no fit), CODE_CONFLICT (mount), CODE_STATE (no catalogue).
 
 var slot: int = 0
 var mount: StringName = &""

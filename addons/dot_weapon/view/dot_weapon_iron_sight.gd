@@ -17,29 +17,22 @@ const RING_OF_WIDTH := 0.40
 const RING_MIN := 0.03
 const RING_MAX := 0.07
 
-## The ring's angular radius at full aim, which the view model sizes it to: the rifle's ring
-## at 0.4 of its width came out at about this and read right beside the reference picture,
-## while the second pack's slimmer, real-sized guns drew a ring a third the size at the
-## same fraction. Clamped to [constant RING_FIT_MIN] - [constant RING_FIT_MAX] model metres.
+## The ring's angular radius at full aim, which the view model sizes it to: what read right for the rifle's ring at 0.4
+## of its width (the second pack's slimmer, real-sized guns drew one a third the size at that fraction).
+## Clamped to [constant RING_FIT_MIN] - [constant RING_FIT_MAX] model metres.
 const RING_DEGREES := 4.8
 const RING_FIT_MIN := 0.02
 const RING_FIT_MAX := 0.12
 
 
-## Measures [param weapon]'s sight line in [param space]'s coordinates (the holder: the
-## model's own space). [param forward] is the art's `model_forward`, model +Y is up.
-##
-## Returns `{}` when there is nothing to measure (no mesh data, a gun pointing up), or:
-## `rear` and `front` (the two sight points, on the line), `ring` (radius, from the width
-## until [method with_ring] resizes it), `top` (the highest top the line clears), `rear_top` and
-## `front_top` (the gun's top under each), `width`, `back` (the gun's back end along the
-## line, for keeping the stock in front of the near plane), and `rear_paint` / `front_paint`
-## (`{material, uv}` of the face each sight stands on).
 ## Node names a model gives its own sight line (see [method from_marks]).
 const MARK_REAR := "sight_rear"
 const MARK_FRONT := "sight_front"
 
 
+## Measures [param weapon]'s sight line in [param space] (the model's own space; [param forward] is the art's `model_forward`, +Y up).
+## `{}` when there is nothing to measure, else `rear`/`front` (the sight points), `ring`, `top`, `rear_top`/`front_top`, `width`,
+## `back` (the gun's back end along the line, to keep the stock off the near plane) and `rear_paint`/`front_paint` (`{material, uv}`).
 static func measure(weapon: Node, space: Node3D, forward: Vector3) -> Dictionary:
 	var f := forward.normalized()
 	if f == Vector3.ZERO or absf(f.dot(Vector3.UP)) > 0.5:
@@ -99,10 +92,8 @@ static func measure(weapon: Node, space: Node3D, forward: Vector3) -> Dictionary
 	}, ring)
 
 
-## The gun's vertical extent at [param fraction] of its length (0 stock, 1 muzzle), measured with
-## rays down and up through the mesh near the centre line: `{low, high, length}` in [param space],
-## or `{}`. The hands take their height from it, because the bounds' height includes a scope on
-## top or a magazine below that the hand never touches.
+## The gun's vertical extent at [param fraction] of its length (0 stock, 1 muzzle), by rays down and up near the centre line:
+## `{low, high, length}` in [param space], or `{}`. The hands use it, as the bounds include a scope or magazine they never touch.
 ## [param gathered] is the result of [method triangles_of], so several spans of one mesh walk it once.
 static func span(weapon: Node, space: Node3D, forward: Vector3, fraction: float, gathered: Array[Dictionary] = []) -> Dictionary:
 	var f := forward.normalized()
@@ -148,10 +139,9 @@ static func span(weapon: Node, space: Node3D, forward: Vector3, fraction: float,
 	return {"low": low, "high": high, "length": length}
 
 
-## The line a model marks for itself: two nodes named [constant MARK_REAR] and
-## [constant MARK_FRONT] (a gun with real sights, modelled; zed-dot-weapons' baked carbine),
-## in [param space]. Empty when the model has no marks. The line is used as it is: no ring
-## is fitted and no sight is built, because the model's own sights are what the eye lines up.
+## The line a model marks for itself: nodes [constant MARK_REAR] and [constant MARK_FRONT] (real modelled sights, e.g.
+## zed-dot-weapons' baked carbine) in [param space]; empty without marks. Used as is: no ring fitted, no sight built,
+## because the model's own sights are what the eye lines up.
 static func from_marks(weapon: Node, space: Node3D, forward: Vector3) -> Dictionary:
 	var rear := weapon.find_child(MARK_REAR, true, false) as Node3D
 	var front := weapon.find_child(MARK_FRONT, true, false) as Node3D
@@ -216,11 +206,8 @@ static func build(line: Dictionary, forward: Vector3) -> Node3D:
 			Vector3(TAU * r / segments * 1.08, tube, r * 0.45), line.front_paint.uv)
 	root.add_child(_commit(st, "Front", line.front_paint.material))
 
-	# Rear: a low notch, its ears' tops below the line. The rear sight is half the front's
-	# distance from the eye, so anything on the line there is twice the size on the screen:
-	# ears up to the line hid the bottom of the ring and filled the middle of the screen. Kept
-	# low, it sits under the ring like a real rear sight seen past the front, and the front
-	# post rises out of its notch.
+	# Rear: a low notch, ears below the line. At half the front's distance from the eye it draws twice the size, so ears up
+	# to the line hid the ring's bottom and filled the screen; kept low it sits under the ring and the front post rises out of it.
 	st = _begin()
 	var notch := r * 0.9
 	var ear_w := r * 0.5
@@ -237,14 +224,8 @@ static func build(line: Dictionary, forward: Vector3) -> Node3D:
 	return root
 
 
-# --- Measuring --------------------------------------------------------------
-
-## Every triangle under [param node], in [param space], with its surface's material and the
-## mean of its corners' UVs (the kit paints with one colour atlas, so a face's UVs sit in one
-## swatch).
-## Every triangle of every mesh under [param node], in [param space]'s coordinates, as bare corners (three
-## to a triangle) with no per-triangle Dictionary: what [method spans] reads. Same walk and same skips as
-## [method triangles_of].
+## Every triangle of every mesh under [param node], in [param space]'s coordinates, as bare corners (three to a triangle)
+## with no per-triangle Dictionary: what [method spans] reads. Same walk and skips as [method triangles_of].
 static func faces_of(node: Node, space: Node3D) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	var stack: Array[Node] = [node]
@@ -312,10 +293,9 @@ static func spans(faces: PackedVector3Array, forward: Vector3, fractions: Array)
 	var length := t_max - t_min
 	if length <= 0.0:
 		return out
-	# A vertical ray can only meet a triangle whose footprint (x and z extent, a hair wider) holds its x and z:
-	# the same Geometry3D test as [method span], run on those triangles alone, so the answers are the same.
-	# One pass over the mesh keeps, per fraction, the triangles under the box of its 15 rays; the rays then
-	# walk only those (each ray walking every triangle was ~35 ms a weapon of hand reach).
+	# A vertical ray can only meet a triangle whose x-z footprint (a hair wider) holds it, so one pass keeps per fraction the
+	# triangles under its 15 rays' box and the rays walk only those: the same Geometry3D test as [method span], same answers
+	# (each ray walking every triangle was ~35 ms a weapon of hand reach).
 	var centre := (s_min + s_max) * 0.5
 	var width := s_max - s_min
 	var rays: Array = []
@@ -377,6 +357,8 @@ static func _bin_faces(faces: PackedVector3Array, boxes: Array[Rect2], near: Arr
 			feet[k].append_array([lo_x, hi_x, lo_z, hi_z])
 
 
+## Every triangle under [param node], in [param space], with its surface's material and the mean of its corners' UVs
+## (the kit paints with one colour atlas, so a face's UVs sit in one swatch).
 static func triangles_of(node: Node, space: Node3D) -> Array[Dictionary]:
 	return _triangles(node, space)
 
@@ -425,9 +407,8 @@ static func _triangles(node: Node, space: Node3D) -> Array[Dictionary]:
 const GRID_CELLS := 24
 
 
-## [param triangles] binned by the cells of a grid over the x-z plane that their footprints (a hair wider,
-## [constant FOOTPRINT_SLACK]) touch, in the triangles' own order: a vertical ray is only tried on the triangles
-## of its own cell, the same Geometry3D test on the same triangles that can hold it, so the answer is the same.
+## [param triangles] binned, in order, by the cells of an x-z grid their footprints ([constant FOOTPRINT_SLACK] wider) touch:
+## a vertical ray tries only its own cell's triangles, the same test on all that can hold it, so the answer is the same.
 ## `{triangles, cells, x0, z0, size, nx, nz}`.
 static func _footprints(triangles: Array[Dictionary]) -> Dictionary:
 	var lo_x := INF
@@ -485,10 +466,9 @@ static func _top_at(index: Dictionary, f: Vector3, side: Vector3, s: float, t: f
 	return best
 
 
-## [method _top_at] at the station, or the nearest station a few centimetres either side that
-## has a face under it (a gap between two parts of the model), and failing that the same a
-## little to either side of the centre line (a gun whose middle is a gap, like a tank and a
-## barrel side by side). The hit's lateral place is returned as `s`.
+## [method _top_at] at the station, or the nearest station a few centimetres either side with a face under it (a gap
+## between parts), failing that the same a little either side of the centre line (a middle gap, like a tank beside a
+## barrel). The hit's lateral place is returned as `s`.
 static func _top_near(index: Dictionary, f: Vector3, side: Vector3, s: float, t: float, length: float, y_max: float, width: float) -> Dictionary:
 	for lateral: float in [0.0, -0.12, 0.12, -0.25, 0.25]:
 		for k in range(9):
@@ -498,8 +478,6 @@ static func _top_near(index: Dictionary, f: Vector3, side: Vector3, s: float, t:
 				return hit
 	return {}
 
-
-# --- Building ---------------------------------------------------------------
 
 ## The corners' UVs spread round the swatch's point: one shared UV has zero derivatives, and the view material's
 ## anisotropic filter (SightFit.sharpen) turns those into per-pixel black and white speckle on llvmpipe.

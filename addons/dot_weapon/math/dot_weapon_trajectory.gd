@@ -110,11 +110,9 @@ const RICOCHET_MAX_ANGLE := 0.35
 const RICOCHET_KEEP := 0.7
 
 
-## Ricochet of a bullet travelling along [param dir] off a hard surface with unit [param normal].
-## [param roll] is 0..1 from the caller's seeded stream (never drawn here, so server, client and
-## replay agree). Returns `{ricochet, dir, speed_scale, angle}`: the bullet bounces when the
-## grazing angle is within [constant RICOCHET_MAX_ANGLE] and roll is under ricochet_chance, the
-## chance scaled down towards the limit. The new direction is the mirror about the surface.
+## Ricochet of a bullet along [param dir] off a hard surface with unit [param normal]; [param roll] is 0..1 from the caller's
+## seeded stream (so server, client and replay agree). Returns `{ricochet, dir, speed_scale, angle}`: it bounces (mirrored about the
+## surface) when the grazing angle is within [constant RICOCHET_MAX_ANGLE] and roll is under ricochet_chance, scaled down towards the limit.
 static func ricochet(b: DotWeaponBallistics, dir: Vector3, normal: Vector3, roll: float) -> Dictionary:
 	var d := dir.normalized()
 	var n := normal.normalized()

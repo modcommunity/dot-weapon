@@ -1,14 +1,10 @@
 class_name DotWeaponKnives
 extends Node3D
-## Thrown knives: the aim key with the knife in hand throws it. The server flies each one on the tick,
-## hurts the first body it meets (the rule `damage`, by default enough to kill outright) and leaves it
-## in the body when that kills, bounces it off the world, and gives it back to whoever walks over it.
-## A client mirrors the server's events (see [DotWeaponKnifeWire]) and draws them.
-##
-## A game owns one of these as a child, fills in the fields below, calls [method input] before each
-## player simulates and [method tick] after everyone moved, and forwards [signal changed] to its
-## clients. Players are duck-typed: [code]arsenal[/code] ([DotWeaponArsenal]), [code]is_alive()[/code],
-## [code]muzzle_position()[/code], and [code]controller.state.position / .velocity[/code].
+## Thrown knives: aim with the knife in hand throws it. The server flies each on the tick, hurts the first body (rule `damage`), sticks it
+## in a body it kills, bounces it off the world and returns it to whoever walks over it; clients mirror the events ([DotWeaponKnifeWire]).
+## A game owns one as a child: fill the fields, call [method input] before players simulate and [method tick] after, forward [signal changed].
+
+# Players are duck-typed: arsenal (DotWeaponArsenal), is_alive(), muzzle_position(), controller.state.position/.velocity.
 
 ## Server: a knife was thrown, bounced, came to rest, stuck or was taken (GONE, [param victim] the taker).
 signal changed(id: int, owner: int, phase: int, victim: int, at: Vector3, motion: Vector3)

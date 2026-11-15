@@ -1,10 +1,8 @@
 extends "sections_accuracy.gd"
 
-## The rest skip of an idle hitscan tick (DotWeaponArsenal.idle_still, DotWeaponBehaviour.rest_tick) must change nothing:
-## the same random stream of commands and postures through an arsenal with the skip and one without, full state compared.
-## The first arsenal also runs with the steady skip of DotWeaponHitscan on and the second with it off, so the same streams
-## prove that one too; the last three modes keep the cone on (as the arena does, where the rest skip never runs) and add
-## flinches, in-place tuning edits (the aimed-tick swap of a weapon rig) and restored snapshots.
+## The rest skip of an idle hitscan tick (DotWeaponArsenal.idle_still, DotWeaponBehaviour.rest_tick) must change nothing: the same random
+## command and posture stream through an arsenal with it and one without, full state compared (the first also runs DotWeaponHitscan's steady
+## skip, the second not); the last three modes keep the cone on, as FC does, and add flinches, in-place tuning edits and restored snapshots.
 
 const _MODES := ["plain", "rules", "rules_cone_off", "rules_edited", "explicit_still", "rules_hurt", "rules_tuning", "rules_restore"]
 const _CONE_MODES := ["rules", "rules_hurt", "rules_tuning", "rules_restore"]

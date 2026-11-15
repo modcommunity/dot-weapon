@@ -254,10 +254,9 @@ func _sorted_mounts(def: DotWeaponDef) -> Array[StringName]:
 	return out
 
 
-## The wire layout of [param def]: [code][mounts in text order, choice list per mount, bits per mount][/code].
-## Kept per value of what [method DotWeaponAttachment.fits] reads (id, slot, mounts, tags), so a
-## def edited in place gets a new entry and two alike share one; [method add] drops them all.
-## A server pulls it twice a player a tick, and building it sorts every id (about 25 us a pull).
+## The wire layout of [param def]: [code][mounts in text order, choice list per mount, bits per mount][/code], memoed per
+## value of what [method DotWeaponAttachment.fits] reads (id, slot, mounts, tags); [method add] drops them all. A server
+## pulls it twice a player a tick, and building it sorts every id (about 25 us a pull).
 func _layout(def: DotWeaponDef) -> Array:
 	var hit: Array = _layouts.get([def.id, def.slot, def.mounts, def.tags], [])
 	if not hit.is_empty():
