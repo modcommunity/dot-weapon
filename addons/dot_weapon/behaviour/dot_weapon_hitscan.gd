@@ -89,10 +89,10 @@ func _tick(ctx: DotWeaponContext) -> void:
 
 	var since := mini(int(state.get(_SINCE, _NEVER)) + 1, _NEVER)
 	state[_SINCE] = since
-	if b.bloom > 0.0:
-		var now := float(state.get(_BLOOM, 0.0))
-		if now > 0.0 and since >= _bloom_delay_of(b):
-			state[_BLOOM] = maxf(0.0, now - scaled_per_tick(b.bloom_recovery))
+	var bloom := float(state.get(_BLOOM, 0.0))
+	if b.bloom > 0.0 and bloom > 0.0 and since >= _bloom_delay_of(b):
+		bloom = maxf(0.0, bloom - scaled_per_tick(b.bloom_recovery))
+		state[_BLOOM] = bloom
 
 	if ctx == null:
 		return
@@ -120,15 +120,18 @@ func _tick(ctx: DotWeaponContext) -> void:
 
 	var rules := rules_object if rules_object != null and rules_object.enabled else null
 	var factor_still := true
+	var factor := 1.0
 	if rules != null:
 		var target := rules.target_factor(ctx)
 		var had_factor := state.has(_FACTOR)
 		var held := float(state.get(_FACTOR, 1.0))
-		var factor := target if target >= held else maxf(target, held - rules.recovery_per_tick(running_tick_rate()))
+		factor = target if target >= held else maxf(target, held - rules.recovery_per_tick(running_tick_rate()))
 		state[_FACTOR] = factor
 		factor_still = had_factor and factor == held
 
-	_shown = _spread_with(b, ctx, rules, rules_object)
+	# The values just written, not read back: _spread_with's motion max is this motion (never below the target, and
+	# no key only at 0), its factor and bloom the ones stored above.
+	_shown = _spread_at(b, ctx, rules, rules_object, motion, factor, bloom)
 	# Only state the idle path would also have: a still gun without rules keeps the cone out of it.
 	var write_now := cone or held_motion > 0.0 or motion > 0.0
 	var now_still := true
@@ -373,10 +376,18 @@ func _spread_for(b: DotWeaponBallistics, ctx: DotWeaponContext) -> float:
 func _spread_with(
 	b: DotWeaponBallistics, ctx: DotWeaponContext, rules: DotWeaponSpreadRules, every: DotWeaponSpreadRules = _rules_object()
 ) -> float:
+	var motion := maxf(float(state.get(_MOTION, 0.0)), _motion_of(b, ctx))
+	return _spread_at(b, ctx, rules, every, motion, float(state.get(_FACTOR, 1.0)), float(state.get(_BLOOM, 0.0)))
+
+
+## [method _spread_with] with the state's motion, factor and bloom already read (a tick has them from its own writes).
+func _spread_at(
+	b: DotWeaponBallistics, ctx: DotWeaponContext, rules: DotWeaponSpreadRules, every: DotWeaponSpreadRules,
+	motion: float, factor: float, bloom_state: float
+) -> float:
 	# Each term is b.accuracy(key, class) without its by-name lookups (an idle moving carrier computes this every tick):
 	# the field when 0 or more, else the class preset _class_of keeps.
 	_class_of(b)
-	var motion := maxf(float(state.get(_MOTION, 0.0)), _motion_of(b, ctx))
 	var out := b.spread_for_motion(motion, ctx.airborne, ctx.crouched)
 	if not ctx.aiming:
 		out += b.spread_hip if b.spread_hip >= 0.0 else _pre_hip
@@ -390,8 +401,8 @@ func _spread_with(
 		var left := 1.0 - float(ctx.tick - ctx.hurt_tick) / (DotWeaponAccuracyClass.FLINCH_SEC * rate)
 		out += (b.spread_flinch if b.spread_flinch >= 0.0 else _pre_flinch) * clampf(left, 0.0, 1.0)
 	if rules != null:
-		out = rules.apply(out, float(state.get(_FACTOR, 1.0)))
-	var bloom := minf(float(state.get(_BLOOM, 0.0)), b.bloom_max)
+		out = rules.apply(out, factor)
+	var bloom := minf(bloom_state, b.bloom_max)
 	if ctx.crouched:
 		bloom *= b.bloom_crouch if b.bloom_crouch >= 0.0 else _pre_crouch
 	out += bloom

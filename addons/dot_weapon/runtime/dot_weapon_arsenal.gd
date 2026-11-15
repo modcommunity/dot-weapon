@@ -288,6 +288,8 @@ static var phase_us := PackedInt64Array([0, 0, 0, 0, 0])
 static var phase_calls := PackedInt64Array([0, 0, 0])
 static var phase_timers := false
 
+var _idle_out: DotWeaponOutcome
+
 
 ## Runs one tick of one command. The only entry point a game needs.
 ##
@@ -416,14 +418,26 @@ func idle_tick() -> DotWeaponOutcome:
 		if lap != 0:
 			_lap(3, lap)
 			phase_calls[2] += 1
-		return DotWeaponOutcome.nothing("")
+		return _idle_nothing()
 	if lap != 0:
 		lap = _lap(3, lap)
 
 	behaviour.tick(idle_posture.call() as DotWeaponContext if idle_posture.is_valid() else null)
 	if lap != 0:
 		_lap(4, lap)
-	return DotWeaponOutcome.nothing("")
+	return _idle_nothing()
+
+
+## [method idle_tick]'s empty outcome: one per arsenal, read before the next tick. A new one each idle player each tick
+## was an object and three typed arrays; one a caller wrote to is replaced, never handed out again.
+func _idle_nothing() -> DotWeaponOutcome:
+	var o := _idle_out
+	if o == null or o.used or o.kind != DotWeaponOutcome.KIND_NONE or not o.refusal.is_empty() or not o.shots.is_empty() \
+			or not o.spawns.is_empty() or not o.events.is_empty() or o.ammo_used != -1 or o.cooldown_ticks != -1 \
+			or o.recoil != Vector2.ZERO or o.recoil_recovery != -1.0 or o.recoil_signed:
+		o = DotWeaponOutcome.nothing("")
+		_idle_out = o
+	return o
 
 
 func _advance_switch(ctx: DotWeaponContext) -> void:

@@ -274,8 +274,50 @@ func _test_idle_tick() -> void:
 	_check(same, "outcomes and snapshots agree on every tick of a mixed stream")
 	_check(skipped > 300, "and the idle path ran for much of it", str(skipped))
 
+	var first := fast.idle_tick()
+	_check(fast.idle_tick() == first, "an idle tick hands out the same empty outcome")
+	first.events.append({"x": 1})
+	var next := fast.idle_tick()
+	_check(next != first and next.events.is_empty() and not next.used, "one a caller wrote to is replaced")
+
 	_drop(slow)
 	_drop(fast)
+	_done()
+
+
+func _test_moving_tick_cone() -> void:
+	_section("a context tick's cone is the one _spread_with reads back from the state")
+
+	var cat := _catalogue()
+	var b := cat.get_def(&"rifle").tuning as DotWeaponBallistics
+	b.bloom = 2.0
+	b.bloom_recovery = 0.2
+	b.settle_ticks = 6
+	var a := _arsenal(cat)
+	a.give(&"rifle")
+	a.spread_rules = DotWeaponSpreadRules.new()
+	var beh := a.current().behaviour as DotWeaponHitscan
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var same := true
+	for tick in range(600):
+		var ctx := _ctx(tick)
+		# Runs, stops (the settle), jumps, crouches and a hit now and then; a shot sets the bloom.
+		ctx.speed = 0.0 if (tick / 30) % 2 == 0 else rng.randf_range(0.0, 9.0)
+		ctx.airborne = rng.randf() < 0.1
+		ctx.crouched = rng.randf() < 0.2
+		ctx.sprinting = rng.randf() < 0.2
+		ctx.hurt_tick = tick - 3 if tick % 97 == 0 else -1
+		if tick % 50 == 0:
+			beh.state[&"bloom"] = 1.5
+		a.spread_rules.enabled = (tick / 100) % 2 == 0
+		beh.tick(ctx)
+		if beh.spread_now() != beh._spread_with(b, ctx, beh._rules()):
+			same = false
+			break
+	_check(same, "on every tick of a mixed stream")
+
+	_drop(a)
 	_done()
 
 
