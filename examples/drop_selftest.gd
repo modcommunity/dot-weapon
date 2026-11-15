@@ -2,7 +2,7 @@ extends "res://examples/drop_selftest_physics.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 190
+const CHECKS := 204
 
 
 func _ready() -> void:
@@ -27,6 +27,7 @@ func _run() -> void:
 	await _test_rescue()
 	await _test_capped_in_air()
 	await _test_support_gone()
+	await _test_settle_rules()
 	await _test_blast()
 	await _test_lies_flat()
 	await _test_seeded_rng()
@@ -67,7 +68,7 @@ func _test_rules() -> void:
 	_check(r.set_cvar("sv_weapon_drop_scan", "0") and r.scan_interval == 0.0, "sv_weapon_drop_scan 0 scans every tick")
 	_check(not r.set_cvar("sv_weapon_drop_time", "soon"), "a non-number is refused")
 	_check(not r.set_cvar("sv_other", "1"), "another cvar is not ours")
-	_check(r.cvar_specs().size() == 30, "thirty cvars are described")
+	_check(r.cvar_specs().size() == 32, "thirty-two cvars are described")
 	_done()
 
 

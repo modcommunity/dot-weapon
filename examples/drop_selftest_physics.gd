@@ -102,6 +102,66 @@ func _gap_under(drops: DotWeaponDrops, id: int) -> float:
 	return drops._sweep_down(body, body.global_transform, 3.0).length()
 
 
+func _test_settle_rules() -> void:
+	_section("settle_max_sec and refall_max: default 4 / 4, 0 unlimited, bad values refused")
+	var r := DotWeaponDropRules.new()
+	_check(r.settle_max_sec == 4.0 and r.refall_max == 4 and DotWeaponDrops.SETTLE_MAX_SEC == 4.0 and DotWeaponDrops.REFALL_MAX == 4, "defaults are unchanged: 4 s and 4 refalls")
+	_check(r.problems().is_empty() and r.resolve(null).settle_max_sec == 4.0, "defaults are valid and survive resolve")
+	_check(r.set_cvar("sv_weapon_drop_settle_max", "0") and r.settle_max_sec == 0.0 and r.problems().is_empty(), "sv_weapon_drop_settle_max 0 is accepted")
+	_check(not r.set_cvar("sv_weapon_drop_settle_max", "-1") and r.settle_max_sec == 0.0, "a negative settle limit is refused, not clamped")
+	_check(not r.set_cvar("sv_weapon_drop_settle_max", "99999") and r.settle_max_sec == 0.0, "an above-range settle limit is refused, not clamped")
+	_check(not r.set_cvar("sv_weapon_drop_refall_max", "-2") and r.refall_max == 4, "a negative refall limit is refused")
+	_check(not r.set_cvar("sv_weapon_drop_refall_max", "1.5") and r.refall_max == 4, "a fractional refall limit is refused")
+	_check(r.set_cvar("sv_weapon_drop_refall_max", "0") and r.refall_max == 0, "refall 0 is accepted (unlimited)")
+	r.settle_max_sec = -1.0
+	r.refall_max = -1
+	_check(r.problems().size() == 2, "negative values set directly are reported")
+	var floor_body := _static_box(Vector3(20, 1, 20), Vector3(400, -0.5, 0))
+	var server := _drops()
+	server.collision_mask = 1
+	server.rules.lifetime = 0.0
+	server.rules.sleep_time = 30.0
+	server.rules.settle_max_sec = 0.3
+	var a := server.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(400, 0.5, 0), Vector3(1, 0, 0), 1)
+	for _i in 120:
+		await get_tree().physics_frame
+	_check(bool(server._entries[a]["rest"]), "a short settle limit forces the rest while it still moves")
+	var b := server.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(405, 0.5, 0), Vector3(1, 0, 0), 1)
+	server.rules.settle_max_sec = 0.0
+	for _i in 600:
+		await get_tree().physics_frame
+	_check(not bool(server._entries[b]["rest"]), "settle_max_sec 0 never forces a rest (10 s past the default limit)")
+	server.rules.settle_max_sec = -1.0
+	var moved: float = float(server._entries[b]["age"])
+	server.tick(0.1)
+	_check(float(server._entries[b]["age"]) == moved, "an invalid rule stops the tick instead of being clamped")
+	server.rules.settle_max_sec = 4.0
+	var crate := _static_box(Vector3(2, 1, 2), Vector3(420, 0.5, 0))
+	var c := server.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(420, 1.6, 0), Vector3.ZERO, 1)
+	server.rules.sleep_time = 0.6
+	for _i in 400:
+		await get_tree().physics_frame
+		if bool(server._entries[c]["rest"]) and not server._entries[c].has("ground_in"):
+			break
+	server._entries[c]["refalls"] = 9
+	crate.free()
+	_check(server.check_support() == 0 and server._entries[c].has("ground_in"), "past refall_max the drop is grounded, not woken")
+	server._entries.erase(c)
+	var d := server.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(430, 1.6, 0), Vector3.ZERO, 1)
+	var crate2 := _static_box(Vector3(2, 1, 2), Vector3(430, 0.5, 0))
+	server.rules.refall_max = 0
+	for _i in 400:
+		await get_tree().physics_frame
+		if bool(server._entries[d]["rest"]) and not server._entries[d].has("ground_in"):
+			break
+	server._entries[d]["refalls"] = 9
+	crate2.free()
+	_check(server.check_support() == 1, "refall_max 0 is unlimited: it falls again however often")
+	server.queue_free()
+	floor_body.queue_free()
+	_done()
+
+
 func _test_support_gone() -> void:
 	_section("a resting drop whose support goes falls again, on the server and its mirror")
 	var floor_body := _static_box(Vector3(20, 1, 20), Vector3(200, -0.5, 0))

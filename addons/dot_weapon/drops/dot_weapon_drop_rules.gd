@@ -18,6 +18,10 @@ const EVICT_OLDEST := 0
 const EVICT_IDLE := 1
 const EVICT_RANDOM := 2
 
+## Defaults of [member settle_max_sec] and [member refall_max] (API 40).
+const DEFAULT_SETTLE_MAX_SEC := 4.0
+const DEFAULT_REFALL_MAX := 4
+
 signal changed
 
 ## A weapon may be dropped (key and death) at all.
@@ -72,6 +76,12 @@ var ccd_speed: float = 10.0
 ## A moving drop whose centre passes down through a floor (the solver let it tunnel) is put back on top of it, and one that falls
 ## [constant DotWeaponDrops.RESCUE_DEPTH] below where it was dropped is put back there once, then removed.
 var rescue: bool = true
+## A drop still moving after this many seconds (a thin gun wobbling on a slope) is put to rest where it lies; 0 never forces
+## a rest (it moves until it sleeps). Negative is refused, see [method problems].
+var settle_max_sec: float = DEFAULT_SETTLE_MAX_SEC
+## Times one resting drop whose support went away may fall again before it is put on the floor under it and left; 0 is
+## unlimited (it falls again every time). Negative is refused, see [method problems].
+var refall_max: int = DEFAULT_REFALL_MAX
 ## Seconds a dropped weapon must lie still before it sleeps.
 var sleep_time: float = 0.6
 ## Mass of a dropped weapon, kilograms.
@@ -111,6 +121,8 @@ const _SPECS := [
 	["sv_weapon_drop_active", "max_active", "int:0:256", "Most dropped weapons simulated awake at once; 0 unlimited"],
 	["sv_weapon_drop_rescue", "rescue", "bool", "1 puts a dropped weapon that fell through a floor back on top of it"],
 	["sv_weapon_drop_ccd_speed", "ccd_speed", "float:0:100", "Launch speed from which a dropped weapon uses continuous collision detection (slower drops skip its cost); 0 always"],
+	["sv_weapon_drop_settle_max", "settle_max_sec", "float:0:3600", "Seconds a dropped weapon may keep moving before it is put to rest where it lies; 0 never forces a rest. Out of range is refused", true],
+	["sv_weapon_drop_refall_max", "refall_max", "int:0:1000", "Times a resting drop whose support went away falls again before it is put on the floor under it; 0 unlimited. Out of range is refused", true],
 	["sv_weapon_drop_sleep", "sleep_time", "float:0.1:10", "Seconds a dropped weapon lies still before it sleeps"],
 	["sv_weapon_drop_mass", "mass", "float:0.1:100", "Mass of a dropped weapon, kilograms"],
 	["sv_weapon_drop_friction", "friction", "float:0:2", "Friction of a dropped weapon"],
@@ -143,6 +155,17 @@ func resolve(source: Object) -> DotWeaponDropRules:
 	return out
 
 
+## What is wrong with the strict rules ([member settle_max_sec], [member refall_max]) as set directly, one line each; empty when
+## fine. These never clamp: [method DotWeaponDrops.tick] reports them as an error and a cvar outside its range is refused.
+func problems() -> PackedStringArray:
+	var out := PackedStringArray()
+	if is_nan(settle_max_sec) or settle_max_sec < 0.0:
+		out.append("settle_max_sec must be 0 (never force a rest) or more, got %s" % settle_max_sec)
+	if refall_max < 0:
+		out.append("refall_max must be 0 (unlimited) or more, got %s" % refall_max)
+	return out
+
+
 func cvar_specs() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for spec in _SPECS:
@@ -170,6 +193,9 @@ func set_cvar(cvar_name: String, text: String) -> bool:
 			return false
 		var kind: PackedStringArray = String(spec[2]).split(":")
 		var n := text.to_float()
+		if spec.size() > 4 and spec[4] and (n < kind[1].to_float() or n > kind[2].to_float() or (kind[0] == "int" and n != floorf(n))):
+			DotLog.error(CHANNEL, "cvar value out of range; refused, left as it was", {"cvar": cvar_name, "value": text, "min": kind[1], "max": kind[2]})
+			return false
 		if kind[0] == "bool":
 			set(spec[1], n != 0.0)
 		elif kind[0] == "int":

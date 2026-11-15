@@ -8,8 +8,9 @@ extends "dot_weapon_drops_push.gd"
 const CHANNEL := "weapon.drop"
 const SETTLE_SPEED := 0.08
 const SETTLE_SEC := 0.6
-## A drop still wobbling after this long (a thin gun on a slope) is put to rest where it lies.
-const SETTLE_MAX_SEC := 4.0
+## Default of [member DotWeaponDropRules.settle_max_sec]: a drop still wobbling after this long (a thin gun on a slope) is
+## put to rest where it lies; the rule is what applies, 0 there never forces a rest.
+const SETTLE_MAX_SEC := DotWeaponDropRules.DEFAULT_SETTLE_MAX_SEC
 ## Cap on how far a thrown weapon may start from the player, so a wall in front cannot swallow it.
 const REACH := 0.5
 ## A moving drop this far below where it was dropped or last pushed fell through the world: it goes back on the floor
@@ -24,8 +25,9 @@ const SUPPORT_EVERY := 0.5
 ## A resting drop that could move this far straight down has lost what held it (a prop broken or moved, a door
 ## opened, a body gone) and falls again.
 const SUPPORT_GAP := 0.04
-## Times one drop falls again for want of support before it is put on the floor under it and left there.
-const REFALL_MAX := 4
+## Default of [member DotWeaponDropRules.refall_max]: times one drop falls again for want of support before it is put on
+## the floor under it and left there; 0 in the rule is unlimited.
+const REFALL_MAX := DotWeaponDropRules.DEFAULT_REFALL_MAX
 
 ## A weapon left a hand (or a corpse): [param state] is [code]{id, magazine, reserve}[/code].
 signal dropped(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int)
@@ -336,6 +338,11 @@ func clear() -> void:
 ## Ages, settles and expires the drops. Call every physics frame (the node does when added to a tree).
 func tick(delta: float) -> void:
 	_clock += delta
+	var bad := rules.problems()
+	if not bad.is_empty():
+		# Fail loudly, never clamp: a negative limit is a caller bug, and the drops stay as they were.
+		DotLog.error(CHANNEL, "drop rules invalid; tick skipped", {"problems": "; ".join(bad)})
+		return
 	for id: int in _entries.keys():
 		var e: Dictionary = _entries[id]
 		e["delay"] = maxf(float(e["delay"]) - delta, 0.0)
@@ -361,7 +368,7 @@ func tick(delta: float) -> void:
 				e["still"] = 0.0
 			elif float(e["still"]) >= rules.sleep_time:
 				_rest(id, e, body)
-			elif float(e["moving"]) >= SETTLE_MAX_SEC:
+			elif rules.settle_max_sec > 0.0 and float(e["moving"]) >= rules.settle_max_sec:
 				_rest_grounded(id, e, body)
 		elif body.global_position.y < -200.0:
 			_remove(id, 0)
@@ -465,7 +472,7 @@ func _topple(e: Dictionary, body: RigidBody3D) -> bool:
 
 ## Authority: wakes every resting drop whose support is gone or moved, so it falls onto what is there now. [method tick]
 ## runs it every [constant SUPPORT_EVERY] (a game removing level geometry may call it at once); a drop losing its support
-## [constant REFALL_MAX] times is put down on the floor under it instead. Returns how many it woke.
+## [member DotWeaponDropRules.refall_max] times is put down on the floor under it instead. Returns how many it woke.
 func check_support() -> int:
 	# Colliding with nothing, a drop has no support to lose (it rests wherever it was put).
 	if not is_authority or not is_inside_tree() or collision_mask == 0:
@@ -484,7 +491,7 @@ func check_support() -> int:
 		var times := int(e.get("refalls", 0)) + 1
 		e["refalls"] = times
 		DotLog.debug(CHANNEL, "drop lost what it rested on; falls again", {"id": id, "times": times})
-		if times > REFALL_MAX:
+		if rules.refall_max > 0 and times > rules.refall_max:
 			e["ground_in"] = 1
 			continue
 		_wake(id)
