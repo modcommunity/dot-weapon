@@ -17,9 +17,6 @@ const REACH := 0.5
 const RESCUE_DEPTH := 40.0
 ## What [method _rescue_lost] sees outside the tree: no floor (read only, so it never allocates).
 const NO_HIT := {}
-## A drop rested by the active cap or [constant SETTLE_MAX_SEC] further than this above the floor under it (beyond its
-## own half-thickness) is in the air, and goes down onto that floor first; less is a drop lying on another.
-const GROUND_GAP := 0.25
 ## Times one drop is put back on a floor it fell through before it is frozen on that floor.
 const RESCUE_MAX := 3
 ## Seconds between checks that a resting drop still has something under it ([method _check_support]).
@@ -509,8 +506,8 @@ func _ground(id: int, e: Dictionary, body: RigidBody3D) -> void:
 	var down := _sweep_down(body, at, RESCUE_DEPTH)
 	if down.length() >= RESCUE_DEPTH - 0.01:
 		return
-	if from.origin.distance_to(at.origin) < 0.001 and down.length() <= GROUND_GAP:
-		return # clear and on the floor already
+	if from.origin.distance_to(at.origin) < 0.001 and down.length() <= SUPPORT_GAP * 0.5:
+		return # clear and on the floor already (close enough that check_support leaves it be)
 	var landed := at.translated(down)
 	if landed.origin.distance_to(start.origin) < 0.002 and landed.basis.is_equal_approx(start.basis):
 		return

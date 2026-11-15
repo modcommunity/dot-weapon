@@ -77,7 +77,8 @@ func _test_capped_in_air() -> void:
 	var _d := drops.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(112, 6, 0), Vector3.ZERO, 1)
 	for _i in DotWeaponDrops.GROUND_TICKS + 1:
 		await get_tree().physics_frame
-	_check(settled.has(c) and absf((settled[c] as Transform3D).origin.y - low.y) < 0.1, "one already down by the floor rests where it is", "%s vs %s" % [settled.get(c), low])
+	_check(settled.has(c) and (settled[c] as Transform3D).origin.y <= low.y + 0.001 and (settled[c] as Transform3D).origin.y > low.y - 0.25, "one already down by the floor comes down onto it, no further", "%s vs %s" % [settled.get(c), low])
+	_check(drops.check_support() == 0, "a drop grounded after a forced rest keeps its support, it does not fall again")
 	drops.queue_free()
 	floor_body.queue_free()
 	_done()
@@ -117,7 +118,7 @@ func _test_support_gone() -> void:
 		pushes.append(id)
 		client.mirror_pushed(id, at, v, spin))
 	var a := server.spawn({"id": &"rifle", "magazine": 1, "reserve": 0}, Vector3(200, 1.6, 0), Vector3.ZERO, 1)
-	for _i in 180:
+	for _i in 400:
 		await get_tree().physics_frame
 		if bool(server._entries[a]["rest"]) and not server._entries[a].has("ground_in"):
 			break

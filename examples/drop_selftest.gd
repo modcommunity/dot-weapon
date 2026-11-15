@@ -2,7 +2,7 @@ extends "res://examples/drop_selftest_physics.gd"
 
 ## Dropped weapons: rules, throw, empty-slot pickup, expiry, cap. Headless.
 
-const CHECKS := 185
+const CHECKS := 186
 
 
 func _ready() -> void:
