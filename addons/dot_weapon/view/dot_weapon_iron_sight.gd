@@ -335,20 +335,7 @@ static func spans(faces: PackedVector3Array, forward: Vector3, fractions: Array)
 		boxes.append(box.grow(0.00001))
 		near.append(PackedInt32Array())
 		feet.append(PackedFloat32Array())
-	for t in faces.size() / 3:
-		var a := faces[t * 3]
-		var b := faces[t * 3 + 1]
-		var c := faces[t * 3 + 2]
-		var lo_x := minf(a.x, minf(b.x, c.x)) - FOOTPRINT_SLACK
-		var hi_x := maxf(a.x, maxf(b.x, c.x)) + FOOTPRINT_SLACK
-		var lo_z := minf(a.z, minf(b.z, c.z)) - FOOTPRINT_SLACK
-		var hi_z := maxf(a.z, maxf(b.z, c.z)) + FOOTPRINT_SLACK
-		for k in boxes.size():
-			var box := boxes[k]
-			if box.end.x < lo_x or box.position.x > hi_x or box.end.y < lo_z or box.position.y > hi_z:
-				continue
-			near[k].append(t)
-			feet[k].append_array([lo_x, hi_x, lo_z, hi_z])
+	_bin_faces(faces, boxes, near, feet)
 	for k in fractions.size():
 		var low := INF
 		var high := -INF
@@ -370,6 +357,24 @@ static func spans(faces: PackedVector3Array, forward: Vector3, fractions: Array)
 		if low != INF and high != -INF:
 			out[k] = {"low": low, "high": high, "length": length}
 	return out
+
+## Fills [param near] and [param feet] for [method spans]: per box, the triangles whose footprint
+## (x and z extent, [constant FOOTPRINT_SLACK] wider) overlaps it, and that footprint.
+static func _bin_faces(faces: PackedVector3Array, boxes: Array[Rect2], near: Array[PackedInt32Array], feet: Array[PackedFloat32Array]) -> void:
+	for t in faces.size() / 3:
+		var a := faces[t * 3]
+		var b := faces[t * 3 + 1]
+		var c := faces[t * 3 + 2]
+		var lo_x := minf(a.x, minf(b.x, c.x)) - FOOTPRINT_SLACK
+		var hi_x := maxf(a.x, maxf(b.x, c.x)) + FOOTPRINT_SLACK
+		var lo_z := minf(a.z, minf(b.z, c.z)) - FOOTPRINT_SLACK
+		var hi_z := maxf(a.z, maxf(b.z, c.z)) + FOOTPRINT_SLACK
+		for k in boxes.size():
+			var box := boxes[k]
+			if box.end.x < lo_x or box.position.x > hi_x or box.end.y < lo_z or box.position.y > hi_z:
+				continue
+			near[k].append(t)
+			feet[k].append_array([lo_x, hi_x, lo_z, hi_z])
 
 
 static func triangles_of(node: Node, space: Node3D) -> Array[Dictionary]:

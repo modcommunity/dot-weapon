@@ -86,6 +86,10 @@ var _next_id: int = 1
 var _aim_held: Dictionary = {}
 var _tick: int = 0
 var _model_box: AABB = AABB()
+## The thrower excluded from a [method _sweep], reused so a flying knife does not build an array a tick.
+var _exclude: Array = []
+## No hitbox sets, for a knife past its first bounce (the trace only reads it).
+var _no_sets: Array[DotHitboxSet] = []
 
 
 ## Registers the rules as cvars named [param prefix] + [constant CVAR_SPECS] through [param add] (a
@@ -237,13 +241,14 @@ func _bounce(k: Knife, hit: DotHitbox.Hit) -> void:
 func _sweep(k: Knife, step: Vector3) -> DotHitbox.Hit:
 	if combat == null or combat.trace == null or step.length() <= 0.0:
 		return null
-	var sets: Array[DotHitboxSet] = []
-	if k.bounces == 0 and is_authority:
-		sets = combat.hitbox_sets()
+	var sets: Array[DotHitboxSet] = combat.hitbox_sets() if k.bounces == 0 and is_authority else _no_sets
 	var thrower := combat.hitboxes_of(k.owner)
-	combat.trace.exclude = [thrower] if thrower != null else []
+	_exclude.clear()
+	if thrower != null:
+		_exclude.append(thrower)
+	combat.trace.exclude = _exclude
 	var hit := combat.trace.ray(k.at, step.normalized(), step.length(), sets)
-	combat.trace.exclude = []
+	_exclude.clear()
 	return hit if hit != null and hit.ok() else null
 
 
@@ -440,19 +445,19 @@ func _make_holder() -> Node3D:
 
 ## The model's mesh extent in its own space.
 static func _bounds(model: Node3D) -> AABB:
-	var out := AABB()
-	var first := true
-	var inv := model.global_transform.affine_inverse()
-	var stack: Array[Node] = [model]
-	while not stack.is_empty():
-		var n: Node = stack.pop_back()
-		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-			var mi := n as MeshInstance3D
-			var box := inv * mi.global_transform * mi.mesh.get_aabb()
-			out = box if first else out.merge(box)
-			first = false
-		stack.append_array(n.get_children())
-	return out if not first else AABB(Vector3(-0.01, -0.02, -0.15), Vector3(0.02, 0.04, 0.3))
+	var out: Variant = _bounds_under(model, model.global_transform.affine_inverse(), null)
+	return out if out != null else AABB(Vector3(-0.01, -0.02, -0.15), Vector3(0.02, 0.04, 0.3))
+
+
+## [param acc] (an AABB, or null for none yet) merged with the mesh extents of [param n] and everything under it.
+static func _bounds_under(n: Node, inv: Transform3D, acc: Variant) -> Variant:
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		var mi := n as MeshInstance3D
+		var box := inv * mi.global_transform * mi.mesh.get_aabb()
+		acc = box if acc == null else (acc as AABB).merge(box)
+	for i in n.get_child_count():
+		acc = _bounds_under(n.get_child(i), inv, acc)
+	return acc
 
 
 ## A basis whose -Z is [param forward].

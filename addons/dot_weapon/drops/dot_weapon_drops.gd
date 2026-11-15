@@ -1,5 +1,5 @@
 class_name DotWeaponDrops
-extends Node3D
+extends "dot_weapon_drops_push.gd"
 
 ## Weapons lying in the world after a player dropped or died with them: the authority simulates
 ## each as a rigid body, a client snaps to its resting place. The game carries the signals and
@@ -12,23 +12,14 @@ const SETTLE_SEC := 0.6
 const SETTLE_MAX_SEC := 4.0
 ## Cap on how far a thrown weapon may start from the player, so a wall in front cannot swallow it.
 const REACH := 0.5
-## The box of a weapon with no model.
-const DEFAULT_SIZE := Vector3(0.12, 0.14, 0.7)
-## Spare bodies kept per weapon for reuse.
-const MAX_PARKED := 8
 ## A moving drop this far below where it was dropped or last pushed fell through the world: it goes back on the floor
 ## under that point (frozen there the second time), or, with no floor there, to the point once and is then removed.
 const RESCUE_DEPTH := 40.0
+## What [method _rescue_lost] sees outside the tree: no floor (read only, so it never allocates).
+const NO_HIT := {}
 ## A drop rested by the active cap or [constant SETTLE_MAX_SEC] further than this above the floor under it (beyond its
 ## own half-thickness) is in the air, and goes down onto that floor first; less is a drop lying on another.
 const GROUND_GAP := 0.25
-## Physics ticks between a cut-short rest and the sweep that puts the drop on the floor ([method _rest_grounded]).
-const GROUND_TICKS := 2
-## A grounded drop inside the floor is lifted in steps of this, up to [constant LIFT_MAX], to a clear pose.
-const LIFT_STEP := 0.02
-const LIFT_MAX := 0.3
-## The grounding sweep goes down in legs of this (under the thinnest drop), so it cannot step through a thin edge.
-const SWEEP_LEG := 0.05
 ## Times one drop is put back on a floor it fell through before it is frozen on that floor.
 const RESCUE_MAX := 3
 ## Seconds between checks that a resting drop still has something under it ([method _check_support]).
@@ -43,21 +34,11 @@ const REFALL_MAX := 4
 signal dropped(drop_id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner_id: int)
 ## Ammunition moved between a dropped weapon and a carrier; [param state] is what still lies there.
 signal ammo_changed(drop_id: int, state: Dictionary)
-## A shot, blast or melee hit set a resting weapon moving again; clients simulate on from here.
-signal pushed(drop_id: int, at: Transform3D, velocity: Vector3, spin: Vector3)
 ## A weapon came to rest at [param at]; clients snap to it.
 signal settled(drop_id: int, at: Transform3D)
 ## A weapon left the world: [param taker_id] is who took it, or 0 for expiry and the cap.
 signal removed(drop_id: int, taker_id: int)
 
-var rules: DotWeaponDropRules = DotWeaponDropRules.new()
-var is_authority: bool = false
-## False on a headless server: no visuals are built.
-var draws: bool = true
-## [code]look_of.call(weapon_id) -> Node3D[/code] or null for a plain box.
-var look_of: Callable = Callable()
-## What a dropped weapon collides with.
-var collision_mask: int = 1
 ## Slots whose weapons never drop (a permanent melee weapon).
 var keep_slots: Array[int] = []
 
@@ -65,15 +46,8 @@ var keep_slots: Array[int] = []
 ## with its dropper's team and reads the taker's; unset means no teams.
 var team_of: Callable = Callable()
 
-var _entries: Dictionary = {}   ## int -> Dictionary {body, state, age, rest, owner, order, team}
-var _fits: Dictionary = {}   ## StringName -> [size, centre] of a weapon's model box
-## StringName -> Array of [body, size]: bodies out of the tree, reused by the next drop of that weapon (no model rebuilt).
-var _parked: Dictionary = {}
-var _material: PhysicsMaterial = null
 var _next_id: int = 1
 var _order: int = 0
-## Seconds this layer has been ticked; stamps `touched`.
-var _clock: float = 0.0
 var _scan_left: float = 0.0
 var _support_left: float = 0.0
 
@@ -449,9 +423,7 @@ func _rescue_lost(id: int, e: Dictionary, body: RigidBody3D) -> bool:
 	var lost := int(e.get("lost", 0)) + 1
 	e["lost"] = lost
 	var origin: Vector3 = e["origin"]
-	var hit: Dictionary = {}
-	if is_inside_tree():
-		hit = _floor_hit(origin, origin + Vector3.DOWN * RESCUE_DEPTH)
+	var hit: Dictionary = _floor_hit(origin, origin + Vector3.DOWN * RESCUE_DEPTH) if is_inside_tree() else NO_HIT
 	DotLog.debug(CHANNEL, "drop fell out of the world; put back", {"id": id, "times": lost, "floor": not hit.is_empty()})
 	if hit.is_empty():
 		if is_authority and lost >= 2:
@@ -467,42 +439,6 @@ func _rescue_lost(id: int, e: Dictionary, body: RigidBody3D) -> bool:
 	return true
 
 
-## The first floor (an upward face of a static body) the ray [param from] to [param to] passes down through, as
-## [code]{position, normal}[/code] with the normal turned towards [param from]; empty for none. Back faces count: a
-## trimesh wound the other way is still a floor, and a front-faces-only ray missed every tunnel on one. Walls,
-## ceilings and moving bodies are passed through.
-func _floor_hit(from: Vector3, to: Vector3) -> Dictionary:
-	var q := PhysicsRayQueryParameters3D.create(from, to, collision_mask)
-	q.hit_back_faces = true
-	var dir := (to - from).normalized()
-	var space := get_world_3d().direct_space_state
-	for _i in 6:
-		var hit := space.intersect_ray(q)
-		if hit.is_empty():
-			return {}
-		var n: Vector3 = hit["normal"]
-		if n.dot(dir) > 0.0:
-			n = -n
-		var other: Object = hit["collider"]
-		if other is CharacterBody3D or other is RigidBody3D or other is AnimatableBody3D:
-			var skip: Array[RID] = q.exclude
-			skip.append(hit["rid"])
-			q.exclude = skip
-			continue
-		if n.y < 0.3:
-			q.from = (hit["position"] as Vector3) + dir * 0.002
-			if (to - q.from).dot(dir) <= 0.0:
-				return {}
-			continue
-		return {"position": hit["position"], "normal": n}
-	return {}
-
-
-## Where [param body], in its current pose, lies [param gap] above [param floor_at] along [param n].
-func _on_floor(body: RigidBody3D, floor_at: Vector3, n: Vector3, gap: float) -> Transform3D:
-	return Transform3D(body.global_basis, floor_at + n * (_support(body, n) + gap) - body.global_basis * _centre(body))
-
-
 ## Moves a moving drop to [param at], still, and tells clients.
 func _place(id: int, e: Dictionary, body: RigidBody3D, at: Transform3D) -> void:
 	body.global_transform = at
@@ -513,13 +449,6 @@ func _place(id: int, e: Dictionary, body: RigidBody3D, at: Transform3D) -> void:
 	e["moving"] = 0.0
 	if is_authority:
 		_announce_push(id)
-
-
-## Half the drop's box measured along [param n], in its current pose.
-func _support(body: RigidBody3D, n: Vector3) -> float:
-	var half := _half_extents(body)
-	var b := body.global_basis
-	return absf(b.x.normalized().dot(n)) * half.x + absf(b.y.normalized().dot(n)) * half.y + absf(b.z.normalized().dot(n)) * half.z
 
 
 ## Nudges a drop propped on end or edge (its long axis steeper than about 20 degrees) so it falls over before it sleeps.
@@ -556,16 +485,6 @@ func _rest(id: int, e: Dictionary, body: RigidBody3D) -> void:
 	e["rest"] = true
 	body.freeze = true
 	settled.emit(id, body.global_transform)
-
-
-## Rests a drop that may still be in flight (the active cap or [constant SETTLE_MAX_SEC] cut it short). It freezes at
-## once (the cap is a physics cost), and [constant GROUND_TICKS] ticks later, one more than [constant GROUND_GAP] above
-## the floor under it is laid flat and swept straight down onto it, so no gun is frozen in the air (a blast that woke a
-## dozen drops froze the oldest where they flew). The wait lets level geometry added the same frame reach the physics
-## space; the sweep moves the whole box, so a drop beside a crate or over a ledge stops on it, not inside it.
-func _rest_grounded(id: int, e: Dictionary, body: RigidBody3D) -> void:
-	_rest(id, e, body)
-	e["ground_in"] = GROUND_TICKS
 
 
 ## Authority: wakes every resting drop with nothing under it any more (the prop, door or body it lay on is gone or
@@ -621,86 +540,6 @@ func _ground(id: int, e: Dictionary, body: RigidBody3D) -> void:
 	body.global_transform = landed
 	DotLog.debug(CHANNEL, "drop rested in the air or in the floor; put on the surface", {"id": id, "fell": snappedf(down.length(), 0.01)})
 	settled.emit(id, body.global_transform)
-
-
-## [param from] itself when clear of the world, else lifted straight up in [constant LIFT_STEP] steps (at most
-## [constant LIFT_MAX]) to the first clear pose; the sweep after it brings the drop back down onto the surface.
-func _lift_clear(body: RigidBody3D, from: Transform3D) -> Transform3D:
-	if not _overlaps(body, from):
-		return from
-	var h := LIFT_STEP
-	while h <= LIFT_MAX:
-		var t := from.translated(Vector3.UP * h)
-		if not _overlaps(body, t):
-			return t
-		h += LIFT_STEP
-	return from
-
-
-## [method _sweep] down in short legs, so a thin tread or crate edge cannot be stepped through in one long cast; a leg
-## that ends inside the world is dropped and the sweep stops above it.
-func _sweep_down(body: RigidBody3D, from: Transform3D, depth: float) -> Vector3:
-	var done := 0.0
-	var pos := from
-	while done < depth:
-		var leg := minf(SWEEP_LEG, depth - done)
-		var step := _sweep(body, pos, Vector3.DOWN * leg)
-		if step.length() < leg - 0.0001:
-			return Vector3.DOWN * (done + step.length())
-		var nxt := pos.translated(step)
-		if _overlaps(body, nxt):
-			return Vector3.DOWN * done
-		pos = nxt
-		done += leg
-	return Vector3.DOWN * done
-
-
-## How far [param body] at [param from] moves along [param motion] before it touches the world (other drops ignored).
-func _sweep(body: RigidBody3D, from: Transform3D, motion: Vector3) -> Vector3:
-	var q := PhysicsTestMotionParameters3D.new()
-	q.from = from
-	q.motion = motion
-	q.margin = 0.001
-	q.exclude_bodies = _drop_rids(body)
-	var r := PhysicsTestMotionResult3D.new()
-	if not PhysicsServer3D.body_test_motion(body.get_rid(), q, r):
-		return motion
-	return r.get_travel()
-
-
-## True when [param body] at [param at] is inside the world (other drops ignored).
-func _overlaps(body: RigidBody3D, at: Transform3D) -> bool:
-	var q := PhysicsTestMotionParameters3D.new()
-	q.from = at
-	q.motion = Vector3.ZERO
-	q.margin = 0.001
-	q.recovery_as_collision = true
-	q.exclude_bodies = _drop_rids(body)
-	return PhysicsServer3D.body_test_motion(body.get_rid(), q, PhysicsTestMotionResult3D.new())
-
-
-func _drop_rids(body: RigidBody3D) -> Array[RID]:
-	var out: Array[RID] = []
-	for other: int in _entries:
-		var b: RigidBody3D = _entries[other]["body"]
-		if b != body and is_instance_valid(b):
-			out.append(b.get_rid())
-	return out
-
-
-## [param b] turned the least way that brings the drop's long axis level.
-func _laid_flat(e: Dictionary, b: Basis) -> Basis:
-	var size: Vector3 = e["size"]
-	var axis := 0 if size.x >= size.y and size.x >= size.z else (1 if size.y >= size.z else 2)
-	var long_world := b[axis].normalized()
-	var level := Vector3(long_world.x, 0.0, long_world.z)
-	if level.length() < 0.01:
-		level = Vector3.RIGHT
-	level = level.normalized()
-	var turn := long_world.cross(level)
-	if turn.length() < 0.0001:
-		return b.orthonormalized()
-	return (Basis(turn.normalized(), long_world.signed_angle_to(level, turn.normalized())) * b.orthonormalized())
 
 
 func _physics_process(delta: float) -> void:
@@ -769,147 +608,6 @@ func mirror_ammo(drop_id: int, state: Dictionary) -> void:
 		_entries[drop_id]["state"] = state
 
 
-## The drop a segment from [param from] to [param to] crosses first, as {id, point, distance}, or empty.
-## Boxes are tested in their own frame, so no physics layer is needed and the shot trace stays untouched.
-func raycast(from: Vector3, to: Vector3) -> Dictionary:
-	var best := {}
-	var best_t := INF
-	var seg := to - from
-	var length := seg.length()
-	if length < 0.0001:
-		return best
-	for id: int in _entries:
-		var body: RigidBody3D = _entries[id]["body"]
-		var inv := body.global_transform.affine_inverse()
-		var o := inv * from
-		var d := inv.basis * (seg / length)
-		var half := _half_extents(body)
-		var centre := _centre(body)
-		var tmin := 0.0
-		var tmax := length
-		var ok := true
-		for axis in 3:
-			var lo := centre[axis] - half[axis]
-			var hi := centre[axis] + half[axis]
-			if absf(d[axis]) < 0.00001:
-				if o[axis] < lo or o[axis] > hi:
-					ok = false
-					break
-			else:
-				var t1 := (lo - o[axis]) / d[axis]
-				var t2 := (hi - o[axis]) / d[axis]
-				tmin = maxf(tmin, minf(t1, t2))
-				tmax = minf(tmax, maxf(t1, t2))
-				if tmin > tmax:
-					ok = false
-					break
-		if ok and tmin < best_t:
-			best_t = tmin
-			best = {"id": id, "point": from + seg / length * tmin, "distance": tmin}
-	return best
-
-
-## A shot or melee hit along [param direction] at [param point] shoves drop [param drop_id] with
-## [param momentum] (kilogram metres per second). Returns false when drops are not shootable here.
-func hit(drop_id: int, point: Vector3, direction: Vector3, momentum: float) -> bool:
-	if not is_authority or not rules.shootable or not _entries.has(drop_id):
-		return false
-	var body: RigidBody3D = _entries[drop_id]["body"]
-	_wake(drop_id)
-	var impulse := direction.normalized() * momentum * rules.impulse_scale
-	# Set directly: the engine folds an impulse in at the next step, and clients are told the result now.
-	body.linear_velocity += impulse / body.mass
-	body.angular_velocity += (point - body.global_position).cross(impulse) / body.mass * 6.0
-	_announce_push(drop_id)
-	return true
-
-
-## Optional [code]func(from: Vector3, to: Vector3) -> bool[/code] that says whether an explosion at [code]from[/code]
-## reaches [code]to[/code]; a game assigns its combat trace's [code]line_of_sight[/code] so walls shield drops as they do players.
-var can_see: Callable = Callable()
-
-
-## An explosion at [param centre]: every drop within [param radius] is thrown outward, harder the closer.
-## [param strength] is the impulse at the centre. Returns how many moved.
-func blast(centre: Vector3, radius: float, strength: float) -> int:
-	if not is_authority or not rules.shootable or radius <= 0.0 or rules.blast_scale <= 0.0:
-		return 0
-	var n := 0
-	for id: int in _entries.keys():
-		var body: RigidBody3D = _entries[id]["body"]
-		var offset := body.global_position - centre
-		var d := offset.length()
-		if d > radius:
-			continue
-		if can_see.is_valid() and not can_see.call(centre, body.global_position):
-			continue
-		var fall := 1.0 - d / radius
-		var dir := (offset / d if d > 0.01 else Vector3.UP) + Vector3.UP * 0.35
-		_wake(id)
-		body.linear_velocity += dir.normalized() * strength * fall * rules.blast_scale / body.mass
-		body.angular_velocity += Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * strength * fall * 0.5 / body.mass
-		_announce_push(id)
-		n += 1
-	return n
-
-
-## Drops that are moving right now.
-func active_count() -> int:
-	var n := 0
-	for id: int in _entries:
-		if not bool(_entries[id]["rest"]):
-			n += 1
-	return n
-
-
-func _wake(id: int) -> void:
-	var e: Dictionary = _entries[id]
-	e["touched"] = _clock
-	var body: RigidBody3D = e["body"]
-	if bool(e["rest"]):
-		e["rest"] = false
-		body.freeze = false
-	e.erase("ground_in")
-	e["still"] = 0.0
-	e["moving"] = 0.0
-	e["origin"] = body.global_position
-	e["last"] = body.global_position
-	_enforce_active(id)
-
-
-## Rests the oldest moving drops until no more than [member DotWeaponDropRules.max_active] are awake, never [param keep]. A burst of deaths (a whole team at once) otherwise steps every body together, one physics step costing 200 ms.
-func _enforce_active(keep: int) -> void:
-	var cap := rules.max_active
-	while cap > 0 and active_count() > cap:
-		var oldest := 0
-		var order := 1 << 60
-		for other: int in _entries:
-			if other != keep and not bool(_entries[other]["rest"]) and int(_entries[other]["order"]) < order:
-				order = int(_entries[other]["order"])
-				oldest = other
-		if oldest == 0:
-			break
-		_rest_grounded(oldest, _entries[oldest], _entries[oldest]["body"])
-
-
-func _announce_push(id: int) -> void:
-	var body: RigidBody3D = _entries[id]["body"]
-	pushed.emit(id, body.global_transform, body.linear_velocity, body.angular_velocity)
-
-
-func _half_extents(body: RigidBody3D) -> Vector3:
-	for c in body.get_children():
-		if c is CollisionShape3D and (c as CollisionShape3D).shape is BoxShape3D:
-			return ((c as CollisionShape3D).shape as BoxShape3D).size * 0.5
-	return Vector3(0.06, 0.07, 0.35)
-
-
-func _centre(body: RigidBody3D) -> Vector3:
-	for c in body.get_children():
-		if c is CollisionShape3D:
-			return (c as CollisionShape3D).position
-	return Vector3.ZERO
-
 
 func mirror_removed(drop_id: int) -> void:
 	_remove(drop_id, -1, false)
@@ -952,117 +650,12 @@ func _make(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, owner
 	DotLog.debug(CHANNEL, "weapon dropped", {"id": id, "weapon": String(state.get("id", &""))})
 
 
-## Builds the body, model and box for [param weapon] at [param at] and adds it to the tree. Returns [body, size].
-func _build(weapon: StringName, at: Transform3D) -> Array:
-	var body := RigidBody3D.new()
-	body.collision_layer = 0
-	body.collision_mask = collision_mask
-	body.linear_damp = 0.15
-	body.angular_damp = 1.2
-	body.set_meta(&"weapon", weapon)
-	body.set_meta(&"draws", draws)
-	_configure(body)
-	add_child(body)
-	body.global_transform = at
-	var look: Node3D = look_of.call(weapon) if look_of.is_valid() and (draws or not _fits.has(weapon)) else null
-	var size := DEFAULT_SIZE
-	var centre := Vector3.ZERO
-	if look == null and _fits.has(weapon):
-		size = _fits[weapon][0]
-		centre = _fits[weapon][1]
-	if look != null:
-		# A server draws nothing but must rest the same box a client's model fills, or the client's
-		# mesh sinks into (or floats off) the floor where the server's box came to rest.
-		body.add_child(look)
-		var fit := _fit_of(weapon, look)
-		size = fit[0]
-		centre = fit[1]
-		if not draws:
-			body.remove_child(look)
-			look.free()
-	body.add_child(_shape(size, centre))
-	if draws and look == null:
-		var mesh := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = size
-		mesh.mesh = bm
-		body.add_child(mesh)
-	return [body, size]
-
-
-## Applies the current rules to a new or reused body, so a cvar changed between drops still takes.
-func _configure(body: RigidBody3D) -> void:
-	body.mass = rules.mass
-	# One material per setting, shared by every body, rather than a Resource per drop.
-	if _material == null or _material.friction != rules.friction or _material.bounce != rules.bounce:
-		_material = PhysicsMaterial.new()
-		_material.friction = rules.friction
-		_material.bounce = rules.bounce
-	body.physics_material_override = _material
-
-
-## Builds [param count] bodies of [param weapon] now and keeps them out of the tree for the next drops, so the first throw does not pay for the model. Call under the loading cover.
-func prewarm(weapon: StringName, count: int = 1) -> void:
-	for _i in mini(count, MAX_PARKED):
-		var built := _build(weapon, Transform3D.IDENTITY)
-		_park(built[0], weapon, built[1])
-
-
-func _park(body: RigidBody3D, weapon: StringName, size: Vector3) -> void:
-	var parked: Array = _parked.get(weapon, [])
-	if parked.size() >= MAX_PARKED:
-		body.queue_free() if body.is_inside_tree() else body.free()
-		return
-	body.freeze = true
-	body.linear_velocity = Vector3.ZERO
-	body.angular_velocity = Vector3.ZERO
-	if body.get_parent() != null:
-		body.get_parent().remove_child(body)
-	parked.append([body, size])
-	_parked[weapon] = parked
-
-
 func _exit_tree() -> void:
 	for weapon: StringName in _parked:
 		for spare: Array in _parked[weapon]:
 			if is_instance_valid(spare[0]):
 				(spare[0] as Node).free()
 	_parked.clear()
-
-
-## The collision box [size, centre] of [param look] (inside the tree), measured once per weapon.
-func _fit_of(weapon: StringName, look: Node3D) -> Array:
-	if _fits.has(weapon):
-		return _fits[weapon]
-	var box := _bounds(look)
-	var fit: Array = [box.size.max(Vector3.ONE * 0.06), box.get_center()] if box.size.length() > 0.05 else [DEFAULT_SIZE, Vector3.ZERO]
-	_fits[weapon] = fit
-	return fit
-
-
-func _shape(size: Vector3, centre: Vector3) -> CollisionShape3D:
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = size
-	shape.shape = box
-	shape.position = centre
-	return shape
-
-
-func _bounds(root: Node3D) -> AABB:
-	var out := AABB()
-	var first := true
-	var stack: Array[Node] = [root]
-	while not stack.is_empty():
-		var n: Node = stack.pop_back()
-		if n is MeshInstance3D and n.has_method(&"get_aabb"):
-			var m := n as MeshInstance3D
-			var rel := root.global_transform.affine_inverse() * m.global_transform if root.is_inside_tree() else m.transform
-			var box := rel * m.get_aabb()
-			out = box if first else out.merge(box)
-			first = false
-		stack.append_array(n.get_children())
-	return out
 
 
 ## One cleanup pass (server): removes every drop past its lifetime, then the [member DotWeaponDropRules.evict] picks until the cap holds.
@@ -1119,3 +712,28 @@ func _remove(id: int, taker_id: int, tell: bool = true) -> void:
 		_park(body, body.get_meta(&"weapon", &""), e["size"])
 	if tell:
 		removed.emit(id, taker_id)
+
+
+## Rests a drop that may still be in flight (the active cap or [constant SETTLE_MAX_SEC] cut it short). It freezes at
+## once (the cap is a physics cost), and [constant GROUND_TICKS] ticks later, one more than [constant GROUND_GAP] above
+## the floor under it is laid flat and swept straight down onto it, so no gun is frozen in the air (a blast that woke a
+## dozen drops froze the oldest where they flew). The wait lets level geometry added the same frame reach the physics
+## space; the sweep moves the whole box, so a drop beside a crate or over a ledge stops on it, not inside it.
+func _rest_grounded(id: int, e: Dictionary, body: RigidBody3D) -> void:
+	_rest(id, e, body)
+	e["ground_in"] = GROUND_TICKS
+
+
+## Rests the oldest moving drops until no more than [member DotWeaponDropRules.max_active] are awake, never [param keep]. A burst of deaths (a whole team at once) otherwise steps every body together, one physics step costing 200 ms.
+func _enforce_active(keep: int) -> void:
+	var cap := rules.max_active
+	while cap > 0 and active_count() > cap:
+		var oldest := 0
+		var order := 1 << 60
+		for other: int in _entries:
+			if other != keep and not bool(_entries[other]["rest"]) and int(_entries[other]["order"]) < order:
+				order = int(_entries[other]["order"])
+				oldest = other
+		if oldest == 0:
+			break
+		_rest_grounded(oldest, _entries[oldest], _entries[oldest]["body"])
