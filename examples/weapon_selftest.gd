@@ -1,8 +1,8 @@
-extends "selftest/sections_knives.gd"
+extends "selftest/sections_native.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 756
+const CHECKS := 781
 
 
 func _ready() -> void:
@@ -13,6 +13,8 @@ func _ready() -> void:
 func _run() -> void:
 	print("dot-weapon self-test")
 	print("")
+	# The sections below prove the GDScript tick (and count its steady skips); _test_native_tick turns the native one on.
+	DotWeaponHitscan.native_tick = false
 
 	_test_no_nul_in_sources()
 	_test_definition()
@@ -71,6 +73,7 @@ func _run() -> void:
 	_test_accuracy_recoil()
 	_test_accuracy_prediction()
 	_test_accuracy_distribution()
+	_test_native_tick()
 
 	print("")
 	print("%d sections entered, %d finished, %d passed, %d failed" % [

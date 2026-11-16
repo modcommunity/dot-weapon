@@ -10,6 +10,8 @@
 /addons/dot_core
 /addons/dot_profile
 /addons/dot_combat
+# dot-sim (optional): its native DotSimWeaponSpread runs the hitscan spread tick when present.
+/addons/dot_sim
 
 # Exports
 build/

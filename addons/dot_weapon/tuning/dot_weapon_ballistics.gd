@@ -35,70 +35,127 @@ extends DotWeaponTuning
 ## Places the pellets on a ring rather than by hash, so the pattern is learnable.
 @export var fixed_pattern: bool = false
 
+## Counts edits to the accuracy fields below (the ones a hitscan cone reads), so a holder of a copy of them (dot-sim's
+## native spread tick, see [DotWeaponHitscan]) refreshes it on a change without comparing every field each tick. Not
+## saved; only a change of it means anything. One element, not an int, so the numeric field walks (stat deltas, the
+## profile overlay) never see it as a tuning number.
+var accuracy_revision := PackedInt64Array([0])
+
 @export_group("Accuracy")
 
 ## Cone half-angle standing still, in degrees.
-@export_range(0.0, 45.0, 0.01) var spread: float = 0.5
+@export_range(0.0, 45.0, 0.01) var spread: float = 0.5:
+	set(value):
+		spread = value
+		accuracy_revision[0] += 1
 
 ## Cone half-angle at full speed.
-@export_range(0.0, 45.0, 0.01) var spread_moving: float = 2.0
+@export_range(0.0, 45.0, 0.01) var spread_moving: float = 2.0:
+	set(value):
+		spread_moving = value
+		accuracy_revision[0] += 1
 
 ## The speed at which [member spread_moving] is reached, in metres per second.
 ##
 ## Below it the spread is interpolated. A fixed threshold makes a weapon that is
 ## perfectly accurate at 4.9 m/s and hopeless at 5.1, which players find and abuse.
-@export_range(0.1, 100.0, 0.1, "or_greater") var spread_speed_ref: float = 6.0
+@export_range(0.1, 100.0, 0.1, "or_greater") var spread_speed_ref: float = 6.0:
+	set(value):
+		spread_speed_ref = value
+		accuracy_revision[0] += 1
 
 ## Cone half-angle off the ground.
-@export_range(0.0, 45.0, 0.01) var spread_airborne: float = 4.0
+@export_range(0.0, 45.0, 0.01) var spread_airborne: float = 4.0:
+	set(value):
+		spread_airborne = value
+		accuracy_revision[0] += 1
 
 ## Multiplies the spread while crouched.
-@export_range(0.0, 2.0, 0.01) var spread_crouched: float = 0.5
+@export_range(0.0, 2.0, 0.01) var spread_crouched: float = 0.5:
+	set(value):
+		spread_crouched = value
+		accuracy_revision[0] += 1
 
 ## Multiplies the crosshair's gap, spread growth included. 0 takes the class default from
 ## [method class_crosshair_scale]; a profile sets it under `extra: tuning: crosshair_scale`.
 @export_range(0.0, 4.0, 0.01) var crosshair_scale: float = 0.0
 
 ## Degrees added per use, and shed while not using.
-@export_range(0.0, 10.0, 0.01) var bloom: float = 0.0
+@export_range(0.0, 10.0, 0.01) var bloom: float = 0.0:
+	set(value):
+		bloom = value
+		accuracy_revision[0] += 1
 
 ## The most bloom may add.
-@export_range(0.0, 45.0, 0.1) var bloom_max: float = 5.0
+@export_range(0.0, 45.0, 0.1) var bloom_max: float = 5.0:
+	set(value):
+		bloom_max = value
+		accuracy_revision[0] += 1
 
 ## Degrees of bloom shed per tick, at [member DotWeaponDef.authored_tick_rate] when the
 ## definition names one (the hitscan behaviour scales it to the running rate).
-@export_range(0.0, 10.0, 0.001) var bloom_recovery: float = 0.15
+@export_range(0.0, 10.0, 0.001) var bloom_recovery: float = 0.15:
+	set(value):
+		bloom_recovery = value
+		accuracy_revision[0] += 1
 
 @export_group("Accuracy model")
 
 ## The class whose defaults fill every -1 below: rifle, smg, lmg, sniper, shotgun, pistol; "" infers it
 ## from tags and id ([DotWeaponAccuracyClass]).
-@export var accuracy_class: String = ""
+@export var accuracy_class: String = "":
+	set(value):
+		accuracy_class = value
+		accuracy_revision[0] += 1
 
 ## Ticks after a shot before bloom starts to shed; never less than the gun's own use interval, so
 ## sustained fire builds bloom. -1 takes the class default.
-@export_range(-1, 1000, 1) var bloom_delay_ticks: int = -1
+@export_range(-1, 1000, 1) var bloom_delay_ticks: int = -1:
+	set(value):
+		bloom_delay_ticks = value
+		accuracy_revision[0] += 1
 
 ## Multiplies the spread and bloom while aiming down sights. -1 takes the class default.
-@export_range(-1.0, 4.0, 0.01) var spread_aim: float = -1.0
+@export_range(-1.0, 4.0, 0.01) var spread_aim: float = -1.0:
+	set(value):
+		spread_aim = value
+		accuracy_revision[0] += 1
 
 ## Degrees added at the hip (not aiming); a scoped rifle is loose unscoped. -1 takes the class default.
-@export_range(-1.0, 45.0, 0.01) var spread_hip: float = -1.0
+@export_range(-1.0, 45.0, 0.01) var spread_hip: float = -1.0:
+	set(value):
+		spread_hip = value
+		accuracy_revision[0] += 1
 
 ## Multiplies the spread while sprinting. -1 takes the class default.
-@export_range(-1.0, 10.0, 0.01) var spread_sprint: float = -1.0
+@export_range(-1.0, 10.0, 0.01) var spread_sprint: float = -1.0:
+	set(value):
+		spread_sprint = value
+		accuracy_revision[0] += 1
 
 ## Multiplies the spread while sliding or wall-running. -1 takes the class default.
-@export_range(-1.0, 10.0, 0.01) var spread_slide: float = -1.0
+@export_range(-1.0, 10.0, 0.01) var spread_slide: float = -1.0:
+	set(value):
+		spread_slide = value
+		accuracy_revision[0] += 1
 
 ## Ticks the moving spread takes to settle to the still spread after stopping. -1 takes the class default.
-@export_range(-1, 1000, 1) var settle_ticks: int = -1
+@export_range(-1, 1000, 1) var settle_ticks: int = -1:
+	set(value):
+		settle_ticks = value
+		accuracy_revision[0] += 1
 
 ## Degrees a hit taken adds, shed over [constant DotWeaponAccuracyClass.FLINCH_SEC]. -1 takes the class default.
-@export_range(-1.0, 45.0, 0.01) var spread_flinch: float = -1.0
+@export_range(-1.0, 45.0, 0.01) var spread_flinch: float = -1.0:
+	set(value):
+		spread_flinch = value
+		accuracy_revision[0] += 1
 
 ## Multiplies bloom while crouched. -1 takes the class default.
-@export_range(-1.0, 4.0, 0.01) var bloom_crouch: float = -1.0
+@export_range(-1.0, 4.0, 0.01) var bloom_crouch: float = -1.0:
+	set(value):
+		bloom_crouch = value
+		accuracy_revision[0] += 1
 
 @export_group("Recoil")
 

@@ -7,6 +7,10 @@ extends "sections_accuracy.gd"
 const _MODES := ["plain", "rules", "rules_cone_off", "rules_edited", "explicit_still", "rules_hurt", "rules_tuning", "rules_restore"]
 const _CONE_MODES := ["rules", "rules_hurt", "rules_tuning", "rules_restore"]
 
+## On while sections_native runs the streams with DotWeaponHitscan.native_tick on the skipping arsenal (index 0); off,
+## both arsenals take the GDScript tick.
+var _rest_native := false
+
 
 ## Eight postures a carrier moves through; index 0 is the settled one.
 func _posture_data(kind: int) -> Dictionary:
@@ -174,10 +178,15 @@ func _rest_stream(mode: String) -> Dictionary:
 			res["detail"] = "%s tick %d spread %s" % [mode, tick, spreads]
 
 	DotWeaponArsenal.phase_timers = timers
-	# A kept cone skips too, through the steady skip's fixed point for the settled posture.
-	_check(int(res["skipped"]) > 300, "%s: the skip ran for much of the stream" % mode, str(res["skipped"]))
-	if mode in _CONE_MODES:
-		_check(int(res["steady"]) > 300, "%s: the steady skip ran for much of the stream" % mode, str(res["steady"]))
+	# A kept cone skips too, through the steady skip's fixed point for the settled posture. The native tick keeps no
+	# fixed point, so a native cone carrier takes every tick.
+	if _rest_native and mode in _CONE_MODES:
+		_check(int(res["skipped"]) == 0, "%s native: a kept cone takes every tick, no rest skip" % mode, str(res["skipped"]))
+		_check(int(res["steady"]) == 0, "%s native: and no steady skip" % mode, str(res["steady"]))
+	else:
+		_check(int(res["skipped"]) > 300, "%s: the skip ran for much of the stream" % mode, str(res["skipped"]))
+		if mode in _CONE_MODES:
+			_check(int(res["steady"]) > 300, "%s: the steady skip ran for much of the stream" % mode, str(res["steady"]))
 	for node in st["arsenals"] + st["players"] + st["controllers"]:
 		_drop(node)
 	return res
@@ -239,6 +248,7 @@ func _rest_pair_tick(mode: String, tick: int, st: Dictionary, roll: Dictionary, 
 	for i in range(2):
 		var a: DotWeaponArsenal = st["arsenals"][i]
 		DotWeaponHitscan.steady_skip = i == 0
+		DotWeaponHitscan.native_tick = _rest_native and i == 0
 		if mode == "rules_restore":
 			if tick % 211 == 100:
 				saved[i] = a.snapshot()

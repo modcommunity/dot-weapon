@@ -46,6 +46,32 @@ var _settled: DotWeaponContext = null
 ## Off: every context tick computes the cone, for an A/B of the steady skip (see [method _steady_holds]); results agree.
 static var steady_skip: bool = true
 
+## On (the default) and dot-sim's `weapon` module loaded: a context tick runs natively ([code]DotSimWeaponSpread[/code],
+## bit for bit this script's [method _tick], state written in place); off, or without dot-sim, the script below runs.
+## Results agree to the bit, so it is only an A/B switch. Named through [ClassDB] only, so this parses without dot-sim.
+static var native_tick: bool = true
+const _NATIVE_CLASS := &"DotSimWeaponSpread"
+# -1 unknown, 0 absent, 1 present: whether dot-sim registered the class, asked once a process.
+static var _native_present: int = -1
+
+# One native twin per behaviour, with the numbers it was last given and what they were made from: the ballistics
+# (object and accuracy_revision), the definition's tick fields, the class and the running rate for the tuning row; the
+# rules (object and revision), the crosshair setting and the rate for the frame. Any change re-sends that row.
+var _native: Object = null
+var _native_b: DotWeaponBallistics = null
+var _native_b_rev: int = -1
+var _native_def: DotWeaponDef = null
+var _native_interval: int = 0
+var _native_authored: int = 0
+var _native_class: String = ""
+var _native_rate: int = 0
+var _native_framed: bool = false
+var _native_rules: DotWeaponSpreadRules = null
+var _native_rules_rev: int = -1
+var _native_cone: bool = false
+var _native_frame_rate: int = 0
+var _native_row := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
 # The last context tick that was a fixed point: everything it read, and the cone it computed.
 var _steady: bool = false
 var _steady_b: DotWeaponBallistics = null
@@ -87,6 +113,19 @@ func _tick(ctx: DotWeaponContext) -> void:
 		else:
 			_shown_stale = false
 
+	# Read from the arsenal once a tick: the native check, the steady check, the factor, the cone and the tracking below
+	# all ask for the same rules.
+	var rules_object: DotWeaponSpreadRules = null
+	var cone := false
+	if ctx != null:
+		rules_object = _rules_object()
+		cone = rules_object != null and bool(arsenal.get(&"crosshair_cone"))
+		if native_tick and _native_ready(b, rules_object, cone):
+			# The whole of this tick, counting and shedding included. It keeps no fixed point: the next tick computes again.
+			_steady = false
+			_shown = _native.call(&"tick", state, _native_posture(ctx))
+			return
+
 	var since := mini(int(state.get(_SINCE, _NEVER)) + 1, _NEVER)
 	state[_SINCE] = since
 	var bloom := float(state.get(_BLOOM, 0.0))
@@ -97,9 +136,6 @@ func _tick(ctx: DotWeaponContext) -> void:
 	if ctx == null:
 		return
 
-	# Read from the arsenal once a tick: the steady check, the factor, the cone and the tracking below all ask for the same rules.
-	var rules_object := _rules_object()
-	var cone := rules_object != null and bool(arsenal.get(&"crosshair_cone"))
 	if steady_skip and _steady and _steady_holds(b, ctx, rules_object, cone):
 		_shown = _steady_shown
 		return
@@ -144,6 +180,91 @@ func _tick(ctx: DotWeaponContext) -> void:
 	_steady = false
 	if steady_skip and factor_still and now_still and motion == held_motion and had_motion == (motion > 0.0) and not _flinching(ctx):
 		_steady_keep(b, ctx, rules_object, cone, motion)
+
+
+## Whether the native twin can run this context tick, its rows brought up to date first: dot-sim loaded, and the
+## tuning and frame rows accepted. Re-sends the tuning row when the ballistics (object or a field), the definition's
+## tick fields, the accuracy class or the running rate changed, and the frame row when the rules (object or a field),
+## the crosshair setting or the rate did.
+func _native_ready(b: DotWeaponBallistics, rules_object: DotWeaponSpreadRules, cone: bool) -> bool:
+	if _native == null:
+		if _native_present < 0:
+			_native_present = 1 if ClassDB.class_exists(_NATIVE_CLASS) else 0
+		if _native_present == 0:
+			return false
+		_native = ClassDB.instantiate(_NATIVE_CLASS)
+		if _native == null:
+			return false
+	var rate := running_tick_rate()
+	var klass := _class_of(b)
+	if (
+		b != _native_b or b.accuracy_revision[0] != _native_b_rev or def != _native_def or rate != _native_rate
+		or def.use_interval_ticks != _native_interval or def.authored_tick_rate != _native_authored or klass != _native_class
+	):
+		if not _native.call(&"set_tuning", _native_tuning(b)):
+			_native_b = null
+			return false
+		_native_b = b
+		_native_b_rev = b.accuracy_revision[0]
+		_native_def = def
+		_native_rate = rate
+		_native_interval = def.use_interval_ticks
+		_native_authored = def.authored_tick_rate
+		_native_class = klass
+	if (
+		not _native_framed or rules_object != _native_rules or cone != _native_cone or rate != _native_frame_rate
+		or (rules_object != null and rules_object.revision[0] != _native_rules_rev)
+	):
+		_native_framed = false
+		if not _native.call(&"set_frame", _native_rules_row(rules_object, rate), cone, rate):
+			return false
+		_native_framed = true
+		_native_rules = rules_object
+		_native_rules_rev = rules_object.revision[0] if rules_object != null else -1
+		_native_cone = cone
+		_native_frame_rate = rate
+	return true
+
+
+## The tuning row of [code]DotSimWeaponSpread.set_tuning[/code]: the ballistics numbers the tick reads, its per-tick and
+## tick-count terms at the running rate, and each accuracy term already the field when 0 or more, else the class preset.
+func _native_tuning(b: DotWeaponBallistics) -> PackedFloat64Array:
+	_class_of(b)
+	return PackedFloat64Array([
+		b.spread, b.spread_moving, b.spread_speed_ref, b.spread_airborne, b.spread_crouched, b.bloom, b.bloom_max,
+		scaled_per_tick(b.bloom_recovery), _bloom_delay_of(b), _settle_ticks_of(b),
+		b.spread_hip if b.spread_hip >= 0.0 else _pre_hip,
+		b.spread_slide if b.spread_slide >= 0.0 else _pre_slide,
+		b.spread_sprint if b.spread_sprint >= 0.0 else _pre_sprint,
+		b.spread_flinch if b.spread_flinch >= 0.0 else _pre_flinch,
+		b.bloom_crouch if b.bloom_crouch >= 0.0 else _pre_crouch,
+		b.spread_aim if b.spread_aim >= 0.0 else _pre_aim,
+	])
+
+
+## The frame's rules row of [code]DotSimWeaponSpread.set_frame[/code]; empty for no rules object.
+static func _native_rules_row(r: DotWeaponSpreadRules, rate: int) -> PackedFloat64Array:
+	if r == null:
+		return PackedFloat64Array()
+	return PackedFloat64Array([
+		1.0 if r.enabled else 0.0, r.scale, r.mult_hip, r.mult_aim, r.mult_stand, r.mult_walk, r.mult_run, r.mult_air,
+		r.mult_sprint, r.mult_slide, r.mult_crouch, r.walk_speed, r.run_speed, r.recovery_per_tick(rate), r.max_spread,
+	])
+
+
+## This context as the native posture row, written into the one row the behaviour keeps.
+func _native_posture(ctx: DotWeaponContext) -> PackedFloat64Array:
+	var row := _native_row
+	row[0] = ctx.speed
+	row[1] = 1.0 if ctx.airborne else 0.0
+	row[2] = 1.0 if ctx.crouched else 0.0
+	row[3] = 1.0 if ctx.aiming else 0.0
+	row[4] = 1.0 if ctx.sliding else 0.0
+	row[5] = 1.0 if ctx.sprinting else 0.0
+	row[6] = 1.0 if ctx.wall_running else 0.0
+	row[7] = ctx.tick
+	row[8] = ctx.hurt_tick
+	return row
 
 
 ## A context tick with the inputs of the kept fixed point: the same ballistics, rules and tuning, the same posture, a

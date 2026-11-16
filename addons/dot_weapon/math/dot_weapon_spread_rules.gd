@@ -26,21 +26,71 @@ const FIELDS := {
 	&"max_spread": [20.0, 0.0, 90.0, "Largest spread cone half-angle in degrees (0 is no cap)"],
 }
 
-var enabled: bool = false
-var scale: float = 1.0
-var mult_hip: float = 1.0
-var mult_aim: float = 0.5
-var mult_stand: float = 1.0
-var mult_walk: float = 1.15
-var mult_run: float = 1.35
-var mult_air: float = 1.5
-var mult_sprint: float = 1.8
-var mult_slide: float = 1.6
-var mult_crouch: float = 0.8
-var walk_speed: float = 0.5
-var run_speed: float = 4.5
-var recovery: float = 6.0
-var max_spread: float = 20.0
+## Counts edits to the fields below, however made (a cvar, a test, a direct set), so a holder of a copy of them
+## (dot-sim's native spread tick, see [DotWeaponHitscan]) refreshes it on a change without comparing every field. One
+## element, not an int, so a walk over the numeric fields never sees it as a rule.
+var revision := PackedInt64Array([0])
+
+var enabled: bool = false:
+	set(value):
+		enabled = value
+		revision[0] += 1
+var scale: float = 1.0:
+	set(value):
+		scale = value
+		revision[0] += 1
+var mult_hip: float = 1.0:
+	set(value):
+		mult_hip = value
+		revision[0] += 1
+var mult_aim: float = 0.5:
+	set(value):
+		mult_aim = value
+		revision[0] += 1
+var mult_stand: float = 1.0:
+	set(value):
+		mult_stand = value
+		revision[0] += 1
+var mult_walk: float = 1.15:
+	set(value):
+		mult_walk = value
+		revision[0] += 1
+var mult_run: float = 1.35:
+	set(value):
+		mult_run = value
+		revision[0] += 1
+var mult_air: float = 1.5:
+	set(value):
+		mult_air = value
+		revision[0] += 1
+var mult_sprint: float = 1.8:
+	set(value):
+		mult_sprint = value
+		revision[0] += 1
+var mult_slide: float = 1.6:
+	set(value):
+		mult_slide = value
+		revision[0] += 1
+var mult_crouch: float = 0.8:
+	set(value):
+		mult_crouch = value
+		revision[0] += 1
+var walk_speed: float = 0.5:
+	set(value):
+		walk_speed = value
+		revision[0] += 1
+var run_speed: float = 4.5:
+	set(value):
+		run_speed = value
+		revision[0] += 1
+var recovery: float = 6.0:
+	set(value):
+		recovery = value
+		revision[0] += 1
+var max_spread: float = 20.0:
+	set(value):
+		max_spread = value
+		revision[0] += 1
 
 
 ## The multiplier this context asks for right now, before recovery smooths it.
