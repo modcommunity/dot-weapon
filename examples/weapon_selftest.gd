@@ -15,7 +15,30 @@ func _run() -> void:
 	print("")
 	# The sections below prove the GDScript tick (and count its steady skips); _test_native_tick turns the native one on.
 	DotWeaponHitscan.native_tick = false
+	_run_sections()
 
+	print("")
+	print("%d sections entered, %d finished, %d passed, %d failed" % [
+		_sections_entered, _sections_finished, _passed, _failed
+	])
+
+	for line in _failures:
+		print("  FAIL  %s" % line)
+
+	# A runtime error in a section's last statement leaves both section counters satisfied with checks
+	# missing, so the total is checked too.
+	if _passed + _failed != CHECKS:
+		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
+			_passed + _failed, CHECKS
+		])
+		get_tree().quit(1)
+		return
+
+	get_tree().quit(1 if _failed > 0 or _sections_entered != _sections_finished else 0)
+
+
+## Every section, in order.
+func _run_sections() -> void:
 	_test_no_nul_in_sources()
 	_test_definition()
 	_test_catalogue()
@@ -74,25 +97,6 @@ func _run() -> void:
 	_test_accuracy_prediction()
 	_test_accuracy_distribution()
 	_test_native_tick()
-
-	print("")
-	print("%d sections entered, %d finished, %d passed, %d failed" % [
-		_sections_entered, _sections_finished, _passed, _failed
-	])
-
-	for line in _failures:
-		print("  FAIL  %s" % line)
-
-	# A runtime error in a section's last statement leaves both section counters satisfied with checks
-	# missing, so the total is checked too.
-	if _passed + _failed != CHECKS:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
-			_passed + _failed, CHECKS
-		])
-		get_tree().quit(1)
-		return
-
-	get_tree().quit(1 if _failed > 0 or _sections_entered != _sections_finished else 0)
 
 
 func _nul_files(dir: String, out: Array) -> void:

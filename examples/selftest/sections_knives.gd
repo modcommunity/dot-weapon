@@ -183,7 +183,16 @@ func _test_knife_boomerang_loop() -> void:
 	_check(k.at == origin and not k.glide and k.velocity == Vector3.ZERO, "it comes back to exactly the throw point", str(k.at.distance_to(origin)))
 	layer.tick(ticks + 2, 1.0 / RATE)
 	_check(k.velocity.y < 0.0 and k.bounces >= 1, "then falls there and can no longer hurt anyone")
+	var curve := _boomerang_curve_checks()
+	var twins := _boomerang_twin_checks()
+	for l: DotWeaponKnives in [layer, curve] + twins:
+		l.clear()
+		l.queue_free()
+	_done()
 
+
+## A default boomerang curves right and lands on the origin; returns the layer to free.
+func _boomerang_curve_checks() -> DotWeaponKnives:
 	var curve := _knife_layer({})
 	curve.rules["boomerang_distance"] = 10.0
 	curve.rules["boomerang_radius"] = 3.0
@@ -198,7 +207,11 @@ func _test_knife_boomerang_loop() -> void:
 	_check(far_x > 5.0, "it curves right by default", "%.2f" % far_x)
 	_check(ck.at == Vector3.ZERO, "and lands on the origin to within nothing", str(ck.at))
 	_check(cid > 0, "throw returns an id")
+	return curve
 
+
+## Two servers fly one throw alike, radius 0 turns on the spot, distance 0 glides on; returns the layers to free.
+func _boomerang_twin_checks() -> Array:
 	var a := _knife_layer({})
 	var b := _knife_layer({})
 	for layer2: DotWeaponKnives in [a, b]:
@@ -222,10 +235,7 @@ func _test_knife_boomerang_loop() -> void:
 	a.rules["boomerang_distance"] = 0.0
 	var straight := a.throw(1, Vector3.ZERO, Vector3.FORWARD, Vector3.ZERO, 1.0, true)
 	_check(a.glides(straight) and a.turn_of(straight) == Vector3.ZERO, "boomerang_distance 0 glides straight on, no return")
-	for l: DotWeaponKnives in [layer, curve, a, b, sharp]:
-		l.clear()
-		l.queue_free()
-	_done()
+	return [a, b, sharp]
 
 
 func _test_knife_boomerang_home() -> void:

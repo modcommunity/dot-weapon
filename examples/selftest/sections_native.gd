@@ -83,7 +83,13 @@ func _test_native_tick() -> void:
 	_check(script_clean, "with native_tick off a behaviour never builds the native twin")
 	_check(edits > 200, "the tuning, rules, class, rate and crosshair edits that must refresh the native rows happened", str(edits))
 
-	# The rest streams: arsenal 0 ticks natively (rest skip on, steady skip on), arsenal 1 is the script without skips.
+	_check_native_rest_streams(native_was)
+	_check_native_missing_class(native_was)
+	_done()
+
+
+## The rest streams: the native tick and the script tick agree on one arsenal.
+func _check_native_rest_streams(native_was: bool) -> void:
 	_rest_native = true
 	var all_same := true
 	var detail := ""
@@ -97,7 +103,9 @@ func _test_native_tick() -> void:
 	DotWeaponHitscan.steady_skip = true
 	_check(all_same, "the rest streams agree with the native tick on one arsenal: outcomes, snapshots, state and cone", detail)
 
-	# A missing native class leaves the GDScript tick.
+
+## A missing native class leaves the GDScript tick.
+func _check_native_missing_class(native_was: bool) -> void:
 	var cat := _catalogue()
 	var a := _arsenal(cat)
 	a.give(&"rifle")
@@ -110,7 +118,7 @@ func _test_native_tick() -> void:
 	DotWeaponHitscan._native_present = present_was
 	DotWeaponHitscan.native_tick = native_was
 	_drop(a)
-	_done()
+
 
 
 ## A random weapon on a stub arsenal, as dot-sim's parity test builds it: [native behaviour, script behaviour, ballistics,
