@@ -17,7 +17,8 @@ enum Phase { FLY, REST, STUCK, GONE }
 const DEFAULT_RULES := {
 	"enabled": true, "speed": 40.0, "pickup": 1.0, "damage": 10000.0,
 	"charge": false, "charge_sec": 1.0, "charge_min": 0.35,
-	"boomerang_loop": 1.6, "boomerang_to_thrower": false, "boomerang_left": false,
+	"boomerang_distance": 18.0, "boomerang_radius": 5.0, "boomerang_speed": 0.0,
+	"boomerang_to_thrower": false, "boomerang_left": false,
 }
 ## cvar suffix after the game's prefix -> the rule key it sets, and what it means.
 const CVAR_SPECS := {
@@ -28,7 +29,9 @@ const CVAR_SPECS := {
 	"_throw_charge": ["charge", "Holding the aim key winds the throw up and releasing throws it (1), or the press throws at once (0)"],
 	"_throw_charge_sec": ["charge_sec", "Seconds of holding to reach full throw power (0 full at once)"],
 	"_throw_charge_min": ["charge_min", "Fraction of the throw speed a throw released at once leaves with"],
-	"_boomerang_loop": ["boomerang_loop", "Seconds a Boomerang knife takes to fly its loop back (0 flies straight)"],
+	"_boomerang_distance": ["boomerang_distance", "Metres a Boomerang knife flies straight out before it turns back (0 flies straight on, no return)"],
+	"_boomerang_radius": ["boomerang_radius", "Radius in metres of the turn a Boomerang knife circles back through (0 turns on the spot)"],
+	"_boomerang_speed": ["boomerang_speed", "Metres per second a Boomerang knife flies at (0 uses the throw speed)"],
 	"_boomerang_to_thrower": ["boomerang_to_thrower", "A Boomerang knife homes back to the thrower's hand (1), or to where it was thrown from (0)"],
 	"_boomerang_left": ["boomerang_left", "A Boomerang knife curves left (1) or right (0)"],
 }
@@ -83,7 +86,15 @@ class Knife extends RefCounted:
 	var glide: bool = false
 	var turn: Vector3 = Vector3.ZERO
 	var origin: Vector3 = Vector3.ZERO
-	var loop_ticks: int = 0
+	## The out-circle-back path: unit forward and side, metres out, turn radius and angle, metres flown so far, total length, leg.
+	var path_dir: Vector3 = Vector3.ZERO
+	var path_side: Vector3 = Vector3.ZERO
+	var path_out: float = 0.0
+	var path_radius: float = 0.0
+	var path_angle: float = PI
+	var path_flown: float = 0.0
+	var path_len: float = 0.0
+	var leg: int = 0
 	var homing: bool = false
 	## Stuck in a living body: it rides at offset from the victim's feet.
 	var riding: bool = false
@@ -114,6 +125,7 @@ var _aim_held: Dictionary = {}
 ## Player id -> ticks the throw has been held for, while winding up.
 var _charge: Dictionary = {}
 var _tick: int = 0
+var _throw_power: float = 1.0
 var _model_box: AABB = AABB()
 ## The thrower excluded from a [method _sweep], reused so a flying knife does not build an array a tick.
 var _exclude: Array = []
@@ -229,6 +241,7 @@ func throw(owner: int, from: Vector3, aim: Vector3, carried: Vector3 = Vector3.Z
 	_next_id += 1
 	k.owner = owner
 	k.at = from
+	_throw_power = power
 	k.velocity = aim.normalized() * float(rules.get("speed", 40.0)) * power + carried
 	k.facing = k.velocity.normalized()
 	k.speed = k.velocity.length()
@@ -243,23 +256,69 @@ func throw(owner: int, from: Vector3, aim: Vector3, carried: Vector3 = Vector3.Z
 	return k.id
 
 
-## The loop is a regular polygon of `boomerang_loop * tick_rate` steps, so it closes on [member Knife.origin] exactly.
+## A boomerang reaches `boomerang_distance` metres from the throw point along the throw (its farthest point), going straight
+## out and then circling through a turn of radius `boomerang_radius` and flying the tangent straight back to
+## [member Knife.origin], where it was thrown from. A radius over the distance flies one full circle of that radius.
+## The turn leaves the circle on the line through the origin, so the way back is as long as the way out.
+## The position is a function of the metres flown, so two servers agree bit for bit and it ends on the origin exactly.
+## The thrower's own velocity is not added: it would move the origin the path closes on.
 func _launch_boomerang(k: Knife) -> void:
 	k.boomerang = true
 	k.glide = true
 	k.origin = k.at
-	var loop := float(rules.get("boomerang_loop", 1.6))
-	if loop <= 0.0 or k.speed <= 0.0:
+	var aim := k.velocity.normalized()
+	var set_speed := float(rules.get("boomerang_speed", 0.0))
+	var speed := set_speed if set_speed > 0.0 else float(rules.get("speed", 40.0)) * _throw_power
+	k.velocity = aim * speed
+	k.speed = speed
+	var out := float(rules.get("boomerang_distance", 18.0))
+	if out <= 0.0 or speed <= 0.0:
 		return
-	k.loop_ticks = maxi(2, roundi(loop * tick_rate))
-	var d := k.velocity / k.speed
-	var right := d.cross(Vector3.UP)
+	var right := aim.cross(Vector3.UP)
 	if right.length() < 0.01:
 		right = Vector3.RIGHT
-	var up := right.normalized().cross(d).normalized()
-	## A negative turn about up curves right.
-	var side := 1.0 if bool(rules.get("boomerang_left", false)) else -1.0
-	k.turn = up * side * TAU * float(tick_rate) / float(k.loop_ticks)
+	k.path_dir = aim
+	k.path_side = right.normalized() * (-1.0 if bool(rules.get("boomerang_left", false)) else 1.0)
+	k.path_radius = maxf(0.0, float(rules.get("boomerang_radius", 5.0)))
+	k.path_out = maxf(0.0, out - k.path_radius)
+	k.path_angle = PI + 2.0 * atan2(k.path_radius, k.path_out)
+	k.path_len = 2.0 * k.path_out + k.path_radius * k.path_angle
+	k.leg = 0
+	k.turn = Vector3.ZERO
+
+
+## Where the boomerang is after [param s] metres of its path, and the unit direction it points there.
+func _path_point(k: Knife, s: float) -> Array:
+	var out := k.path_out
+	var r := k.path_radius
+	var d := k.path_dir
+	var side := k.path_side
+	var arc := r * k.path_angle
+	if s <= out:
+		return [k.origin + d * s, d]
+	if r <= 0.0:
+		return [k.origin + d * out - d * (s - out), -d]
+	var centre := k.origin + d * out + side * r
+	if s <= out + arc:
+		var phi := (s - out) / r
+		return [centre + (d * sin(phi) - side * cos(phi)) * r, d * cos(phi) + side * sin(phi)]
+	var back := d * cos(k.path_angle) + side * sin(k.path_angle)
+	var start := centre + (d * sin(k.path_angle) - side * cos(k.path_angle)) * r
+	return [start + back * (s - out - arc), back]
+
+
+## Which leg [param s] metres in: 0 straight out, 1 the turn, 2 straight back.
+func _path_leg(k: Knife, s: float) -> int:
+	if s < k.path_out:
+		return 0
+	return 1 if s < k.path_out + k.path_radius * k.path_angle else 2
+
+
+## The velocity turn of leg [param leg]: about the turn's axis while circling, none on the straights.
+func _leg_turn(k: Knife, leg: int) -> Vector3:
+	if leg != 1 or k.path_radius <= 0.0:
+		return Vector3.ZERO
+	return k.path_dir.cross(k.path_side) * (k.speed / k.path_radius)
 
 
 ## Whether knife [param id] is gliding (no gravity), and the turn it glides with: for the wire.
@@ -296,21 +355,41 @@ func tick(current_tick: int, delta: float) -> void:
 
 
 func _fly(k: Knife, delta: float) -> void:
-	if k.glide:
-		if k.homing and not _home(k, delta):
-			return
-		if k.turn != Vector3.ZERO:
-			k.velocity = k.velocity.rotated(k.turn.normalized(), k.turn.length() * delta)
+	var step := Vector3.ZERO
+	var arrived := false
+	if k.glide and k.path_len > 0.0 and not k.homing:
+		var flown := minf(k.path_flown + k.speed * delta, k.path_len)
+		arrived = flown >= k.path_len
+		var here := _path_point(k, flown)
+		k.path_flown = flown
+		k.velocity = (here[1] as Vector3) * k.speed
+		step = (k.origin if arrived else here[0] as Vector3) - k.at
+		var leg := _path_leg(k, flown)
+		if leg != k.leg:
+			k.leg = leg
+			k.turn = _leg_turn(k, leg)
+			if leg == 2 and bool(rules.get("boomerang_to_thrower", false)):
+				k.homing = true
+				k.path_len = 0.0
+				arrived = false
+			_tell(k)
 	else:
-		k.velocity.y -= (THROW_GRAVITY if k.bounces == 0 else GRAVITY) * delta
-	var step := k.velocity * delta
+		if k.glide:
+			if k.homing and not _home(k, delta):
+				return
+			if k.turn != Vector3.ZERO:
+				k.velocity = k.velocity.rotated(k.turn.normalized(), k.turn.length() * delta)
+		else:
+			k.velocity.y -= (THROW_GRAVITY if k.bounces == 0 else GRAVITY) * delta
+		step = k.velocity * delta
 	var hit := _sweep(k, step)
 	if hit == null:
 		k.at += step
 		if k.velocity.length() > 0.5:
 			k.facing = k.velocity.normalized()
-		if k.glide and k.loop_ticks > 0:
-			_loop_point(k)
+		if arrived:
+			k.at = k.origin
+			_drop_out(k)
 		return
 	if not hit.blocked and _kill(k, hit):
 		return
@@ -318,21 +397,6 @@ func _fly(k: Knife, delta: float) -> void:
 	k.turn = Vector3.ZERO
 	_bounce(k, hit)
 	_tell(k)
-
-
-## Halfway round a homing boomerang turns for the hand; a full loop drops one back on its throw point.
-func _loop_point(k: Knife) -> void:
-	if bool(rules.get("boomerang_to_thrower", false)):
-		if not k.homing and k.age * 2 >= k.loop_ticks:
-			k.homing = true
-			k.turn = Vector3.ZERO
-			_tell(k)
-		elif k.age >= k.loop_ticks * 2:
-			_drop_out(k)
-		return
-	if k.age >= k.loop_ticks:
-		k.at = k.origin
-		_drop_out(k)
 
 
 ## Gliding ends: it falls from where it is and can no longer hurt anyone.

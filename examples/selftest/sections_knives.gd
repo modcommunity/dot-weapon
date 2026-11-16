@@ -139,46 +139,90 @@ func _test_knife_charge() -> void:
 
 
 func _test_knife_boomerang_loop() -> void:
-	_section("thrown knife: boomerang loop")
+	_section("thrown knife: boomerang out, circle, back")
 	var p := _knife_player(true)
 	_check(DotWeaponKnives.is_boomerang(p.arsenal.current_def()), "the Boomerang attachment marks the fitted knife")
 	var layer := _knife_layer({1: p})
+	layer.rules["boomerang_distance"] = 18.0
+	layer.rules["boomerang_radius"] = 5.0
 	layer.input(1, p, _aim(true))
 	var k: DotWeaponKnives.Knife = layer.entries()[0] if layer.count() == 1 else null
 	_check(k != null and k.boomerang and layer.glides(k.id) and k.state.has("fit"), "the throw glides as a boomerang and keeps the fitting")
 	var origin := p.muzzle_position()
-	var n := roundi(1.6 * RATE)
-	_check(k.loop_ticks == n, "the loop is boomerang_loop seconds of ticks", str(k.loop_ticks))
-	var far := 0.0
-	var right_at_quarter := 0.0
-	for t in n:
+	var aim := k.velocity.normalized()
+	_check(absf(k.path_len - (26.0 + 5.0 * k.path_angle)) < 0.001, "the path is out, a turn, and the same way back", str(k.path_len))
+	var apex := 0.0
+	var along_max := 0.0
+	var turned_at := -1
+	var straight_max := 0.0
+	var straight_ok := true
+	var back_dir := Vector3.ZERO
+	var back_from := Vector3.ZERO
+	var ticks := ceili(k.path_len / (k.speed / RATE)) + 2
+	for t in ticks:
 		layer.tick(t + 1, 1.0 / RATE)
-		far = maxf(far, k.at.distance_to(origin))
-		if t + 1 == n / 4:
-			right_at_quarter = k.at.x
-		if k.age == n - 1:
-			_check(k.glide and absf(k.velocity.y) < 0.001, "no gravity while it glides", str(k.velocity))
-	_check(far > 15.0, "it flies out", "%.1f m" % far)
-	_check(right_at_quarter > 3.0, "curving right by default", "%.1f" % right_at_quarter)
-	_check(k.at == origin and not k.glide and k.velocity == Vector3.ZERO, "and comes back to exactly the throw point")
-	layer.tick(n + 1, 1.0 / RATE)
+		if k.phase != DotWeaponKnives.Phase.FLY or not k.glide:
+			break
+		apex = maxf(apex, k.at.distance_to(origin))
+		along_max = maxf(along_max, (k.at - origin).dot(aim))
+		if k.leg == 0:
+			straight_max = maxf(straight_max, (k.at - origin).dot(aim))
+		if turned_at < 0 and k.leg == 1:
+			turned_at = t
+		if k.leg == 2 and back_dir == Vector3.ZERO:
+			back_dir = k.velocity.normalized()
+			back_from = k.at
+		if k.leg == 0 and (k.at - origin).cross(aim).length() > 0.001:
+			straight_ok = false
+	_check(absf(along_max - 18.0) < k.speed / RATE + 0.01, "it flies out the configured distance before turning", "%.2f m" % along_max)
+	_check(straight_max > 12.0 and straight_max < 13.5, "the straight leg is the distance less the turn radius", "%.2f m" % straight_max)
+	_check(apex >= 18.0 and apex < 21.0, "the farthest point stays near the configured distance", "%.2f m" % apex)
+	_check(straight_ok, "the outward leg is straight along the throw")
+	_check(turned_at > 0, "the turn comes after the outward leg")
+	_check(back_dir.dot((origin - back_from).normalized()) > 0.999, "the return leg points straight at the throw point", str(back_dir.dot((origin - back_from).normalized())))
+	_check(k.at == origin and not k.glide and k.velocity == Vector3.ZERO, "it comes back to exactly the throw point", str(k.at.distance_to(origin)))
+	layer.tick(ticks + 2, 1.0 / RATE)
 	_check(k.velocity.y < 0.0 and k.bounces >= 1, "then falls there and can no longer hurt anyone")
+
+	var curve := _knife_layer({})
+	curve.rules["boomerang_distance"] = 10.0
+	curve.rules["boomerang_radius"] = 3.0
+	var cid := curve.throw(1, Vector3.ZERO, Vector3.FORWARD, Vector3.ZERO, 1.0, true)
+	var ck: DotWeaponKnives.Knife = curve.entries()[0]
+	var far_x := 0.0
+	for t in ceili(ck.path_len / (ck.speed / RATE)) + 2:
+		curve.tick(t + 1, 1.0 / RATE)
+		if not ck.glide:
+			break
+		far_x = maxf(far_x, ck.at.x)
+	_check(far_x > 5.0, "it curves right by default", "%.2f" % far_x)
+	_check(ck.at == Vector3.ZERO, "and lands on the origin to within nothing", str(ck.at))
+	_check(cid > 0, "throw returns an id")
 
 	var a := _knife_layer({})
 	var b := _knife_layer({})
 	for layer2: DotWeaponKnives in [a, b]:
 		layer2.rules["boomerang_left"] = true
 		var _id := layer2.throw(1, Vector3(1.0, 1.5, 2.0), Vector3(0.3, 0.2, -1.0), Vector3(0.5, 0.0, 0.0), 0.8, true)
-		for t in 70:
+		for t in 40:
 			layer2.tick(t + 1, 1.0 / RATE)
 	var ka: DotWeaponKnives.Knife = a.entries()[0]
 	var kb: DotWeaponKnives.Knife = b.entries()[0]
 	_check(ka.at == kb.at and ka.velocity == kb.velocity, "two servers fly it bit-identically")
-	_check(ka.turn.y > 0.0, "boomerang_left turns the other way")
-	a.rules["boomerang_loop"] = 0.0
+	_check(ka.turn.length() > 0.0 and ka.turn.dot(ka.path_dir.cross(ka.path_side)) > 0.0, "the circling leg carries a turn for clients to fly")
+	var sharp := _knife_layer({})
+	sharp.rules["boomerang_radius"] = 0.0
+	var sk_id := sharp.throw(1, Vector3.ZERO, Vector3.FORWARD, Vector3.ZERO, 1.0, true)
+	var sk: DotWeaponKnives.Knife = sharp.entries()[0]
+	for t in ceili(sk.path_len / (sk.speed / RATE)) + 2:
+		sharp.tick(t + 1, 1.0 / RATE)
+		if not sk.glide:
+			break
+	_check(sk_id > 0 and sk.at == Vector3.ZERO, "radius 0 turns on the spot and still lands on the origin")
+	a.rules["boomerang_distance"] = 0.0
 	var straight := a.throw(1, Vector3.ZERO, Vector3.FORWARD, Vector3.ZERO, 1.0, true)
-	_check(a.glides(straight) and a.turn_of(straight) == Vector3.ZERO, "boomerang_loop 0 glides straight")
-	for l: DotWeaponKnives in [layer, a, b]:
+	_check(a.glides(straight) and a.turn_of(straight) == Vector3.ZERO, "boomerang_distance 0 glides straight on, no return")
+	for l: DotWeaponKnives in [layer, curve, a, b, sharp]:
 		l.clear()
 		l.queue_free()
 	_done()
@@ -193,12 +237,12 @@ func _test_knife_boomerang_home() -> void:
 	var k: DotWeaponKnives.Knife = layer.entries()[0]
 	p.controller.state.position = Vector3(-4.0, 0.0, 3.0)
 	var caught := -1
-	for t in k.loop_ticks * 2:
+	for t in 400:
 		layer.tick(t + 1, 1.0 / RATE)
 		if layer.count() == 0:
 			caught = t + 1
 			break
-	_check(caught > k.loop_ticks / 2, "it comes back to the thrower who moved", str(caught))
+	_check(caught > 20, "it comes back to the thrower who moved", str(caught))
 	p.arsenal.bring_to_hand(4)
 	_check(p.arsenal.carries(&"knife") and DotWeaponKnives.is_boomerang(p.arsenal.current_def()), "into the hand, Boomerang still fitted")
 	layer.queue_free()
@@ -231,7 +275,7 @@ func _test_knife_boomerang_stick() -> void:
 	var layer := _knife_layer(players)
 	layer.combat = manager
 	layer.rules["damage"] = 10.0
-	layer.rules["boomerang_loop"] = 0.0
+	layer.rules["boomerang_distance"] = 0.0
 	layer.input(1, thrower, _aim(true))
 	var k: DotWeaponKnives.Knife = layer.entries()[0]
 	for t in 20:
