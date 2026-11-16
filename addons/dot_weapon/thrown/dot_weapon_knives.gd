@@ -3,6 +3,8 @@ extends Node3D
 ## Thrown knives: aim with the knife in hand throws it. The server flies each on the tick, hurts the first body (rule `damage`), sticks it
 ## in a body it kills, bounces it off the world and returns it to whoever walks over it; clients mirror the events ([DotWeaponKnifeWire]).
 ## A game owns one as a child: fill the fields, call [method input] before players simulate and [method tick] after, forward [signal changed].
+## Rule `charge` makes the throw a hold-and-release whose power fills over `charge_sec`; a knife whose fitted def has
+## [constant PARAM_BOOMERANG] glides a closed loop back to where it left the hand (or homes on the thrower) and sticks in any enemy it hits.
 
 # Players are duck-typed: arsenal (DotWeaponArsenal), is_alive(), muzzle_position(), controller.state.position/.velocity.
 
@@ -12,14 +14,28 @@ signal changed(id: int, owner: int, phase: int, victim: int, at: Vector3, motion
 enum Phase { FLY, REST, STUCK, GONE }
 
 ## The defaults of [member rules]; copy it ([code].duplicate()[/code]) for a game's own dictionary.
-const DEFAULT_RULES := {"enabled": true, "speed": 40.0, "pickup": 1.0, "damage": 10000.0}
+const DEFAULT_RULES := {
+	"enabled": true, "speed": 40.0, "pickup": 1.0, "damage": 10000.0,
+	"charge": false, "charge_sec": 1.0, "charge_min": 0.35,
+	"boomerang_loop": 1.6, "boomerang_to_thrower": false, "boomerang_left": false,
+}
 ## cvar suffix after the game's prefix -> the rule key it sets, and what it means.
 const CVAR_SPECS := {
 	"_throw": ["enabled", "The aim key throws a knife in hand (1), or does nothing (0)"],
 	"_throw_speed": ["speed", "Metres per second a thrown knife leaves the hand at"],
 	"_throw_pickup": ["pickup", "Metres from a lying or embedded knife a player picks it up (0 off)"],
 	"_throw_damage": ["damage", "Damage a thrown knife deals to the first body it meets (a kill leaves it in the body)"],
+	"_throw_charge": ["charge", "Holding the aim key winds the throw up and releasing throws it (1), or the press throws at once (0)"],
+	"_throw_charge_sec": ["charge_sec", "Seconds of holding to reach full throw power (0 full at once)"],
+	"_throw_charge_min": ["charge_min", "Fraction of the throw speed a throw released at once leaves with"],
+	"_boomerang_loop": ["boomerang_loop", "Seconds a Boomerang knife takes to fly its loop back (0 flies straight)"],
+	"_boomerang_to_thrower": ["boomerang_to_thrower", "A Boomerang knife homes back to the thrower's hand (1), or to where it was thrown from (0)"],
+	"_boomerang_left": ["boomerang_left", "A Boomerang knife curves left (1) or right (0)"],
 }
+## Set true in a fitted def's params (an attachment's params_set) to make that knife a boomerang.
+const PARAM_BOOMERANG := "boomerang"
+## How hard a homing boomerang turns toward the hand each tick (0..1).
+const HOME_BLEND := 0.2
 ## Gravity on the throw until its first contact, then the players' own; flat enough to land where aimed.
 const THROW_GRAVITY := 8.0
 const GRAVITY := 22.0
@@ -59,6 +75,19 @@ class Knife extends RefCounted:
 	var seek: float = 0.0
 	var spun: float = 0.0
 	var bled: bool = false
+	## The speed it left the hand at, and the drop state (fitting) it goes back into an arsenal with.
+	var speed: float = 0.0
+	var state: Dictionary = {}
+	## Boomerang: no gravity while it glides; the velocity turns about turn's axis at its length (rad/s).
+	var boomerang: bool = false
+	var glide: bool = false
+	var turn: Vector3 = Vector3.ZERO
+	var origin: Vector3 = Vector3.ZERO
+	var loop_ticks: int = 0
+	var homing: bool = false
+	## Stuck in a living body: it rides at offset from the victim's feet.
+	var riding: bool = false
+	var offset: Vector3 = Vector3.ZERO
 
 
 ## `enabled`, `speed` (m/s), `pickup` (m, 0 off) and `damage`; [method bind_cvars] ties them to cvars.
@@ -76,10 +105,14 @@ var player_ids: Callable = Callable()
 var ragdolls: Node = null
 var blood: Node = null
 var look_of: Callable = Callable()
+## Server: a gliding knife's state is re-sent this often, since homing is not extrapolated (0 never).
+var glide_sync_ticks: int = 8
 
 var _knives: Dictionary = {}
 var _next_id: int = 1
 var _aim_held: Dictionary = {}
+## Player id -> ticks the throw has been held for, while winding up.
+var _charge: Dictionary = {}
 var _tick: int = 0
 var _model_box: AABB = AABB()
 ## The thrower excluded from a [method _sweep], reused so a flying knife does not build an array a tick.
@@ -121,40 +154,123 @@ func entries() -> Array:
 	return _knives.values()
 
 
-## Server, before the player simulates: the aim key's rising edge with the knife in hand throws it.
-## The button is cleared on [param fire] for this tick, so nothing else reads the press.
+## The throw power for [param held_seconds] of winding up under [param rules_dict]: 1 without `charge`.
+static func power_fraction(rules_dict: Dictionary, held_seconds: float) -> float:
+	if not bool(rules_dict.get("charge", false)):
+		return 1.0
+	return lerpf(float(rules_dict.get("charge_min", 0.35)), 1.0, fill_fraction(rules_dict, held_seconds))
+
+
+## How full the power meter is (0..1) after [param held_seconds]; full at once when `charge_sec` is 0.
+static func fill_fraction(rules_dict: Dictionary, held_seconds: float) -> float:
+	var sec := float(rules_dict.get("charge_sec", 1.0))
+	return 1.0 if sec <= 0.0 else clampf(held_seconds / sec, 0.0, 1.0)
+
+
+## Whether [param def] (a fitted def) throws as a boomerang; the param may be keyed by String or StringName.
+static func is_boomerang(def: DotWeaponDef) -> bool:
+	return def != null and bool(def.params.get(PARAM_BOOMERANG, def.params.get(StringName(PARAM_BOOMERANG), false)))
+
+
+## Server: how full [param id]'s throw meter is (0..1), or -1 when they are not winding up.
+func charge_of(id: int) -> float:
+	if not _charge.has(id):
+		return -1.0
+	return fill_fraction(rules, float(_charge[id]) / float(tick_rate))
+
+
+## Server, before the player simulates: the aim key's rising edge with the knife in hand throws it, or with
+## `charge` starts winding up and the release throws. The button is cleared on [param fire] while it is the knife's.
 func input(id: int, player, fire: DotWeaponCommand) -> void:
 	if not is_authority or fire == null or player == null or player.arsenal == null:
 		return
 	var down := fire.is_pressed(DotWeaponCommand.BUTTON_AIM)
 	var was: bool = _aim_held.get(id, false)
 	_aim_held[id] = down
-	if not down or was or not bool(rules.get("enabled", true)):
-		return
 	var def: DotWeaponDef = player.arsenal.current_def()
-	if def == null or def.id != weapon_id:
+	var in_hand := def != null and def.id == weapon_id
+	if not bool(rules.get("enabled", true)):
+		var _off := _charge.erase(id)
 		return
-	if player.arsenal.drop_from_slot(player.arsenal.current_slot()).is_empty():
+	if _charge.has(id):
+		if not in_hand or not player.is_alive():
+			var _cancel := _charge.erase(id)
+			return
+		fire.set_button(DotWeaponCommand.BUTTON_AIM, false)
+		if down:
+			_charge[id] = int(_charge[id]) + 1
+			return
+		var held := float(_charge[id]) / float(tick_rate)
+		var _done := _charge.erase(id)
+		_release(id, player, def, fire, power_fraction(rules, held))
+		return
+	if not down or was or not in_hand:
 		return
 	fire.set_button(DotWeaponCommand.BUTTON_AIM, false)
-	var _id := throw(id, player.muzzle_position(), fire.aim_direction(), player.controller.state.velocity)
+	if bool(rules.get("charge", false)):
+		_charge[id] = 0
+		return
+	_release(id, player, def, fire, 1.0)
 
 
-## Server: a knife leaves [param from] along [param aim] at the rule's speed plus [param carried].
-func throw(owner: int, from: Vector3, aim: Vector3, carried: Vector3 = Vector3.ZERO) -> int:
+func _release(id: int, player, def: DotWeaponDef, fire: DotWeaponCommand, power: float) -> void:
+	var boomerang := is_boomerang(def)
+	var state: Dictionary = player.arsenal.drop_from_slot(player.arsenal.current_slot())
+	if state.is_empty():
+		return
+	var _id := throw(id, player.muzzle_position(), fire.aim_direction(), player.controller.state.velocity, power, boomerang, state)
+
+
+## Server: a knife leaves [param from] along [param aim] at the rule's speed times [param power] plus [param carried].
+## [param state] is the arsenal's drop state, put back on whoever gets it.
+func throw(owner: int, from: Vector3, aim: Vector3, carried: Vector3 = Vector3.ZERO, power: float = 1.0, boomerang: bool = false, state: Dictionary = {}) -> int:
 	var k := Knife.new()
 	k.id = _next_id
 	_next_id += 1
 	k.owner = owner
 	k.at = from
-	k.velocity = aim.normalized() * float(rules.get("speed", 40.0)) + carried
+	k.velocity = aim.normalized() * float(rules.get("speed", 40.0)) * power + carried
 	k.facing = k.velocity.normalized()
+	k.speed = k.velocity.length()
+	k.state = state
+	if boomerang:
+		_launch_boomerang(k)
 	_knives[k.id] = k
 	_tell(k)
 	if _knives.size() > MAX_KNIVES:
 		var oldest: Knife = _knives[_knives.keys().min()]
 		_finish(oldest, oldest.owner, true)
 	return k.id
+
+
+## The loop is a regular polygon of `boomerang_loop * tick_rate` steps, so it closes on [member Knife.origin] exactly.
+func _launch_boomerang(k: Knife) -> void:
+	k.boomerang = true
+	k.glide = true
+	k.origin = k.at
+	var loop := float(rules.get("boomerang_loop", 1.6))
+	if loop <= 0.0 or k.speed <= 0.0:
+		return
+	k.loop_ticks = maxi(2, roundi(loop * tick_rate))
+	var d := k.velocity / k.speed
+	var right := d.cross(Vector3.UP)
+	if right.length() < 0.01:
+		right = Vector3.RIGHT
+	var up := right.normalized().cross(d).normalized()
+	## A negative turn about up curves right.
+	var side := 1.0 if bool(rules.get("boomerang_left", false)) else -1.0
+	k.turn = up * side * TAU * float(tick_rate) / float(k.loop_ticks)
+
+
+## Whether knife [param id] is gliding (no gravity), and the turn it glides with: for the wire.
+func glides(id: int) -> bool:
+	var k: Knife = _knives.get(id, null)
+	return k != null and k.glide
+
+
+func turn_of(id: int) -> Vector3:
+	var k: Knife = _knives.get(id, null)
+	return k.turn if k != null and k.glide else Vector3.ZERO
 
 
 ## Server, every tick after the players moved.
@@ -168,6 +284,10 @@ func tick(current_tick: int, delta: float) -> void:
 			_fly(k, delta)
 		if k.phase == Phase.GONE:
 			continue
+		if k.phase == Phase.FLY and k.glide and glide_sync_ticks > 0 and k.age % glide_sync_ticks == 0:
+			_tell(k)
+		if k.riding:
+			_ride(k)
 		var limit := FLIGHT_SECONDS if k.phase == Phase.FLY else LIFETIME_SECONDS
 		if k.age >= int(limit * tick_rate):
 			_finish(k, k.owner, true)
@@ -176,21 +296,80 @@ func tick(current_tick: int, delta: float) -> void:
 
 
 func _fly(k: Knife, delta: float) -> void:
-	k.velocity.y -= (THROW_GRAVITY if k.bounces == 0 else GRAVITY) * delta
+	if k.glide:
+		if k.homing and not _home(k, delta):
+			return
+		if k.turn != Vector3.ZERO:
+			k.velocity = k.velocity.rotated(k.turn.normalized(), k.turn.length() * delta)
+	else:
+		k.velocity.y -= (THROW_GRAVITY if k.bounces == 0 else GRAVITY) * delta
 	var step := k.velocity * delta
 	var hit := _sweep(k, step)
 	if hit == null:
 		k.at += step
 		if k.velocity.length() > 0.5:
 			k.facing = k.velocity.normalized()
+		if k.glide and k.loop_ticks > 0:
+			_loop_point(k)
 		return
 	if not hit.blocked and _kill(k, hit):
 		return
+	k.glide = false
+	k.turn = Vector3.ZERO
 	_bounce(k, hit)
 	_tell(k)
 
 
-## The first enemy the blade meets dies, and the knife stays in them.
+## Halfway round a homing boomerang turns for the hand; a full loop drops one back on its throw point.
+func _loop_point(k: Knife) -> void:
+	if bool(rules.get("boomerang_to_thrower", false)):
+		if not k.homing and k.age * 2 >= k.loop_ticks:
+			k.homing = true
+			k.turn = Vector3.ZERO
+			_tell(k)
+		elif k.age >= k.loop_ticks * 2:
+			_drop_out(k)
+		return
+	if k.age >= k.loop_ticks:
+		k.at = k.origin
+		_drop_out(k)
+
+
+## Gliding ends: it falls from where it is and can no longer hurt anyone.
+func _drop_out(k: Knife) -> void:
+	k.glide = false
+	k.homing = false
+	k.turn = Vector3.ZERO
+	k.velocity = Vector3.ZERO
+	k.bounces = maxi(k.bounces, 1)
+	_tell(k)
+
+
+## Steers toward the thrower's hand, which catches it within the pickup reach; false when it was caught or dropped.
+func _home(k: Knife, delta: float) -> bool:
+	var p = player_for.call(k.owner) if player_for.is_valid() else null
+	if p == null or not p.is_alive() or p.arsenal == null or p.arsenal.carries(weapon_id):
+		_drop_out(k)
+		return false
+	var to: Vector3 = p.muzzle_position() - k.at
+	if to.length() <= float(rules.get("pickup", 1.0)) + k.speed * delta:
+		_finish(k, k.owner, true)
+		return false
+	k.velocity = k.velocity.lerp(to.normalized() * k.speed, HOME_BLEND).normalized() * k.speed
+	return true
+
+
+## Server: a knife in a living body follows it; when the body dies it stays where it was, and clients find the ragdoll.
+func _ride(k: Knife) -> void:
+	var p = player_for.call(k.victim) if player_for.is_valid() else null
+	if p == null or not p.is_alive():
+		k.riding = false
+		_tell(k)
+		return
+	k.at = p.controller.state.position + k.offset
+
+
+## The first enemy the blade meets dies, and the knife stays in them; a boomerang stays in a survivor too.
 func _kill(k: Knife, hit: DotHitbox.Hit) -> bool:
 	if combat == null or not combat.is_authority or hit.entity == null:
 		return false
@@ -205,13 +384,19 @@ func _kill(k: Knife, hit: DotHitbox.Hit) -> bool:
 	damage.weapon_id = weapon_id
 	damage.context = {"why": &"knife_throw"}
 	var _applied := combat.apply_damage(damage)
-	if damage.refused or health.alive:
+	if damage.refused or (health.alive and not k.boomerang):
 		return false
 	k.facing = k.velocity.normalized()
 	k.phase = Phase.STUCK
 	k.victim = victim
 	k.at = hit.point
 	k.velocity = Vector3.ZERO
+	k.glide = false
+	k.turn = Vector3.ZERO
+	var p = player_for.call(victim) if health.alive and player_for.is_valid() else null
+	if p != null:
+		k.riding = true
+		k.offset = hit.point - (p.controller.state.position as Vector3)
 	_tell(k)
 	return true
 
@@ -257,9 +442,11 @@ func _offer(k: Knife) -> void:
 		var p = player_for.call(id)
 		if p == null or not p.is_alive() or p.arsenal == null or p.arsenal.carries(weapon_id):
 			continue
+		if k.riding and id == k.victim:
+			continue
 		var feet: Vector3 = p.controller.state.position
 		var close := Vector3(feet.x, clampf(k.at.y, feet.y, feet.y + 1.8), feet.z)
-		if close.distance_to(k.at) <= reach and p.arsenal.give(weapon_id, true).ok:
+		if close.distance_to(k.at) <= reach and _give_back(p, k):
 			_finish(k, id, false)
 			return
 
@@ -269,7 +456,7 @@ func _finish(k: Knife, to: int, returning: bool) -> void:
 	if returning and player_for.is_valid():
 		var p = player_for.call(to)
 		if p != null and p.is_alive() and p.arsenal != null and not p.arsenal.carries(weapon_id):
-			var _given: DotResult = p.arsenal.give(weapon_id, true)
+			var _given := _give_back(p, k)
 	k.phase = Phase.GONE
 	k.victim = to
 	_tell(k)
@@ -277,12 +464,21 @@ func _finish(k: Knife, to: int, returning: bool) -> void:
 	var _gone := _knives.erase(k.id)
 
 
+## Gives the knife to [param p] with what was fitted to it when it left the hand.
+func _give_back(p, k: Knife) -> bool:
+	var given: DotResult = p.arsenal.give(weapon_id, true)
+	if given.ok and k.state.has("fit"):
+		p.arsenal.apply_dropped(k.state)
+	return given.ok
+
+
 func _tell(k: Knife) -> void:
 	changed.emit(k.id, k.owner, k.phase, k.victim, k.at, k.velocity if k.phase == Phase.FLY else k.facing)
 
 
-## Client: one knife event from the server. [param motion] is the velocity in flight, else the blade's facing.
-func mirror(id: int, owner: int, phase: int, victim: int, at: Vector3, motion: Vector3) -> void:
+## Client: one knife event from the server. [param motion] is the velocity in flight, else the blade's facing;
+## [param glide] and [param turn] are [method glides] and [method turn_of] on the server.
+func mirror(id: int, owner: int, phase: int, victim: int, at: Vector3, motion: Vector3, glide: bool = false, turn: Vector3 = Vector3.ZERO) -> void:
 	if is_authority:
 		return
 	var k: Knife = _knives.get(id, null)
@@ -301,12 +497,27 @@ func mirror(id: int, owner: int, phase: int, victim: int, at: Vector3, motion: V
 	k.victim = victim
 	k.at = at
 	k.velocity = motion if phase == Phase.FLY else Vector3.ZERO
+	k.glide = glide and phase == Phase.FLY
+	k.turn = turn if k.glide else Vector3.ZERO
 	if motion.length() > 0.01:
 		k.facing = motion.normalized()
-	if phase == Phase.FLY and k.bounces == 0 and was == Phase.FLY and k.age > 0:
+	if phase == Phase.FLY and k.bounces == 0 and was == Phase.FLY and k.age > 0 and not glide:
 		k.bounces = 1
-	if phase == Phase.STUCK and (was != Phase.STUCK or k.holder == null):
+	if phase != Phase.STUCK:
+		return
+	var rider = _rider(victim)
+	if was != Phase.STUCK or k.holder == null or (k.riding and rider == null):
 		k.seek = SEEK_SECONDS
+		k.part = null
+	k.riding = rider != null
+	if k.riding:
+		k.offset = at - (rider.controller.state.position as Vector3)
+
+
+## The living player [param id], or null.
+func _rider(id: int):
+	var p = player_for.call(id) if player_for.is_valid() and id != 0 else null
+	return p if p != null and p.is_alive() else null
 
 
 ## Client: flies the mirrors between events, against the world only; the server's next event corrects it.
@@ -317,12 +528,16 @@ func _physics_process(delta: float) -> void:
 		if k.phase != Phase.FLY:
 			continue
 		k.age += 1
-		k.velocity.y -= (THROW_GRAVITY if k.bounces == 0 else GRAVITY) * delta
+		if not k.glide:
+			k.velocity.y -= (THROW_GRAVITY if k.bounces == 0 else GRAVITY) * delta
+		elif k.turn != Vector3.ZERO:
+			k.velocity = k.velocity.rotated(k.turn.normalized(), k.turn.length() * delta)
 		var step := k.velocity * delta
 		var hit := _sweep(k, step)
 		if hit == null:
 			k.at += step
 		else:
+			k.glide = false
 			_bounce(k, hit)
 
 
@@ -368,6 +583,13 @@ func _draw_stuck(k: Knife, model: Node3D, delta: float) -> void:
 	if not k.bled:
 		k.bled = true
 		_bleed(k)
+	if k.riding:
+		var rider = _rider(k.victim)
+		if rider != null:
+			k.holder.global_transform = Transform3D(_basis_along(k.facing), (rider.controller.state.position as Vector3) + k.offset)
+			return
+		k.riding = false
+		k.seek = SEEK_SECONDS
 	if k.part != null:
 		if is_instance_valid(k.part) and k.part.is_inside_tree():
 			k.holder.global_transform = k.part.global_transform * k.part_local
@@ -479,3 +701,4 @@ func clear() -> void:
 			_drop_view(k)
 	_knives.clear()
 	_aim_held.clear()
+	_charge.clear()
