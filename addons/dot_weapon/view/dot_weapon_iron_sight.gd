@@ -242,7 +242,7 @@ static func faces_of(node: Node, space: Node3D) -> PackedVector3Array:
 				to_space = (walk as Node3D).transform * to_space
 			walk = walk.get_parent()
 		for s in mi.mesh.get_surface_count():
-			if mi.mesh.surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
+			if not _is_triangles(mi.mesh, s):
 				continue
 			var arrays := mi.mesh.surface_get_arrays(s)
 			if arrays.size() <= Mesh.ARRAY_INDEX:
@@ -357,6 +357,15 @@ static func _bin_faces(faces: PackedVector3Array, boxes: Array[Rect2], near: Arr
 			feet[k].append_array([lo_x, hi_x, lo_z, hi_z])
 
 
+## Whether surface [param s] of [param mesh] is a triangle list. Only [ArrayMesh] says (a [PrimitiveMesh] such as an
+## attachment's [BoxMesh] has no [code]surface_get_primitive_type[/code]: calling it was a script error per fitting);
+## every built-in primitive is triangles except [PointMesh].
+static func _is_triangles(mesh: Mesh, s: int) -> bool:
+	if mesh is ArrayMesh:
+		return (mesh as ArrayMesh).surface_get_primitive_type(s) == Mesh.PRIMITIVE_TRIANGLES
+	return not mesh is PointMesh
+
+
 ## Every triangle under [param node], in [param space], with its surface's material and the mean of its corners' UVs
 ## (the kit paints with one colour atlas, so a face's UVs sit in one swatch).
 static func triangles_of(node: Node, space: Node3D) -> Array[Dictionary]:
@@ -379,7 +388,7 @@ static func _triangles(node: Node, space: Node3D) -> Array[Dictionary]:
 				to_space = (walk as Node3D).transform * to_space
 			walk = walk.get_parent()
 		for s in mi.mesh.get_surface_count():
-			if mi.mesh.surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
+			if not _is_triangles(mi.mesh, s):
 				continue
 			var arrays := mi.mesh.surface_get_arrays(s)
 			if arrays.size() <= Mesh.ARRAY_INDEX:

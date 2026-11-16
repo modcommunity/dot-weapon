@@ -210,7 +210,9 @@ static func _numbers(def: DotWeaponDef) -> Dictionary:
 		if candidate == null:
 			continue
 		for prop: Dictionary in candidate.get_property_list():
-			if int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+			# A leading underscore is a private cache (DotWeaponDef._modes_from_fire), never a stat: the attachments menu
+			# showed "_modes_from_fire +100%" beside the Laser Sight.
+			if int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE == 0 or str(prop["name"]).begins_with("_"):
 				continue
 			var v: Variant = candidate.get(StringName(prop["name"]))
 			if v is int or v is float:

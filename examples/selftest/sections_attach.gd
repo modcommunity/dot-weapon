@@ -75,6 +75,17 @@ func _test_attach_compat() -> void:
 	var delta := DotWeaponAttachments.stat_delta(rifle, fitted)
 	_check(str(delta.keys()) == str(["params.ads_seconds", "params.optic_zoom"]), "stat_delta lists the numbers that changed", str(delta.keys()))
 	_check(DotWeaponAttachMenu.stat_lines({"spread": [3.0, 2.4]}) == PackedStringArray(["spread -20%"]), "a stat line is a percent", str(DotWeaponAttachMenu.stat_lines({"spread": [3.0, 2.4]})))
+	var _mode := rifle.fire_mode_at(0)  # fills the held gun's private mode cache; the fitted copy has none
+	var cached := DotWeaponAttachments.stat_delta(rifle, fitted).keys()
+	_check(cached.filter(func(k: String) -> bool: return k.begins_with("_")).is_empty(), "stat_delta never lists a private cache (the menu showed _modes_from_fire +100%)", str(cached))
+	var sight := preload("../../addons/dot_weapon/view/dot_weapon_iron_sight.gd")
+	var gun := Node3D.new()
+	var box := MeshInstance3D.new()
+	box.mesh = BoxMesh.new()
+	gun.add_child(box)
+	_check(sight.faces_of(gun, gun).size() >= 36, "a primitive mesh (BoxMesh) gives its faces to the sight line, with no script error", str(sight.faces_of(gun, gun).size()))
+	_check(sight.triangles_of(gun, gun).size() > 0, "and its triangles")
+	gun.free()
 	_done()
 
 
