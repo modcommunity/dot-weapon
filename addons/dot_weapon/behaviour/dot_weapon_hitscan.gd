@@ -188,10 +188,20 @@ func _tick(ctx: DotWeaponContext) -> void:
 ## tuning and frame rows accepted. Re-sends the tuning row when the ballistics (object or a field), the definition's
 ## tick fields, the accuracy class or the running rate changed, and the frame row when the rules (object or a field),
 ## the crosshair setting or the rate did.
+static func _dot_sim_loaded() -> bool:
+	for path in GDExtensionManager.get_loaded_extensions():
+		if path.get_file() == "dot_sim.gdextension":
+			return true
+	return false
+
+
 func _native_ready(b: DotWeaponBallistics, rules_object: DotWeaponSpreadRules, cone: bool) -> bool:
 	if _native == null:
 		if _native_present < 0:
 			_native_present = 1 if ClassDB.class_exists(_NATIVE_CLASS) else 0
+			if _native_present == 0 and _dot_sim_loaded():
+				# dot-sim is there but predates its weapon module (a stale build): every tick falls back to script.
+				push_warning("dot-weapon: dot-sim is loaded without %s, so the hitscan tick runs in GDScript; rebuild or update dot-sim" % _NATIVE_CLASS)
 		if _native_present == 0:
 			return false
 		_native = ClassDB.instantiate(_NATIVE_CLASS)
