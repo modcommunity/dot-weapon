@@ -1,5 +1,5 @@
 extends RefCounted
-## What a first-person reload review needs that no view model owns (by path, no `class_name`): the fractions to stop at, waiting for a rig to reach one, and the contact sheet. Arena and ZZ each drive their own view model and share this.
+## What a first-person reload review needs that no view model owns (by path, no `class_name`): the fractions to stop at, waiting for a rig to reach one, and the contact sheet. FC and ZZ each drive their own view model and share this.
 
 
 ## [param count] fractions spread over a reload, none at the very start or end (a frame at 0 or 1 is the idle pose).

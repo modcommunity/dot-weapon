@@ -2,7 +2,7 @@ extends RefCounted
 
 ## The player's scope settings and the two client cvars that write them, shared by every game drawing
 ## [code]dot_weapon_scope_overlay.gd[/code]. Preloaded by path, no `class_name`; a game may subclass it (FC's
-## `ArenaScopePrefs`) to keep a name. The settings are static: one player per client.
+## `FcScopePrefs`) to keep a name. The settings are static: one player per client.
 
 ## cl_scope_mode: 1 shows the scope as a lens on a normal screen, 2 fills the screen with it; a server's `scope_mode` ADS rule overrides.
 static var mode := 1
