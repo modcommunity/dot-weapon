@@ -132,6 +132,21 @@ func rest_tick(_still: Callable) -> bool:
 	return false
 
 
+## What [method idle_row] did: declined (nothing changed), ticked with the row's posture, or took the rest tick.
+const IDLE_ROW_DECLINED := 0
+const IDLE_ROW_TICKED := 1
+const IDLE_ROW_RESTED := 2
+
+
+## The whole idle tick from a posture row ([code][speed, airborne, crouched, aiming, sliding, sprinting, wall_running,
+## tick, hurt_tick][/code], the [member DotWeaponArsenal.idle_posture] context's fields) in one native call: the rest tick
+## when [param rest] (the carrier is settled and the arsenal skips rest ticks) and the weapon is at rest, else the tick
+## with that posture. [constant IDLE_ROW_TICKED] or [constant IDLE_ROW_RESTED] if taken; [constant IDLE_ROW_DECLINED]
+## changes nothing, and the arsenal runs [method DotWeaponArsenal.idle_tick]. The base has no native tick, so it declines.
+func idle_row(_row: PackedFloat64Array, _rest: bool) -> int:
+	return IDLE_ROW_DECLINED
+
+
 ## The spread cone half-angle this weapon would fire with at its last tick, in degrees, for a crosshair.
 func spread_now() -> float:
 	return 0.0

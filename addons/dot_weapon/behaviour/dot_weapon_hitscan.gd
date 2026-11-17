@@ -71,6 +71,8 @@ var _native_rules_rev: int = -1
 var _native_cone: bool = false
 var _native_frame_rate: int = 0
 var _native_row := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+# -1 unknown, 0 no, 1 yes: whether the twin has `idle` (a dot-sim older than it has only `tick`).
+var _native_idle: int = -1
 
 # The last context tick that was a fixed point: everything it read, and the cone it computed.
 var _steady: bool = false
@@ -397,6 +399,38 @@ func rest_tick(still: Callable) -> bool:
 	else:
 		_shown_stale = true
 	return true
+
+
+## [method DotWeaponBehaviour.idle_row] on the native twin: [method rest_tick] and [method _tick] with the row's posture,
+## bit for bit, in one call. Declines (nothing changed) without dot-sim, a refused row, a twin built before
+## `idle`, or a crosshair cone held at a steady fixed point (only the script's rest tick keeps that).
+func idle_row(row: PackedFloat64Array, rest: bool) -> int:
+	if not native_tick or _native_idle == 0:
+		return IDLE_ROW_DECLINED
+	var b := _ballistics()
+	if b == null:
+		return IDLE_ROW_DECLINED
+	var rules_object := _rules_object()
+	var cone := rules_object != null and bool(arsenal.get(&"crosshair_cone"))
+	if cone and _steady:
+		return IDLE_ROW_DECLINED
+	if not _native_ready(b, rules_object, cone):
+		return IDLE_ROW_DECLINED
+	if _native_idle < 0:
+		_native_idle = 1 if _native.has_method(&"idle") else 0
+		if _native_idle == 0:
+			return IDLE_ROW_DECLINED
+	# A cone kept for a crosshair rests only through the steady fixed point, which the native path never keeps.
+	var shown: float = _native.call(&"idle", state, row, rest and not cone)
+	if shown == -2.0:
+		_shown_stale = true
+		return IDLE_ROW_RESTED
+	if shown < 0.0:
+		return IDLE_ROW_DECLINED
+	_shown_stale = false
+	_steady = false
+	_shown = shown
+	return IDLE_ROW_TICKED
 
 
 ## Needs a context while enabled spread rules follow the carrier, a crosshair follows an idle player

@@ -21,9 +21,9 @@ func _test_native_tick() -> void:
 	var present := ClassDB.class_exists(&"DotSimWeaponSpread")
 	var native_was := DotWeaponHitscan.native_tick
 	if not present:
-		# The case checks, each rest stream's (the bridge check but for explicit_still, the skip, the steady skip of a
-		# cone mode), the streams' agreement and the missing-class fallback.
-		for i in range(4 + _MODES.size() * 2 - 1 + _CONE_MODES.size() + 2):
+		# The case checks, twice each rest stream's (the bridge check but for explicit_still, the skip, the steady skip of
+		# a cone mode) and the streams' agreement (the native tick, then the idle row), and the missing-class fallback.
+		for i in range(4 + (_MODES.size() * 2 - 1 + _CONE_MODES.size() + 1) * 2 + 1):
 			_check(true, "skip: DotSimWeaponSpread not loaded")
 		_done()
 		return
@@ -84,6 +84,7 @@ func _test_native_tick() -> void:
 	_check(edits > 200, "the tuning, rules, class, rate and crosshair edits that must refresh the native rows happened", str(edits))
 
 	_check_native_rest_streams(native_was)
+	_check_native_row_streams(native_was)
 	_check_native_missing_class(native_was)
 	_done()
 
@@ -102,6 +103,24 @@ func _check_native_rest_streams(native_was: bool) -> void:
 	DotWeaponHitscan.native_tick = native_was
 	DotWeaponHitscan.steady_skip = true
 	_check(all_same, "the rest streams agree with the native tick on one arsenal: outcomes, snapshots, state and cone", detail)
+
+
+## The rest streams again, with that arsenal's idle ticks as one native call from a posture row (idle_tick_row).
+func _check_native_row_streams(native_was: bool) -> void:
+	_rest_native = true
+	_rest_row = true
+	var all_same := true
+	var detail := ""
+	for mode: String in _MODES:
+		var res := _rest_stream(mode)
+		if not res["same"] or not res["spread_same"]:
+			all_same = false
+			detail = res["detail"]
+	_rest_row = false
+	_rest_native = false
+	DotWeaponHitscan.native_tick = native_was
+	DotWeaponHitscan.steady_skip = true
+	_check(all_same, "the rest streams agree with the idle row on one arsenal: outcomes, snapshots, state and cone", detail)
 
 
 ## A missing native class leaves the GDScript tick.

@@ -428,6 +428,28 @@ func idle_tick() -> DotWeaponOutcome:
 	return _idle_nothing()
 
 
+## [method idle_tick] with the [member idle_posture] context already a row ([method DotWeaponBehaviour.idle_row]) and
+## [member idle_still]'s answer already in [param still]: both must be what those callables would say this tick. A
+## behaviour with a native idle tick takes it in one call; any other runs [method idle_tick]. Same result either way.
+func idle_tick_row(row: PackedFloat64Array, still: bool) -> DotWeaponOutcome:
+	if not idle_posture.is_valid():
+		return idle_tick()
+	var lap := Time.get_ticks_usec() if phase_timers else 0
+	var rest := still and idle_rest_skip and idle_still.is_valid()
+	var took := current().behaviour.idle_row(row, rest)
+	if took == DotWeaponBehaviour.IDLE_ROW_DECLINED:
+		return idle_tick()
+	_held_ticks = 0
+	if lap != 0:
+		phase_calls[1] += 1
+		if took == DotWeaponBehaviour.IDLE_ROW_RESTED:
+			_lap(3, lap)
+			phase_calls[2] += 1
+		else:
+			_lap(4, lap)
+	return _idle_nothing()
+
+
 ## [method idle_tick]'s empty outcome: one per arsenal, read before the next tick. A new one each idle player each tick
 ## was an object and three typed arrays; one a caller wrote to is replaced, never handed out again.
 func _idle_nothing() -> DotWeaponOutcome:

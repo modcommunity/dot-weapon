@@ -10,6 +10,8 @@ const _CONE_MODES := ["rules", "rules_hurt", "rules_tuning", "rules_restore"]
 ## On while sections_native runs the streams with DotWeaponHitscan.native_tick on the skipping arsenal (index 0); off,
 ## both arsenals take the GDScript tick.
 var _rest_native := false
+## With [member _rest_native]: the first arsenal's idle ticks go through [method DotWeaponArsenal.idle_tick_row].
+var _rest_row := false
 
 
 ## Eight postures a carrier moves through; index 0 is the settled one.
@@ -264,7 +266,10 @@ func _rest_pair_tick(mode: String, tick: int, st: Dictionary, roll: Dictionary, 
 		hit.hurt_tick = st["hurt"][0]
 		if a.is_idle_for(cmd, previous):
 			var rests := DotWeaponArsenal.phase_calls[2]
-			out = a.idle_tick()
+			if _rest_row and i == 0:
+				out = a.idle_tick_row(_idle_row_of(a), a.idle_still.is_valid() and bool(a.idle_still.call()))
+			else:
+				out = a.idle_tick()
 			if i == 0 and DotWeaponArsenal.phase_calls[2] != rests:
 				res["skipped"] += 1
 		else:
@@ -275,6 +280,13 @@ func _rest_pair_tick(mode: String, tick: int, st: Dictionary, roll: Dictionary, 
 		states.append(var_to_str(a.snapshot()) + var_to_str(a.current().behaviour.state))
 		spreads.append(a.spread_now())
 	return [results, states, spreads]
+
+
+## The arsenal's [member DotWeaponArsenal.idle_posture] context as the row [method DotWeaponArsenal.idle_tick_row] takes.
+func _idle_row_of(a: DotWeaponArsenal) -> PackedFloat64Array:
+	var c: DotWeaponContext = a.idle_posture.call()
+	return PackedFloat64Array([c.speed, 1.0 if c.airborne else 0.0, 1.0 if c.crouched else 0.0, 1.0 if c.aiming else 0.0,
+			1.0 if c.sliding else 0.0, 1.0 if c.sprinting else 0.0, 1.0 if c.wall_running else 0.0, c.tick, c.hurt_tick])
 
 
 func _test_reload_shots() -> void:
