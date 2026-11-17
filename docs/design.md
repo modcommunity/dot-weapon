@@ -42,7 +42,7 @@ Ticks, but ticks at which rate? A pack is written once and runs on servers at 64
 
 Decisions, each with the alternative that was wrong:
 
-- **Zero means unscaled, and it is the default.** Every row written before the field existed (game-airdrift's own, written at 128 for a 128 Hz game) behaves exactly as before. A default of 64 would have halved g2gfast's cadence.
+- **Zero means unscaled, and it is the default.** Every row written before the field existed (game-airdrift's own, written at 128 for a 128 Hz game) behaves exactly as before. A default of 64 would have halved Airdrift's cadence.
 - **The rate is per definition, not per arsenal.** One arsenal can carry a game's own rows next to a pack's, written at different rates.
 - **Scaled at read time, not by copying the definition on equip.** The catalogue's rows are shared, read-only objects (FC hands one catalogue to every player); a scaled copy per arsenal would be one more object per weapon per player and a second source of truth. Reading through `ticks_for` keeps the numbers integers, so a client and a server at one rate reach the same deadline.
 - **Rounded, never to zero.** 4 ticks at 64 Hz is 3.75 at 60 and becomes 4; 1 tick at 64 Hz at 20 Hz is still 1, because 0 means "every tick" on an interval.
