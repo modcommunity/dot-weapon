@@ -18,7 +18,7 @@ const DEFAULT_RULES := {
 	"enabled": true, "speed": 40.0, "pickup": 1.0, "damage": 10000.0,
 	"charge": false, "charge_sec": 1.0, "charge_min": 0.35,
 	"boomerang_distance": 18.0, "boomerang_radius": 5.0, "boomerang_speed": 0.0,
-	"boomerang_to_thrower": false, "boomerang_left": false,
+	"boomerang_to_thrower": false, "boomerang_left": false, "boomerang_catch": 1.5,
 }
 ## cvar suffix after the game's prefix -> the rule key it sets, and what it means.
 const CVAR_SPECS := {
@@ -34,6 +34,7 @@ const CVAR_SPECS := {
 	"_boomerang_speed": ["boomerang_speed", "Metres per second a Boomerang knife flies at (0 uses the throw speed)"],
 	"_boomerang_to_thrower": ["boomerang_to_thrower", "A Boomerang knife homes back to the thrower's hand (1), or to where it was thrown from (0)"],
 	"_boomerang_left": ["boomerang_left", "A Boomerang knife curves left (1) or right (0)"],
+	"_boomerang_catch": ["boomerang_catch", "Metres from the thrower's hand a returning Boomerang knife is caught in the air (0 never: it falls at the throw point)"],
 }
 ## Set true in a fitted def's params (an attachment's params_set) to make that knife a boomerang.
 const PARAM_BOOMERANG := "boomerang"
@@ -387,6 +388,8 @@ func _fly(k: Knife, delta: float) -> void:
 		k.at += step
 		if k.velocity.length() > 0.5:
 			k.facing = k.velocity.normalized()
+		if k.boomerang and k.glide and k.leg == 2 and _catch(k):
+			return
 		if arrived:
 			k.at = k.origin
 			_drop_out(k)
@@ -513,6 +516,22 @@ func _offer(k: Knife) -> void:
 		if close.distance_to(k.at) <= reach and _give_back(p, k):
 			_finish(k, id, false)
 			return
+
+
+## A Boomerang on its way back (the return leg) is caught when it passes within `boomerang_catch` metres of its
+## thrower's hand, the thrower alive with no knife: back in the hand, not dropped at the throw point.
+## False when it flies on (no catch rule, the thrower dead, away or already holding one).
+func _catch(k: Knife) -> bool:
+	var reach := float(rules.get("boomerang_catch", 0.0))
+	if reach <= 0.0 or not player_for.is_valid():
+		return false
+	var p = player_for.call(k.owner)
+	if p == null or not p.is_alive() or p.arsenal == null or p.arsenal.carries(weapon_id):
+		return false
+	if (p.muzzle_position() as Vector3).distance_to(k.at) > reach:
+		return false
+	_finish(k, k.owner, true)
+	return true
 
 
 ## Takes [param k] out of the world; [param returning] gives it to [param to] when alive and without one.

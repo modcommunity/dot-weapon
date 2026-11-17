@@ -2,7 +2,7 @@ extends "selftest/sections_native.gd"
 
 ## dot-weapon's self-test. Headless, no network, no scene but this one.
 
-const CHECKS := 811
+const CHECKS := 818
 
 
 func _ready() -> void:

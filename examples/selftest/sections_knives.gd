@@ -55,6 +55,7 @@ class KnifePlayer extends RefCounted:
 func _test_knives() -> void:
 	_test_knife_charge()
 	_test_knife_boomerang_loop()
+	_test_knife_boomerang_catch()
 	_test_knife_boomerang_home()
 	_test_knife_boomerang_stick()
 	_test_knife_wire()
@@ -145,6 +146,7 @@ func _test_knife_boomerang_loop() -> void:
 	var layer := _knife_layer({1: p})
 	layer.rules["boomerang_distance"] = 18.0
 	layer.rules["boomerang_radius"] = 5.0
+	layer.rules["boomerang_catch"] = 0.0
 	layer.input(1, p, _aim(true))
 	var k: DotWeaponKnives.Knife = layer.entries()[0] if layer.count() == 1 else null
 	_check(k != null and k.boomerang and layer.glides(k.id) and k.state.has("fit"), "the throw glides as a boomerang and keeps the fitting")
@@ -188,6 +190,50 @@ func _test_knife_boomerang_loop() -> void:
 	for l: DotWeaponKnives in [layer, curve] + twins:
 		l.clear()
 		l.queue_free()
+	_done()
+
+
+func _test_knife_boomerang_catch() -> void:
+	_section("thrown knife: boomerang caught in the air")
+	_check(float(DotWeaponKnives.DEFAULT_RULES["boomerang_catch"]) > 0.0, "a returning Boomerang is caught by default")
+	var p := _knife_player(true)
+	var layer := _knife_layer({1: p})
+	layer.rules["boomerang_distance"] = 12.0
+	layer.rules["boomerang_radius"] = 3.0
+	layer.rules["boomerang_catch"] = 1.5
+	layer.input(1, p, _aim(true))
+	var k: DotWeaponKnives.Knife = layer.entries()[0] if layer.count() == 1 else null
+	_check(k != null and not p.arsenal.carries(&"knife"), "the hand is empty while the knife flies")
+	var ticks := ceili(k.path_len / (k.speed / RATE)) + 2
+	var caught_at := -1.0
+	var out_leg_caught := false
+	for t in ticks:
+		var before := k.at
+		var leg := k.leg
+		layer.tick(t + 1, 1.0 / RATE)
+		if layer.count() == 0:
+			caught_at = before.distance_to(p.muzzle_position())
+			out_leg_caught = leg == 0
+			break
+	_check(layer.count() == 0 and p.arsenal.carries(&"knife"), "it comes back into the thrower's hand without touching the floor")
+	_check(caught_at >= 0.0 and caught_at < 1.5 + k.speed / RATE + 0.01, "caught within reach of the hand", "%.2f m" % caught_at)
+	_check(not out_leg_caught, "never caught on the way out")
+	_check(DotWeaponKnives.is_boomerang(p.arsenal.current_def()), "the caught knife keeps its Boomerang fitting")
+	layer.clear()
+	layer.queue_free()
+	# Walked away from the throw point: it flies past the empty spot and falls there.
+	var q := _knife_player(true)
+	var away := _knife_layer({1: q})
+	away.rules["boomerang_distance"] = 12.0
+	away.rules["boomerang_radius"] = 3.0
+	away.input(1, q, _aim(true))
+	var qk: DotWeaponKnives.Knife = away.entries()[0] if away.count() == 1 else null
+	q.controller.state.position = Vector3(0.0, 0.0, 30.0)
+	for t in ceili(qk.path_len / (qk.speed / RATE)) + 2:
+		away.tick(t + 1, 1.0 / RATE)
+	_check(away.count() == 1 and not qk.glide and not q.arsenal.carries(&"knife"), "out of reach it is not caught and falls at the throw point")
+	away.clear()
+	away.queue_free()
 	_done()
 
 
