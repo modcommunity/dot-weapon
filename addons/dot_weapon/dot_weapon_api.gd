@@ -97,5 +97,6 @@ extends RefCounted
 ## 43: the Boomerang flies out, circles and returns: rules `boomerang_distance` (metres straight out, 0 flies straight on), `boomerang_radius` (turn radius, 0 turns on the spot), `boomerang_speed` (0 uses the throw speed) replace `boomerang_loop`; the path is a function of the metres flown, closes on the throw point exactly and ignores the thrower's own velocity; the wire carries the turn only on the circling leg. Additive.
 ## 44: [method DotWeaponArsenal.idle_tick_row] and [method DotWeaponBehaviour.idle_row]: an idle tick handed its posture as a packed row and its stillness as a bool, which [DotWeaponHitscan] runs as one native call (rest tick or posture tick, bit-exact with [method DotWeaponArsenal.idle_tick], which stays the fallback). Additive. OLDEST stays 1.
 ## 45: rule `boomerang_catch` (cvar suffix `_boomerang_catch`, default 1.5 m, 0 never): a Boomerang on its return leg is caught in the air when it passes within that reach of its thrower's hand (alive, no knife), back in the hand with its fitting instead of falling at the throw point. Additive. OLDEST stays 1.
-const LEVEL := 45
+## 46: [method DotWeaponArsenal.empty_hand] (lowers the weapon in hand at once, slot 0) and knives rule `boomerang_empty_hand` (cvar suffix `_boomerang_empty_hand`, default on): a Boomerang thrower waits for the catch bare-handed instead of drawing the next weapon; the catch puts the knife back in hand, a knife that falls, sticks or is taken brings the first carried weapon up. Additive. OLDEST stays 1.
+const LEVEL := 46
 const OLDEST := 1

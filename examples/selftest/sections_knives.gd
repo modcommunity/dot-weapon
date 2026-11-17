@@ -56,6 +56,7 @@ func _test_knives() -> void:
 	_test_knife_charge()
 	_test_knife_boomerang_loop()
 	_test_knife_boomerang_catch()
+	_test_knife_boomerang_empty_hand()
 	_test_knife_boomerang_home()
 	_test_knife_boomerang_stick()
 	_test_knife_wire()
@@ -235,6 +236,65 @@ func _test_knife_boomerang_catch() -> void:
 	away.clear()
 	away.queue_free()
 	_done()
+
+
+func _test_knife_boomerang_empty_hand() -> void:
+	_section("thrown knife: boomerang thrower waits bare-handed")
+	_check(bool(DotWeaponKnives.DEFAULT_RULES["boomerang_empty_hand"]), "the thrower waits bare-handed by default")
+	var p := _knife_with_sidearm()
+	var knife_slot: int = p.arsenal.current_slot()
+	var layer := _knife_layer({1: p})
+	layer.rules["boomerang_distance"] = 12.0
+	layer.rules["boomerang_radius"] = 3.0
+	layer.input(1, p, _aim(true))
+	var k: DotWeaponKnives.Knife = layer.entries()[0] if layer.count() == 1 else null
+	_check(k != null and p.arsenal.current_slot() == 0, "the throw leaves the hand empty, not on the next weapon", str(p.arsenal.current_slot()))
+	for t in ceili(k.path_len / (k.speed / RATE)) + 2:
+		layer.tick(t + 1, 1.0 / RATE)
+		if layer.count() == 0:
+			break
+	_check(layer.count() == 0 and p.arsenal.current_slot() == knife_slot, "the catch puts the knife straight back in the empty hand")
+	layer.clear()
+	layer.queue_free()
+	# Out of reach: the knife falls at the throw point and the next weapon comes up.
+	var q := _knife_with_sidearm()
+	var away := _knife_layer({1: q})
+	away.rules["boomerang_distance"] = 12.0
+	away.rules["boomerang_radius"] = 3.0
+	away.input(1, q, _aim(true))
+	var qk: DotWeaponKnives.Knife = away.entries()[0] if away.count() == 1 else null
+	q.controller.state.position = Vector3(0.0, 0.0, 30.0)
+	var waited := true
+	for t in ceili(qk.path_len / (qk.speed / RATE)) + 2:
+		away.tick(t + 1, 1.0 / RATE)
+		if qk.glide and q.arsenal.current_slot() != 0:
+			waited = false
+	_check(waited, "the hand stays empty while the knife glides")
+	_check(not qk.glide and q.arsenal.current_slot() != 0 and not q.arsenal.carries(&"knife"), "a knife that falls brings the next weapon up", str(q.arsenal.current_slot()))
+	away.clear()
+	away.queue_free()
+	# Rule off: the throw draws the next weapon at once, as before.
+	var r := _knife_with_sidearm()
+	var off := _knife_layer({1: r})
+	off.rules["boomerang_empty_hand"] = false
+	off.input(1, r, _aim(true))
+	_check(off.count() == 1 and r.arsenal.current_slot() != 0, "with the rule off the next weapon is drawn at once")
+	off.clear()
+	off.queue_free()
+	_check(r.arsenal.empty_hand() and r.arsenal.current_slot() == 0 and not r.arsenal.empty_hand(), "empty_hand lowers the weapon once")
+	_done()
+
+
+## A Boomerang knife player who also carries the catalogue's first other weapon.
+func _knife_with_sidearm() -> KnifePlayer:
+	var p := _knife_player(true)
+	var knife_slot: int = p.arsenal.current_slot()
+	var c: DotWeaponCatalogue = p.arsenal.catalogue
+	for id: StringName in c.ids():
+		if c.get_def(id).slot != knife_slot and p.arsenal.give(id, true).ok:
+			break
+	p.arsenal.bring_to_hand(knife_slot)
+	return p
 
 
 ## A default boomerang curves right and lands on the origin; returns the layer to free.

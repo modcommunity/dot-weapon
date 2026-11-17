@@ -19,6 +19,7 @@ const DEFAULT_RULES := {
 	"charge": false, "charge_sec": 1.0, "charge_min": 0.35,
 	"boomerang_distance": 18.0, "boomerang_radius": 5.0, "boomerang_speed": 0.0,
 	"boomerang_to_thrower": false, "boomerang_left": false, "boomerang_catch": 1.5,
+	"boomerang_empty_hand": true,
 }
 ## cvar suffix after the game's prefix -> the rule key it sets, and what it means.
 const CVAR_SPECS := {
@@ -35,6 +36,7 @@ const CVAR_SPECS := {
 	"_boomerang_to_thrower": ["boomerang_to_thrower", "A Boomerang knife homes back to the thrower's hand (1), or to where it was thrown from (0)"],
 	"_boomerang_left": ["boomerang_left", "A Boomerang knife curves left (1) or right (0)"],
 	"_boomerang_catch": ["boomerang_catch", "Metres from the thrower's hand a returning Boomerang knife is caught in the air (0 never: it falls at the throw point)"],
+	"_boomerang_empty_hand": ["boomerang_empty_hand", "A Boomerang thrower waits bare-handed for the catch (1), or draws the next weapon at once (0); a knife that falls or sticks instead brings the next weapon up"],
 }
 ## Set true in a fitted def's params (an attachment's params_set) to make that knife a boomerang.
 const PARAM_BOOMERANG := "boomerang"
@@ -132,6 +134,8 @@ var _model_box: AABB = AABB()
 var _exclude: Array = []
 ## No hitbox sets, for a knife past its first bounce (the trace only reads it).
 var _no_sets: Array[DotHitboxSet] = []
+## Server: thrower id -> the Boomerang knife id they wait for bare-handed (rule `boomerang_empty_hand`).
+var _empty_for: Dictionary = {}
 
 
 ## Registers the rules as cvars named [param prefix] + [constant CVAR_SPECS] through [param add] (a
@@ -250,11 +254,40 @@ func throw(owner: int, from: Vector3, aim: Vector3, carried: Vector3 = Vector3.Z
 	if boomerang:
 		_launch_boomerang(k)
 	_knives[k.id] = k
+	if boomerang:
+		_wait_bare_handed(k)
 	_tell(k)
 	if _knives.size() > MAX_KNIVES:
 		var oldest: Knife = _knives[_knives.keys().min()]
 		_finish(oldest, oldest.owner, true)
 	return k.id
+
+
+## Rule `boomerang_empty_hand`: the thrower lowers what the throw drew and waits for the catch with an empty hand.
+func _wait_bare_handed(k: Knife) -> void:
+	if not bool(rules.get("boomerang_empty_hand", true)) or not player_for.is_valid():
+		return
+	var p = player_for.call(k.owner)
+	if p == null or p.arsenal == null or not p.arsenal.has_method(&"empty_hand"):
+		return
+	var _emptied: bool = p.arsenal.empty_hand()
+	_empty_for[k.owner] = k.id
+
+
+## A thrower waiting bare-handed whose Boomerang will not come back to the hand (it fell, stuck or was taken)
+## gets the first weapon they carry up; a catch already put the knife in the hand, a switch of their own ends the wait.
+func _end_bare_hands() -> void:
+	for owner: int in _empty_for.keys():
+		var k: Knife = _knives.get(_empty_for[owner], null)
+		if k != null and k.phase == Phase.FLY and k.glide:
+			continue
+		_empty_for.erase(owner)
+		var p = player_for.call(owner) if player_for.is_valid() else null
+		if p == null or not p.is_alive() or p.arsenal == null or p.arsenal.current_slot() != 0:
+			continue
+		var carried: Array = p.arsenal.slots()
+		if not carried.is_empty():
+			p.arsenal.bring_to_hand(int(carried[0]))
 
 
 ## A boomerang reaches `boomerang_distance` metres from the throw point along the throw (its farthest point), going straight
@@ -353,6 +386,8 @@ func tick(current_tick: int, delta: float) -> void:
 			_finish(k, k.owner, true)
 			continue
 		_offer(k)
+	if not _empty_for.is_empty():
+		_end_bare_hands()
 
 
 func _fly(k: Knife, delta: float) -> void:
@@ -785,3 +820,4 @@ func clear() -> void:
 	_knives.clear()
 	_aim_held.clear()
 	_charge.clear()
+	_empty_for.clear()

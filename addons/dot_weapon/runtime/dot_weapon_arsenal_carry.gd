@@ -113,6 +113,16 @@ func bring_to_hand(slot: int) -> void:
 		_force_select(slot)
 
 
+## Lowers whatever is in hand at once and leaves the hand empty (slot 0), with no holster delay: a thrower whose
+## Boomerang is in the air waits for it bare-handed instead of drawing the next weapon. False when already empty.
+## [method give] puts the next weapon given into an empty hand, and [method select] draws from it as usual.
+func empty_hand() -> bool:
+	if _current == 0:
+		return false
+	_force_select(0)
+	return true
+
+
 ## Puts the ammunition, attachments and fire mode of a [method drop_current] state back on the weapon
 ## [param state] names, which must already be carried (given with `full = false`).
 func apply_dropped(state: Dictionary) -> void:
