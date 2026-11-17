@@ -84,10 +84,14 @@ func _derive_idle_still() -> void:
 		return
 	_still_derived = false
 	idle_still = Callable()
-	if idle_posture.is_valid() and idle_posture.get_method() == &"posture_for" and idle_posture.get_object() == DotWeaponPlayerBridge:
+	if not idle_posture.is_valid() or idle_posture.get_method() != &"posture_for":
+		return
+	# By uid, not by name: the bridge names the arsenal, and a script loop stays in memory for good (Godot 4.7).
+	var bridge: Script = load("uid://b1wropruyd5oq")
+	if idle_posture.get_object() == bridge:
 		var bound := idle_posture.get_bound_arguments()
 		if bound.size() == 1 and bound[0] is Node:
-			idle_still = DotWeaponPlayerBridge.still_for.bind(bound[0])
+			idle_still = Callable(bridge, &"still_for").bind(bound[0])
 			_still_derived = true
 
 ## Per-weapon recoil patterns (`sv_recoil_*`); null or disabled leaves every gun's flat kick.
