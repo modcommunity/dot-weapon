@@ -23,7 +23,8 @@ func _test_native_tick() -> void:
 	if not present:
 		# The case checks, twice each rest stream's (the bridge check but for explicit_still, the skip, the steady skip of
 		# a cone mode) and the streams' agreement (the native tick, then the idle row), and the missing-class fallback.
-		for i in range(4 + (_MODES.size() * 2 - 1 + _CONE_MODES.size() + 1) * 2 + 1):
+		# Then the idle gate's four.
+		for i in range(4 + (_MODES.size() * 2 - 1 + _CONE_MODES.size() + 1) * 2 + 1 + 4):
 			_check(true, "skip: DotSimWeaponSpread not loaded")
 		_done()
 		return
@@ -86,6 +87,7 @@ func _test_native_tick() -> void:
 	_check_native_rest_streams(native_was)
 	_check_native_row_streams(native_was)
 	_check_native_missing_class(native_was)
+	_check_idle_gate(native_was)
 	_done()
 
 
@@ -105,10 +107,14 @@ func _check_native_rest_streams(native_was: bool) -> void:
 	_check(all_same, "the rest streams agree with the native tick on one arsenal: outcomes, snapshots, state and cone", detail)
 
 
-## The rest streams again, with that arsenal's idle ticks as one native call from a posture row (idle_tick_row).
+## The rest streams again, with that arsenal's idle ticks as one native call from a posture row (idle_tick_row). The
+## idle gate runs its verify mode here (DotWeaponBehaviour.idle_gate 2): _check_idle_gate counts what it found.
 func _check_native_row_streams(native_was: bool) -> void:
 	_rest_native = true
 	_rest_row = true
+	_gate_row_misses = DotWeaponBehaviour.idle_gate_misses
+	var gate_was := DotWeaponBehaviour.idle_gate
+	DotWeaponBehaviour.idle_gate = 2
 	var all_same := true
 	var detail := ""
 	for mode: String in _MODES:
@@ -118,9 +124,91 @@ func _check_native_row_streams(native_was: bool) -> void:
 			detail = res["detail"]
 	_rest_row = false
 	_rest_native = false
+	DotWeaponBehaviour.idle_gate = gate_was
+	_gate_row_misses = DotWeaponBehaviour.idle_gate_misses - _gate_row_misses
 	DotWeaponHitscan.native_tick = native_was
 	DotWeaponHitscan.steady_skip = true
 	_check(all_same, "the rest streams agree with the idle row on one arsenal: outcomes, snapshots, state and cone", detail)
+
+
+var _gate_row_misses := 0
+
+
+## DotWeaponBehaviour.idle_gate: the gated idle row (1) and its verify mode (2) leave what the plain one (0) leaves, bit
+## for bit, over three behaviours on one random weapon edited mid-run (tuning, rules, class, rate, crosshair) with uses and
+## script ticks between rows; then a posed tick_needs_context answers as the plain one for every kind of weapon.
+func _check_idle_gate(native_was: bool) -> void:
+	var gate_was := DotWeaponBehaviour.idle_gate
+	var misses_was := DotWeaponBehaviour.idle_gate_misses
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261118
+	var rows := 0
+	var held := 0
+	var first_miss := ""
+	DotWeaponHitscan.native_tick = true
+	for i in range(_NATIVE_CASES):
+		var w := _native_case(rng)
+		var hs: Array[DotWeaponHitscan] = [w[0], w[1], DotWeaponHitscan.new()]
+		hs[2].setup(w[3], w[4])
+		var arsenal: NativeArsenal = w[4]
+		var ctx := DotWeaponContext.new()
+		var hold := 0
+		for t in range(_NATIVE_TICKS):
+			if hold <= 0:
+				_native_posture_roll(rng, ctx, hs[0])
+				hold = rng.randi_range(1, 24)
+			hold -= 1
+			ctx.tick = t
+			if rng.randf() < 0.04:
+				_native_edit(rng, w)
+			if rng.randf() < 0.05:
+				var bloom := float(hs[0].state.get(&"bloom", 0.0)) + rng.randf_range(0.0, 1.5)
+				for h in hs:
+					h.state[&"since_use"] = 0
+					h.state[&"bloom"] = bloom
+			if rng.randf() < 0.05:
+				# A script context tick between rows: it may leave a steady fixed point the rows must decline on.
+				DotWeaponHitscan.native_tick = false
+				for h in hs:
+					h._tick(ctx)
+				DotWeaponHitscan.native_tick = true
+			var row := PackedFloat64Array([ctx.speed, float(ctx.airborne), float(ctx.crouched), float(ctx.aiming),
+					float(ctx.sliding), float(ctx.sprinting), float(ctx.wall_running), ctx.tick, ctx.hurt_tick])
+			var rest := rng.randf() < 0.5
+			var rules: DotWeaponSpreadRules = arsenal.spread_rules
+			var rate: int = arsenal.tick_rate
+			var took: Array[int] = []
+			for g in range(3):
+				DotWeaponBehaviour.idle_gate = g
+				if g == 1 and hs[1]._idle_gate_holds(rules, arsenal.crosshair_cone and rules != null, rate):
+					held += 1
+				took.append(hs[g].idle_row_framed(row, rest, rules, arsenal.crosshair_cone, rate))
+			rows += 1
+			for g in [1, 2]:
+				var miss := _native_state_diff(hs[0].state, hs[g].state)
+				if miss == "" and (took[g] != took[0] or hs[g]._shown != hs[0]._shown or hs[g]._shown_stale != hs[0]._shown_stale or hs[g]._steady != hs[0]._steady):
+					miss = "took %s shown %s/%s stale %s/%s" % [took, hs[0]._shown, hs[g]._shown, hs[0]._shown_stale, hs[g]._shown_stale]
+				if miss != "" and first_miss == "":
+					first_miss = "gate %d case %d tick %d: %s" % [g, i, t, miss]
+	DotWeaponBehaviour.idle_gate = gate_was
+	DotWeaponHitscan.native_tick = native_was
+	var misses := DotWeaponBehaviour.idle_gate_misses - misses_was
+	_check(first_miss == "", "%d idle rows of %d random weapons: gate 1 and its verify mode leave what gate 0 leaves, key for key and bit for bit" % [rows, _NATIVE_CASES], first_miss)
+	_check(held > rows / 2 and misses == 0, "the gate held on most rows (%d of %d) and its verify mode found nothing" % [held, rows], "held %d misses %d" % [held, misses])
+	_check(_gate_row_misses == 0, "the rest streams' idle rows under the verify mode: the arsenal's frame is the one idle_row reads, the gate never stale", str(_gate_row_misses))
+
+	var cat := _catalogue()
+	var a := _arsenal(cat)
+	var ctx := DotWeaponContext.new()
+	a.idle_posture = func() -> DotWeaponContext: return ctx
+	var differ := ""
+	for id in cat.ids():
+		var made := cat.instantiate(id, a)
+		var b: DotWeaponBehaviour = made.value if made.ok else null
+		if b == null or b.tick_needs_context_posed() != b.tick_needs_context():
+			differ += "%s " % id
+	_drop(a)
+	_check(differ == "", "with a posture, tick_needs_context_posed answers as tick_needs_context for every weapon in the catalogue", differ)
 
 
 ## A missing native class leaves the GDScript tick.

@@ -147,6 +147,27 @@ func idle_row(_row: PackedFloat64Array, _rest: bool) -> int:
 	return IDLE_ROW_DECLINED
 
 
+## How an idle arsenal ticks: 1 (default) hands the behaviour its rules, crosshair and rate ([method idle_row_framed],
+## [method tick_needs_context_posed]) so cached rows that provably hold are reused; 0 takes the plain calls (same bits,
+## an A/B switch); 2 does both and counts each disagreement in [member idle_gate_misses] with an error.
+static var idle_gate: int = 1
+## Disagreements [member idle_gate] 2 found since start: 0 unless a cached row went stale unseen.
+static var idle_gate_misses: int = 0
+
+
+## [method idle_row] handed what the arsenal already holds: its [param rules] ([member DotWeaponArsenal.spread_rules]),
+## [param crosshair] ([member DotWeaponArsenal.crosshair_cone]) and [param rate] ([member DotWeaponArsenal.tick_rate]).
+## Must do exactly what [method idle_row] does; the base has nothing to save, so it is [method idle_row].
+func idle_row_framed(row: PackedFloat64Array, rest: bool, _rules: DotWeaponSpreadRules, _crosshair: bool, _rate: int) -> int:
+	return idle_row(row, rest)
+
+
+## [method tick_needs_context] when the arsenal has an [member DotWeaponArsenal.idle_posture]; must answer the same.
+## The base reads no posture, so it is [method tick_needs_context].
+func tick_needs_context_posed() -> bool:
+	return tick_needs_context()
+
+
 ## The spread cone half-angle this weapon would fire with at its last tick, in degrees, for a crosshair.
 func spread_now() -> float:
 	return 0.0

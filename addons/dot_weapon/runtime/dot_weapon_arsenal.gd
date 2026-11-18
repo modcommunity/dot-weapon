@@ -364,7 +364,17 @@ func is_idle_for(command: DotWeaponCommand, previous: DotWeaponCommand) -> bool:
 		return false
 
 	var slot := current()
-	return slot != null and not slot.behaviour.tick_needs_context()
+	if slot == null:
+		return false
+	# With a posture the behaviour need not look for one (DotWeaponBehaviour.idle_gate; 0 asks the plain way).
+	var gate := DotWeaponBehaviour.idle_gate
+	if gate == 0 or not idle_posture.is_valid():
+		return not slot.behaviour.tick_needs_context()
+	var needs := slot.behaviour.tick_needs_context_posed()
+	if gate == 2 and needs != slot.behaviour.tick_needs_context():
+		DotWeaponBehaviour.idle_gate_misses += 1
+		push_error("dot-weapon idle gate (%s): tick_needs_context_posed says %s, tick_needs_context the opposite" % [slot.def.id, needs])
+	return not needs
 
 
 ## Whether [method simulate_tick] with this command and context reads nothing of the context's aim: the attack is
@@ -436,7 +446,7 @@ func idle_tick_row(row: PackedFloat64Array, still: bool) -> DotWeaponOutcome:
 		return idle_tick()
 	var lap := Time.get_ticks_usec() if phase_timers else 0
 	var rest := still and idle_rest_skip and idle_still.is_valid()
-	var took := current().behaviour.idle_row(row, rest)
+	var took := current().behaviour.idle_row_framed(row, rest, spread_rules, crosshair_cone, tick_rate)
 	if took == DotWeaponBehaviour.IDLE_ROW_DECLINED:
 		return idle_tick()
 	_held_ticks = 0

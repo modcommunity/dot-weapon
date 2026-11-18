@@ -430,6 +430,70 @@ func idle_row(row: PackedFloat64Array, rest: bool) -> int:
 		_native_idle = 1 if _native.has_method(&"idle") else 0
 		if _native_idle == 0:
 			return IDLE_ROW_DECLINED
+	return _native_idle_call(row, rest, cone)
+
+
+## [method idle_row] with the arsenal's rules, crosshair and rate handed in. When all the native rows were made from is
+## provably unchanged (def, ballistics and rules at the same revision, tick fields, class key, crosshair, rate),
+## [method _native_ready] would send nothing, so the native call runs at once; else, or at idle_gate 0, [method idle_row].
+func idle_row_framed(row: PackedFloat64Array, rest: bool, rules: DotWeaponSpreadRules, crosshair: bool, rate: int) -> int:
+	if idle_gate == 0:
+		return idle_row(row, rest)
+	var cone := crosshair and rules != null
+	var held := _idle_gate_holds(rules, cone, rate)
+	if idle_gate == 2:
+		_idle_gate_verify(held, rules, cone, rate)
+	if not held:
+		return idle_row(row, rest)
+	if cone and _steady:
+		return IDLE_ROW_DECLINED
+	return _native_idle_call(row, rest, cone)
+
+
+func _idle_gate_holds(rules: DotWeaponSpreadRules, cone: bool, rate: int) -> bool:
+	var b := _native_b
+	if not native_tick or _native_idle != 1 or not _native_framed or b == null or def != _native_def:
+		return false
+	if def.tuning != b or b.accuracy_revision[0] != _native_b_rev or rate != _native_rate or rate != _native_frame_rate:
+		return false
+	if def.use_interval_ticks != _native_interval or def.authored_tick_rate != _native_authored:
+		return false
+	if not _class_key_set or b.accuracy_class != _class_key or def.id != _class_id or _class != _native_class:
+		return false
+	if rules != _native_rules or cone != _native_cone:
+		return false
+	return rules == null or rules.revision[0] == _native_rules_rev
+
+
+# Idle gate 2: what the arsenal handed in must be what idle_row reads, and a gate that held must leave _native_ready
+# nothing to send.
+func _idle_gate_verify(held: bool, rules: DotWeaponSpreadRules, cone: bool, rate: int) -> void:
+	var read_rules := _rules_object()
+	var read_cone := read_rules != null and bool(arsenal.get(&"crosshair_cone"))
+	var miss := ""
+	if read_rules != rules or read_cone != cone or running_tick_rate() != rate:
+		miss = "the arsenal handed rules %s cone %s rate %d, idle_row reads %s %s %d" % [rules, cone, rate, read_rules, read_cone, running_tick_rate()]
+	elif held:
+		var before := _native_cache()
+		var b := _ballistics()
+		if b == null or not _native_ready(b, read_rules, read_cone):
+			miss = "the gate held but the native rows are not ready"
+		elif _native_cache() != before:
+			miss = "the gate held but _native_ready re-sent a row: %s -> %s" % [before, _native_cache()]
+	if miss != "":
+		idle_gate_misses += 1
+		push_error("dot-weapon idle gate (%s): %s" % [def.id if def != null else &"", miss])
+
+
+func _native_cache() -> Array:
+	return [
+		_native_b, _native_b_rev, _native_def, _native_rate, _native_interval, _native_authored, _native_class,
+		_native_framed, _native_rules, _native_rules_rev, _native_cone, _native_frame_rate, _class_key_set, _class_key,
+		_class_id, _class,
+	]
+
+
+func _native_idle_call(row: PackedFloat64Array, rest: bool, cone: bool) -> int:
 	# A cone kept for a crosshair rests only through the steady fixed point, which the native path never keeps.
 	var shown: float = _native.call(&"idle", state, row, rest and not cone)
 	if shown == -2.0:
@@ -455,6 +519,11 @@ func tick_needs_context() -> bool:
 		var rules_object := _rules_object()
 		wants = rules_object != null and (rules_object.enabled or bool(arsenal.get(&"crosshair_cone")))
 	return wants or super.tick_needs_context()
+
+
+## With a posture provided every want of [method tick_needs_context] is answered, so this skips straight to the base.
+func tick_needs_context_posed() -> bool:
+	return super.tick_needs_context()
 
 
 func _posture_provided() -> bool:
