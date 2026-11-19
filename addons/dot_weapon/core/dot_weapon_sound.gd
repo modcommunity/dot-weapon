@@ -75,6 +75,38 @@ static func pick(sound: StringName, roll: int = 0) -> AudioStream:
 	return held[i]
 
 
+## Loads every variant a weapon of each of [param sound_classes] can play, so the first shot, reload, dry click, equip or
+## far report finds its stream already loaded (and, with [member keep_streams], held). Returns the streams, for a caller to
+## hand on to a decoder such as [code]DotAudioPcm.warm[/code]. [param stages] are the reload stages; nothing is capped.
+static func warm(sound_classes: Array, stages: Array = [&"out", &"in"], far: bool = true) -> Array[AudioStream]:
+	var names := {}
+	for sc: Variant in sound_classes:
+		var c := StringName(sc)
+		if not FIRE.has(c):
+			continue
+		names[FIRE[c]] = true
+		for kind in [&"dry", &"equip"]:
+			var own := StringName("%s_%s" % [kind, FEEL.get(c, &"")])
+			names[own if FEEL.has(c) and count(own) > 0 else kind] = true
+		for stage in stages:
+			names[reload_name(c, StringName(stage))] = true
+		if far and String(FIRE[c]).ends_with("_fire"):
+			names[StringName(String(FIRE[c]).replace("_fire", "_far"))] = true
+	return warm_sounds(names.keys())
+
+
+## Loads every variant of each stock sound in [param sounds] (names as [method pick] takes them, such as
+## &"impact_flesh"), and returns the streams. Unknown names are skipped.
+static func warm_sounds(sounds: Array) -> Array[AudioStream]:
+	var out: Array[AudioStream] = []
+	for sound: Variant in sounds:
+		for i in count(StringName(sound)):
+			var stream := pick(StringName(sound), i)
+			if stream != null and not out.has(stream):
+				out.append(stream)
+	return out
+
+
 ## The report for a pack's sound class, or null.
 static func pick_class(sound_class: StringName, roll: int = 0) -> AudioStream:
 	return pick(FIRE.get(sound_class, &""), roll) if FIRE.has(sound_class) else null

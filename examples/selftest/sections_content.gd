@@ -693,6 +693,27 @@ func _test_profiles() -> void:
 	_done()
 
 
+func _test_sound_warm() -> void:
+	_section("warm loads every variant a class can play")
+	if DotWeaponSound.count(&"light_fire") == 0:
+		_check(DotWeaponSound.warm([&"light"]).is_empty(), "without dot-audio a warm returns nothing")
+		_check(DotWeaponSound.warm([]).is_empty(), "no classes is nothing")
+		_check(DotWeaponSound.warm([&"light"], [], false).is_empty(), "no stages and no far is nothing")
+		_check(DotWeaponSound.warm_sounds([&"impact"]).is_empty(), "warm_sounds returns nothing too")
+		_done()
+		return
+	var got := DotWeaponSound.warm([&"light", &"shotgun", &"nope"])
+	var want := 0
+	for sound: StringName in [&"light_fire", &"shotgun_fire", &"reload_out_light", &"reload_in_light", &"reload_shell", &"light_far", &"shotgun_far"]:
+		want += DotWeaponSound.count(sound)
+	_check(got.size() >= want, "every fire, reload and far variant comes back (%d, at least %d)" % [got.size(), want])
+	_check(not got.has(null) and got.has(DotWeaponSound.pick(&"light_fire", 0)) and got.has(DotWeaponSound.pick_reload(&"shotgun", &"out", 0)), "all loaded, and they are the held pick() streams")
+	_check(DotWeaponSound.warm([]).is_empty() and DotWeaponSound.warm([&"light"], [], false).size() < got.size(), "no classes is nothing; no stages and no far is fewer")
+	var named := DotWeaponSound.warm_sounds([&"impact", &"no_such_sound"])
+	_check(named.size() == DotWeaponSound.count(&"impact") and named.size() > 0, "warm_sounds loads every variant of a named sound and skips an unknown one")
+	_done()
+
+
 func _test_sound_held() -> void:
 	_section("stock sounds held after the first pick")
 	var held := DotWeaponSound.keep_streams

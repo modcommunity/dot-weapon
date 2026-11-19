@@ -99,5 +99,6 @@ extends RefCounted
 ## 45: rule `boomerang_catch` (cvar suffix `_boomerang_catch`, default 1.5 m, 0 never): a Boomerang on its return leg is caught in the air when it passes within that reach of its thrower's hand (alive, no knife), back in the hand with its fitting instead of falling at the throw point. Additive. OLDEST stays 1.
 ## 46: [method DotWeaponArsenal.empty_hand] (lowers the weapon in hand at once, slot 0) and knives rule `boomerang_empty_hand` (cvar suffix `_boomerang_empty_hand`, default on): a Boomerang thrower waits for the catch bare-handed instead of drawing the next weapon; the catch puts the knife back in hand, a knife that falls, sticks or is taken brings the first carried weapon up. Additive. OLDEST stays 1.
 ## 47: [method DotWeaponBehaviour.idle_row_framed] and [method DotWeaponBehaviour.tick_needs_context_posed]: [method DotWeaponArsenal.idle_tick_row] hands the behaviour its rules, crosshair and rate, and [method DotWeaponArsenal.is_idle_for] says a posture is provided, so a hitscan whose cached native rows provably still hold skips re-reading and re-checking them. [member DotWeaponBehaviour.idle_gate] (1 default; 0 the plain calls for A/B; 2 verify, counting [member DotWeaponBehaviour.idle_gate_misses]). Bit-exact. Additive. OLDEST stays 1.
-const LEVEL := 47
+## 48: [method DotWeaponSound.warm] and [method DotWeaponSound.warm_sounds]: load every variant of the given sound classes' fire, reload, dry, equip and far sounds and returns the streams.
+const LEVEL := 48
 const OLDEST := 1
