@@ -1,4 +1,4 @@
-[![Weapon - GameSpice addon](docs/banner.png)](https://moddingcommunity.com/a/246-dot-weapon)
+[![Weapon - GameSpice addon](docs/banner.png)](https://moddingcommunity.com/a/42-gs-weapon)
 
 What a player holds and uses: a catalogue of weapon definitions that each name a behaviour script by path. Guns, bows, melee, thrown charges, beams, and anything your game writes that none of those describe. Adding a weapon is a script, a definition and a row in a table, never an edit to the addon.
 
