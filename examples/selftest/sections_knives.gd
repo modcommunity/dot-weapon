@@ -3,7 +3,7 @@ extends "sections_attach.gd"
 ## Thrown knives: the charged throw, the Boomerang's closed loop and homing, sticking in a survivor, the wire.
 
 
-## dot-net is not a dependency: a tape that hands back what was written, in order, stands in for its writer and reader.
+## GameSpice Net is not a dependency: a tape that hands back what was written, in order, stands in for its writer and reader.
 class Tape extends RefCounted:
 	var values: Array = []
 	var read_at: int = 0

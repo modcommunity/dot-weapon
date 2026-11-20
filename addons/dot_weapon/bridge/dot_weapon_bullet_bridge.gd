@@ -1,9 +1,9 @@
 class_name DotWeaponBulletBridge
 extends Node
 
-## Flies simulated bullets for dot-combat: a drop-in for `combat.resolve_shot(shot, view_tick)`.
+## Flies simulated bullets for GameSpice Combat: a drop-in for `combat.resolve_shot(shot, view_tick)`.
 ## Rules off or no muzzle velocity: exactly `combat.resolve_shot`. On: one bullet per pellet, and
-## rays, hitboxes, rewind and damage stay dot-combat's own, so a game writes none.
+## rays, hitboxes, rewind and damage stay GameSpice Combat's own, so a game writes none.
 
 signal bullet_hit(id: int, damage: DotDamage)
 ## Before the world is rewound for a bullet of [param owner_id] (a game keeps the shooter in place).

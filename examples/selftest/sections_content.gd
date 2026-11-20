@@ -432,7 +432,7 @@ func _test_extension_point() -> void:
 	_section("a weapon the addon knows nothing about")
 
 	# The point of the design: this weapon chains to several targets, costs more the further it chains, sets its own
-	# cadence, refuses to fire indoors and keeps a charge counter, and none of those ideas exist in dot-weapon;
+	# cadence, refuses to fire indoors and keeps a charge counter, and none of those ideas exist in GameSpice Weapon;
 	# adding it edited no file in the addon.
 	var a := _arsenal()
 	a.give(&"rod")
@@ -483,7 +483,7 @@ func _test_extension_point() -> void:
 	_done()
 
 
-## A stand-in for a dot-player node. This project does not depend on dot-player, so the
+## A stand-in for a GameSpice Player node. This project does not depend on GameSpice Player, so the
 ## bridge is duck-typed and so is the thing it is tested against — which is the honest
 ## test: if this passes, a real DotPlayer with the same methods passes.
 class StubPlayer extends Node3D:
@@ -570,7 +570,7 @@ func _test_player_bridge() -> void:
 	_check(not DotWeaponPlayerBridge.attach_view_model(null, view_model), "and to nothing")
 	view_model.free()
 
-	# The class loadout, duck-typed against dot-player-class.
+	# The class loadout, duck-typed against GameSpice Player Class.
 	var arsenal := _arsenal()
 	var classless := RefCounted.new()
 	_check(

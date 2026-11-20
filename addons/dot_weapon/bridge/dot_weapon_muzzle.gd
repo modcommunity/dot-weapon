@@ -1,7 +1,7 @@
 class_name DotWeaponMuzzle
 extends RefCounted
 
-## Muzzle flash for a weapon, on dot-fx's `DotMuzzleFlash`, reached by path so this addon parses without dot-fx.
+## Muzzle flash for a weapon, on GameSpice FX's `DotMuzzleFlash`, reached by path so this addon parses without GameSpice FX.
 ##
 ## A weapon's profile picks the size with `extra: {muzzle_flash: big|medium|small|very_small|none}`, which lands in [member DotWeaponDef.params]; absent, the category decides. A headless server builds nothing.
 
@@ -24,7 +24,7 @@ static func flash_name(def: DotWeaponDef) -> String:
 	return str(def.params.get(KEY, ""))
 
 
-## Builds a flash under [param parent] (a muzzle point or view-model node) and returns it, or null with no dot-fx, no display, or a size of none. Call [method fire] per shot.
+## Builds a flash under [param parent] (a muzzle point or view-model node) and returns it, or null with no GameSpice FX, no display, or a size of none. Call [method fire] per shot.
 static func attach(
 	parent: Node3D, category: String, def: DotWeaponDef = null,
 	first_person: bool = false, suppressed: bool = false
@@ -62,7 +62,7 @@ static func attach(
 	return flash
 
 
-## Starts building a flash for [param category] under [param host] (put the node [method attach] will get as its parent, in the tree, under the loading cover; a flash warmed elsewhere is moved, which re-enters it): its pool fills one instance a frame, and the next [method attach] for the same size and view takes it, so the first shot builds nothing. False with no dot-fx, no display or a size of none.
+## Starts building a flash for [param category] under [param host] (put the node [method attach] will get as its parent, in the tree, under the loading cover; a flash warmed elsewhere is moved, which re-enters it): its pool fills one instance a frame, and the next [method attach] for the same size and view takes it, so the first shot builds nothing. False with no GameSpice FX, no display or a size of none.
 static func warm(
 	host: Node, category: String, def: DotWeaponDef = null,
 	first_person: bool = false, suppressed: bool = false

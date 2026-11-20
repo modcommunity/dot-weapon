@@ -1,7 +1,7 @@
 class_name DotWeaponKnifeWire
 extends RefCounted
 ## The wire format of one [DotWeaponKnives] event: id, owner, phase, victim, where and how it moves.
-## dot-net's writer and reader are passed in, never named (dot-net is not a dependency of dot-weapon):
+## GameSpice Net's writer and reader are passed in, never named (GameSpice Net is not a dependency of GameSpice Weapon):
 ## [code]writer[/code] is a DotNetWriter, [code]reader[/code] a DotNetReader.
 
 const _EXTENT := 4096.0

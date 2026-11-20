@@ -1,6 +1,6 @@
 # Weapon attachments
 
-Attachments are items of their own: a scope, a suppressor, a laser, an extended magazine. One attachment fits every weapon its rules allow, so nothing is wired to one gun. dot-weapon holds the generic part (schema, fit rules, the server request, the menu, loadout rows and model sockets). A weapon pack provides only the profile files and meshes.
+Attachments are items of their own: a scope, a suppressor, a laser, an extended magazine. One attachment fits every weapon its rules allow, so nothing is wired to one gun. GameSpice Weapon holds the generic part (schema, fit rules, the server request, the menu, loadout rows and model sockets). A weapon pack provides only the profile files and meshes.
 
 ## Pieces
 

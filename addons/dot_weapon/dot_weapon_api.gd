@@ -1,6 +1,6 @@
 extends RefCounted
 
-## dot-weapon's API level. The rule for bumping it is on [DotAddonApi].
+## GameSpice Weapon's API level. The rule for bumping it is on [DotAddonApi].
 ##
 ## LEVEL rises by one for anything a game could call that did not exist before. OLDEST is
 ## raised to LEVEL when something a game could have called is removed or changes meaning,
@@ -19,13 +19,13 @@ extends RefCounted
 ## [method DotWeaponCatalogue.listings], [method DotWeaponCatalogue.listing] and
 ## [method DotWeaponCatalogue.categories], the [signal DotWeaponCatalogue.weapon_added] and
 ## [signal DotWeaponCatalogue.listings_changed] signals, and the optional category and icon arguments of
-## [method DotWeaponCatalogue.add]. Needs dot-core API 9 ([DotContentIndex]); OLDEST stays 1.
+## [method DotWeaponCatalogue.add]. Needs GameSpice Core API 9 ([DotContentIndex]); OLDEST stays 1.
 
 ## 4: weapon attachments ([member DotWeaponDef.mounts], [DotWeaponAttachment], [DotWeaponFitting], [DotWeaponAttachments],
 ## [method DotWeaponArsenal.fit], [method DotWeaponArsenal.fitting_at], [method DotWeaponNetSync.fitting_specs]). OLDEST stays 1.
 
-## 5: [DotWeaponProfiles], weapons as `weapon` profiles (dot-core [DotProfileSet]) with upgrade children.
-## Needs dot-core API with DotProfileSet; OLDEST stays 1.
+## 5: [DotWeaponProfiles], weapons as `weapon` profiles (GameSpice Core [DotProfileSet]) with upgrade children.
+## Needs GameSpice Core API with DotProfileSet; OLDEST stays 1.
 
 ## 6: [DotWeaponProfileGroup] (every pack's weapon set behind the one `weapon` kind, one runtime layer),
 ## the optional `layer` of [method DotWeaponProfiles.make_set] and [method DotWeaponProfiles.refresh_def].
@@ -84,7 +84,7 @@ extends RefCounted
 ## 30: `view/dot_weapon_reload_shots.gd` (by path, no `class_name`): the fractions, the wait for a rig to reach one and the contact sheet of a first-person reload review (game-zombie-zone `shot.sh --view=reload`). OLDEST stays 1.
 ## 31: `DotWeaponArsenal.is_cooling_for(command, ctx)`: whether this tick reads nothing of the context's aim (a trigger held inside the cadence), so a rig can skip working the aim out.
 ## 32: `DotWeaponArsenal.phase_timers`, `phase_us`, `phase_calls`, `PHASES`: opt-in sub-phase timings of simulate_tick and idle_tick for a profiler. OLDEST stays 1.
-## 33: ammo profiles `speed` and `reference_speed` (m/s, 0 = off) reach `DotPenetration.speed`/`reference_speed` through `make_penetration`; dot-combat scales wall and body costs by them. OLDEST stays 1.
+## 33: ammo profiles `speed` and `reference_speed` (m/s, 0 = off) reach `DotPenetration.speed`/`reference_speed` through `make_penetration`; GameSpice Combat scales wall and body costs by them. OLDEST stays 1.
 ## 34: `DotWeaponHitscan.steady_skip` (static, on): a hitscan weapon whose idle tick left its spread state at a fixed point skips the spread work on the next tick with the same inputs (posture, motion, rules, cone, tuning, no flinch), identical state; off for A/B. OLDEST stays 1.
 ## 35: `DotWeaponHitscan` reads the cone's accuracy terms as the field or the class preset kept with the class (no by-name `accuracy()` lookups), and a slowing carrier's settle the same way: an idle moving carrier's tick is cheaper, identical cone (`_test_accuracy_cone_reads`). OLDEST stays 1.
 ## 36: [member DotWeaponDropRules.rescue] (cvar sv_weapon_drop_rescue, on): a moving drop whose centre passed down through a floor since the last tick is put back on top of it, and one that fell [constant DotWeaponDrops.RESCUE_DEPTH] below its drop point goes back there once, then is removed. OLDEST stays 1.
@@ -93,7 +93,7 @@ extends RefCounted
 ## 39: [member DotWeaponDrops.rng] and [method DotWeaponDrops.seed_rng]: drops roll, spin, tumble and evict on their own stream, randomised per layer (live play as before) or seeded from a match or sim seed so a bot sim repeats; nothing in drops reads the global stream. OLDEST stays 1.
 ## 40: [member DotWeaponDropRules.settle_max_sec] (cvar sv_weapon_drop_settle_max, default 4.0, 0 never forces a rest) and [member DotWeaponDropRules.refall_max] (sv_weapon_drop_refall_max, default 4, 0 unlimited) replace the hardcoded [constant DotWeaponDrops.SETTLE_MAX_SEC] and [constant DotWeaponDrops.REFALL_MAX], which stay as the defaults. A value out of range is refused (cvar) or reported as an error by [method DotWeaponDropRules.problems] (direct), never clamped. Additive. OLDEST stays 1.
 ## 41: [DotWeaponKnives] charged throws (rules `charge`, `charge_sec`, `charge_min`; [method DotWeaponKnives.charge_of], [method DotWeaponKnives.power_fraction], [method DotWeaponKnives.fill_fraction]) and the Boomerang ([constant DotWeaponKnives.PARAM_BOOMERANG] on a fitted def; rules `boomerang_loop` (replaced at 43), `boomerang_to_thrower`, `boomerang_left`; [method DotWeaponKnives.glides], [method DotWeaponKnives.turn_of], [method DotWeaponKnives.is_boomerang]); `mirror` and [method DotWeaponKnifeWire.write_knife] take optional glide and turn, `read_knife` returns them. A returned or picked-up knife keeps its fitting. Additive, `charge` defaults off. OLDEST stays 1.
-## 42: [member DotWeaponHitscan.native_tick] (default on): a context tick runs dot-sim's DotSimWeaponSpread (found through ClassDB, never named) when it is loaded, bit-exact with the GDScript tick it replaces, which stays the fallback (dot-sim absent, a refused row, or `native_tick = false` for A/B). The native path keeps no steady fixed point. [member DotWeaponBallistics.accuracy_revision] and [member DotWeaponSpreadRules.revision] count field writes so the native rows refresh only on a change. Additive. OLDEST stays 1.
+## 42: [member DotWeaponHitscan.native_tick] (default on): a context tick runs GameSpice Sim's DotSimWeaponSpread (found through ClassDB, never named) when it is loaded, bit-exact with the GDScript tick it replaces, which stays the fallback (GameSpice Sim absent, a refused row, or `native_tick = false` for A/B). The native path keeps no steady fixed point. [member DotWeaponBallistics.accuracy_revision] and [member DotWeaponSpreadRules.revision] count field writes so the native rows refresh only on a change. Additive. OLDEST stays 1.
 ## 43: the Boomerang flies out, circles and returns: rules `boomerang_distance` (metres straight out, 0 flies straight on), `boomerang_radius` (turn radius, 0 turns on the spot), `boomerang_speed` (0 uses the throw speed) replace `boomerang_loop`; the path is a function of the metres flown, closes on the throw point exactly and ignores the thrower's own velocity; the wire carries the turn only on the circling leg. Additive.
 ## 44: [method DotWeaponArsenal.idle_tick_row] and [method DotWeaponBehaviour.idle_row]: an idle tick handed its posture as a packed row and its stillness as a bool, which [DotWeaponHitscan] runs as one native call (rest tick or posture tick, bit-exact with [method DotWeaponArsenal.idle_tick], which stays the fallback). Additive. OLDEST stays 1.
 ## 45: rule `boomerang_catch` (cvar suffix `_boomerang_catch`, default 1.5 m, 0 never): a Boomerang on its return leg is caught in the air when it passes within that reach of its thrower's hand (alive, no knife), back in the hand with its fitting instead of falling at the throw point. Additive. OLDEST stays 1.

@@ -4,12 +4,12 @@ extends RefCounted
 ## What a networked carrier has to replicate of its [DotWeaponArsenal], and how to move
 ## it in and out.
 ##
-## The weapon half of what dot-combat's `DotCombatNetSync` used to carry on its own. A
+## The weapon half of what GameSpice Combat's `DotCombatNetSync` used to carry on its own. A
 ## game using both concatenates the two spec lists; a game with weapons and no health
 ## uses only this one.
 ##
-## [b]dot-net is not a dependency and is not imported here[/b], for the reason
-## dot-combat gives: a script that merely [i]mentions[/i] a [code]class_name[/code] the
+## [b]GameSpice Net is not a dependency and is not imported here[/b], for the reason
+## GameSpice Combat gives: a script that merely [i]mentions[/i] a [code]class_name[/code] the
 ## project does not have fails to parse, and takes every script referencing it down as
 ## well. So the bridge lives in the host game and this is everything it would otherwise
 ## have to work out.

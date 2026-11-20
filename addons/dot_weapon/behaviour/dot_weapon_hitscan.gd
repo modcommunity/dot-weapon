@@ -4,7 +4,7 @@ extends DotWeaponBehaviour
 ## A weapon whose damage arrives the instant it is used: a rifle, a pistol, a shotgun,
 ## a railgun.
 ##
-## Produces [DotShot]s for dot-combat to resolve against a world rewound to the tick
+## Produces [DotShot]s for GameSpice Combat to resolve against a world rewound to the tick
 ## the trigger was pulled on. It applies nothing itself.
 ##
 ## Reads a [DotWeaponBallistics], from [member DotWeaponDef.tuning] or from
@@ -46,12 +46,12 @@ var _settled: DotWeaponContext = null
 ## Off: every context tick computes the cone, for an A/B of the steady skip (see [method _steady_holds]); results agree.
 static var steady_skip: bool = true
 
-## On (the default) and dot-sim's `weapon` module loaded: a context tick runs natively ([code]DotSimWeaponSpread[/code],
-## bit for bit this script's [method _tick], state written in place); off, or without dot-sim, the script below runs.
-## Results agree to the bit, so it is only an A/B switch. Named through [ClassDB] only, so this parses without dot-sim.
+## On (the default) and GameSpice Sim's `weapon` module loaded: a context tick runs natively ([code]DotSimWeaponSpread[/code],
+## bit for bit this script's [method _tick], state written in place); off, or without GameSpice Sim, the script below runs.
+## Results agree to the bit, so it is only an A/B switch. Named through [ClassDB] only, so this parses without GameSpice Sim.
 static var native_tick: bool = true
 const _NATIVE_CLASS := &"DotSimWeaponSpread"
-# -1 unknown, 0 absent, 1 present: whether dot-sim registered the class, asked once a process.
+# -1 unknown, 0 absent, 1 present: whether GameSpice Sim registered the class, asked once a process.
 static var _native_present: int = -1
 
 # One native twin per behaviour, with the numbers it was last given and what they were made from: the ballistics
@@ -71,7 +71,7 @@ var _native_rules_rev: int = -1
 var _native_cone: bool = false
 var _native_frame_rate: int = 0
 var _native_row := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-# -1 unknown, 0 no, 1 yes: whether the twin has `idle` (a dot-sim older than it has only `tick`).
+# -1 unknown, 0 no, 1 yes: whether the twin has `idle` (a GameSpice Sim older than it has only `tick`).
 var _native_idle: int = -1
 
 # The last context tick that was a fixed point: everything it read, and the cone it computed.
@@ -184,7 +184,7 @@ func _tick(ctx: DotWeaponContext) -> void:
 		_steady_keep(b, ctx, rules_object, cone, motion)
 
 
-## Whether the native twin can run this context tick, its rows brought up to date first: dot-sim loaded, and the
+## Whether the native twin can run this context tick, its rows brought up to date first: GameSpice Sim loaded, and the
 ## tuning and frame rows accepted. Re-sends the tuning row when the ballistics (object or a field), the definition's
 ## tick fields, the accuracy class or the running rate changed, and the frame row when the rules (object or a field),
 ## the crosshair setting or the rate did.
@@ -200,7 +200,7 @@ func _native_ready(b: DotWeaponBallistics, rules_object: DotWeaponSpreadRules, c
 		if _native_present < 0:
 			_native_present = 1 if ClassDB.class_exists(_NATIVE_CLASS) else 0
 			if _native_present == 0 and _dot_sim_loaded():
-				# dot-sim is there but predates its weapon module (a stale build): every tick falls back to script.
+				# GameSpice Sim is there but predates its weapon module (a stale build): every tick falls back to script.
 				push_warning("dot-weapon: dot-sim is loaded without %s, so the hitscan tick runs in GDScript; rebuild or update dot-sim" % _NATIVE_CLASS)
 		if _native_present == 0:
 			return false
@@ -412,7 +412,7 @@ func rest_tick(still: Callable) -> bool:
 
 
 ## [method DotWeaponBehaviour.idle_row] on the native twin: [method rest_tick] and [method _tick] with the row's posture,
-## bit for bit, in one call. Declines (nothing changed) without dot-sim, a refused row, a twin built before
+## bit for bit, in one call. Declines (nothing changed) without GameSpice Sim, a refused row, a twin built before
 ## `idle`, or a crosshair cone held at a steady fixed point (only the script's rest tick keeps that).
 func idle_row(row: PackedFloat64Array, rest: bool) -> int:
 	if not native_tick or _native_idle == 0:
@@ -709,7 +709,7 @@ func _use(ctx: DotWeaponContext) -> DotWeaponOutcome:
 		bullet_offset = rr.apply(out, b, state, ctx, def.id, running_tick_rate(), recoil_posture(b, ctx))
 		shot.direction = DotWeaponRecoilRules.offset_direction(shot.direction, bullet_offset)
 
-	# A simulated bullet is flown by DotWeaponBulletBridge; the shot is deferred so dot-combat only
+	# A simulated bullet is flown by DotWeaponBulletBridge; the shot is deferred so GameSpice Combat only
 	# records its endpoint. Off (the default) this line never runs and the shot is unchanged.
 	if DotWeaponBallisticsRules.simulates(arsenal.get(&"ballistics_rules") as DotWeaponBallisticsRules if arsenal != null else null, b):
 		shot.deferred = true

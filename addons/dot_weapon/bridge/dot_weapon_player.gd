@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Fills a [DotWeaponContext] from a player, and hangs a view model on their hands.
 ##
-## [b]dot-player is not a dependency and is not named here.[/b] Same rule as
+## [b]GameSpice Player is not a dependency and is not named here.[/b] Same rule as
 ## [DotWeaponLoadoutBridge]: a script that mentions a [code]class_name[/code] the
 ## project does not have fails to parse and takes every script referencing it down with
 ## it, so everything below is duck-typed. A "player" here is any node that answers
@@ -25,7 +25,7 @@ const CHANNEL := "weapon.player"
 ## A stable, non-negative entity number for a player key.
 ##
 ## [b]Stable across machines and across a reconnect, which is what makes it usable at
-## all.[/b] dot-weapon identifies the user of a weapon by an [code]int[/code] because
+## all.[/b] GameSpice Weapon identifies the user of a weapon by an [code]int[/code] because
 ## that is what fits in a wire message; a player is identified by a string key
 ## everywhere else in the family. Something has to convert, and a counter would give
 ## different numbers on the server and the client for the same person.
@@ -207,7 +207,7 @@ static func attach_view_model(
 
 ## Gives an arsenal whatever a player's class says they start with.
 ##
-## Duck-typed against dot-player-class: a class definition answers
+## Duck-typed against GameSpice Player Class: a class definition answers
 ## [code]loadout_id[/code], and a game maps that to weapons with [param mapping] — the
 ## same seam [DotWeaponLoadoutBridge] uses, because an id space is a game's to decide.
 static func give_class_loadout(

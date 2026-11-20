@@ -1,6 +1,6 @@
 extends Node
 
-## dot-weapon's self-test. Headless, no network, no scene but this one.
+## GameSpice Weapon's self-test. Headless, no network, no scene but this one.
 ## Printed at the end: sections entered against sections that ran to their last line, and a total of checks;
 ## a script error aborts its section after it announced itself, so the entered count alone proves nothing.
 

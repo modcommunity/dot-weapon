@@ -2,7 +2,7 @@ class_name DotWeaponBullets
 extends Node
 
 ## Every simulated bullet in one node (no node per bullet), stepped once per game tick. Server authority: [signal hit]
-## applies damage; clients only draw [signal tracer]. Lag compensation as dot-combat: each sub-step is cast against
+## applies damage; clients only draw [signal tracer]. Lag compensation as GameSpice Combat: each sub-step is cast against
 ## the world as of `now - lag` via [member rewind_fn], then [member restore_fn] undoes it.
 
 ## Bullet [param id] hit [param info] (the cast result) after [param distance] metres.
@@ -17,7 +17,7 @@ signal expired(id: int)
 
 ## `func(from: Vector3, to: Vector3, owner_id: int) -> Dictionary`, empty for clear.
 var cast_fn: Callable = Callable()
-## `func(tick: float)` and `func()`, as dot-combat's.
+## `func(tick: float)` and `func()`, as GameSpice Combat's.
 var rewind_fn: Callable = Callable()
 var restore_fn: Callable = Callable()
 var rules: DotWeaponBallisticsRules = null

@@ -27,7 +27,7 @@ const FIELDS := {
 }
 
 ## Counts edits to the fields below, however made (a cvar, a test, a direct set), so a holder of a copy of them
-## (dot-sim's native spread tick, see [DotWeaponHitscan]) refreshes it on a change without comparing every field. One
+## (GameSpice Sim's native spread tick, see [DotWeaponHitscan]) refreshes it on a change without comparing every field. One
 ## element, not an int, so a walk over the numeric fields never sees it as a rule.
 var revision := PackedInt64Array([0])
 

@@ -1,10 +1,10 @@
-# dot-weapon history
+# GameSpice Weapon history
 
 Bug stories worth keeping because the bug could come back. The rules they left are in [CLAUDE.md](../CLAUDE.md) and [design.md](design.md).
 
-## Split out of dot-combat
+## Split out of GameSpice Combat
 
-dot-combat lost `weapons/` entirely. `DotWeapon`, `DotArsenal`, `DotWeaponState`, `DotRecoil` and `DotCombatCommand` are gone; `DotSpread` moved to dot-combat's `core/`; `DotShot` stayed and stopped pointing at a weapon. A name from that list in a game or doc is a leftover.
+GameSpice Combat lost `weapons/` entirely. `DotWeapon`, `DotArsenal`, `DotWeaponState`, `DotRecoil` and `DotCombatCommand` are gone; `DotSpread` moved to GameSpice Combat's `core/`; `DotShot` stayed and stopped pointing at a weapon. A name from that list in a game or doc is a leftover.
 
 ## The reload that restarted for ever
 

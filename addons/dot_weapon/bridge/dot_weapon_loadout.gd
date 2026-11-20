@@ -3,15 +3,15 @@ extends RefCounted
 
 ## Fills an arsenal from what a player brought in.
 ##
-## [b]Neither dot-loadout nor dot-inventory is a dependency, and neither is named
+## [b]Neither GameSpice Loadout nor GameSpice Inventory is a dependency, and neither is named
 ## here.[/b] A script that mentions a [code]class_name[/code] the project does not have
 ## fails to parse and takes every script referencing it down with it, so everything
 ## below is duck-typed: a resolved loadout is an array of dictionaries with an
 ## [code]arsenal_slot[/code] and an [code]item[/code] that has an [code]id[/code], and
-## that is all this needs to know. dot-weapon installs and runs with dot-core and
-## dot-combat alone.
+## that is all this needs to know. GameSpice Weapon installs and runs with GameSpice Core and
+## GameSpice Combat alone.
 ##
-## [b]dot-loadout deliberately stops at `[slot, item]` pairs[/b], with a note that a
+## [b]GameSpice Loadout deliberately stops at `[slot, item]` pairs[/b], with a note that a
 ## game maps items to weapons with its own table. This is that table, written once,
 ## because every game that adopted both wrote the same twenty lines.
 ##

@@ -40,7 +40,7 @@ static func schema() -> Array:
 	]
 
 
-## Kind to schema, for dot-core's `profile_check`.
+## Kind to schema, for GameSpice Core's `profile_check`.
 static func profile_schemas() -> Dictionary:
 	return {KIND: {"schema": schema()}}
 

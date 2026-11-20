@@ -5,7 +5,7 @@ extends RefCounted
 ##
 ## [b]This addon spawns nothing.[/b] It describes what should exist and hands the
 ## description to the game, which owns the scene, the node and the physics. That is the
-## same division dot-fx draws between a catalogue and a scene, and it is what lets a
+## same division GameSpice FX draws between a catalogue and a scene, and it is what lets a
 ## dedicated server with none of the content installed still run the weapon: a server
 ## that only needs to know an arrow is travelling at 90 m/s from here does not need the
 ## arrow's mesh.

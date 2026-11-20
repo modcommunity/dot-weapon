@@ -2,14 +2,14 @@ class_name DotWeaponSpawnerConfig
 extends RefCounted
 
 ## The spawner's rules, layered: what pools exist, per-site defaults, groups, and what a map changes.
-## Structure is `spawner.yml` in each `dot-weapon` tier of [DotAddonConfig], merged weakest first; the scalars in [method map_keys] go through dot-map's per-map files.
+## Structure is `spawner.yml` in each `gs-weapon` tier of [DotAddonConfig], merged weakest first; the scalars in [method map_keys] go through GameSpice Map's per-map files.
 ## Format, per-map blocks and an example: docs/spawners.md.
 
 const CHANNEL := "weapon.spawner"
 const ADDON := "dot-weapon"
 const FILE := "spawner.yml"
 
-## The scalars dot-map's per-map files may set, as the `allow` schema [DotMapConfig] takes. Merge them into a game's `_map_config_keys()`.
+## The scalars GameSpice Map's per-map files may set, as the `allow` schema [DotMapConfig] takes. Merge them into a game's `_map_config_keys()`.
 const MAP_KEYS := {
 	"spawner_enabled": {"type": "bool"},
 	"spawner_respawn_scale": {"type": "float", "min": 0.05, "max": 100.0},

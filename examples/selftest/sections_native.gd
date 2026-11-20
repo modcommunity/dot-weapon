@@ -1,9 +1,9 @@
 extends "sections_knives.gd"
 
-## DotWeaponHitscan.native_tick: a context tick through dot-sim's DotSimWeaponSpread must leave what the GDScript tick
+## DotWeaponHitscan.native_tick: a context tick through GameSpice Sim's DotSimWeaponSpread must leave what the GDScript tick
 ## leaves, bit for bit. Random weapons tick twice, once each way, on shared tuning, rules and arsenal objects edited
 ## mid-run (each edit must reach the cached native rows); then the rest streams run with the native tick on one arsenal.
-## Without dot-sim loaded every check passes as a skip, so the count stays fixed.
+## Without GameSpice Sim loaded every check passes as a skip, so the count stays fixed.
 
 const _NATIVE_CASES := 200
 const _NATIVE_TICKS := 160
@@ -228,7 +228,7 @@ func _check_native_missing_class(native_was: bool) -> void:
 
 
 
-## A random weapon on a stub arsenal, as dot-sim's parity test builds it: [native behaviour, script behaviour, ballistics,
+## A random weapon on a stub arsenal, as GameSpice Sim's parity test builds it: [native behaviour, script behaviour, ballistics,
 ## def, arsenal]. Both behaviours share the def, tuning and arsenal, so an edit reaches both.
 func _native_case(rng: RandomNumberGenerator) -> Array:
 	var b := DotWeaponBallistics.new()

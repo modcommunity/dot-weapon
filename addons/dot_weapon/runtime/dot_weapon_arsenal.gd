@@ -5,7 +5,7 @@ extends "dot_weapon_arsenal_carry.gd"
 ## What one carrier holds, and the state machine that drives it.
 ##
 ## [b]It decides that a use happened. It never decides what the use hit.[/b] That is
-## dot-combat's job, and the split is the same one dot-combat draws internally: this
+## GameSpice Combat's job, and the split is the same one GameSpice Combat draws internally: this
 ## runs on the owning client [i]and[/i] on the server, and both reach the same
 ## [DotWeaponOutcome] from the same command. Collapsing the two gives you a client that
 ## decides who dies.

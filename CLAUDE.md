@@ -1,19 +1,19 @@
-# dot-weapon
+# GameSpice Weapon
 
 What a player holds and uses. A weapon is a document (`DotWeaponDef`) that names a behaviour script by path; the arsenal runs slots, cadence, ammunition and reloads, and the behaviour decides what a use does, returning shots for dot-combat and spawns for the game.
 
 Read the family [CLAUDE.md](../../CLAUDE.md) first.
 
-**The distributable is `addons/dot_weapon/`.** It requires [dot-core](../dot-core) and [dot-combat](../dot-combat) (symlinked into `addons/`, gitignored). dot-net, dot-loadout, dot-inventory and dot-player are optional and never named.
+**The distributable is `addons/dot_weapon/`.** It requires [GameSpice Core](../dot-core) and [GameSpice Combat](../dot-combat) (symlinked into `addons/`, gitignored). dot-net, dot-loadout, dot-inventory and dot-player are optional and never named.
 
-Also requires **dot-profile** (`DotProfileSet`, `DotProfile`, `DotProfileRuntime`, split from dot-core): link `addons/dot_profile` next to `addons/dot_core`.
+Also requires **GameSpice Profile** (`DotProfileSet`, `DotProfile`, `DotProfileRuntime`, split from GameSpice Core): link `addons/dot_profile` next to `addons/dot_core`.
 
 ## Read before
 
 | Read | Before |
 | --- | --- |
 | [docs/design.md](docs/design.md) | changing anything: why a definition plus a behaviour, the four behaviour rules, ticks, the `_try_use` order, `select()`, spread and recoil, `DotShot`, the duck-typed bridges |
-| [docs/history.md](docs/history.md) | the dot-combat split, and the two bugs that left rules here |
+| [docs/history.md](docs/history.md) | the GameSpice Combat split, and the two bugs that left rules here |
 
 ## Layout
 
@@ -29,9 +29,9 @@ Also requires **dot-profile** (`DotProfileSet`, `DotProfile`, `DotProfileRuntime
 | `core/dot_weapon_attach_request.gd`, `ui/dot_weapon_attach_menu.gd`, `view/dot_weapon_attachment_models.gd` | attachments as items (API 38), see [docs/attachments.md](docs/attachments.md): `DotWeaponAttachRequest` (a client's ask; the server checks ownership and fit, then `arsenal.fit`), `DotWeaponAttachMenu` (the key/pad/touch attach menu; emits `requested`, changes nothing), `DotWeaponAttachmentModels.dress` (attachment scenes on `socket_<mount>` nodes); loadout rows keep fittings; render check `examples/attach_demo.tscn` |
 | `core/dot_weapon_profiles.gd` | `DotWeaponProfiles`: the `weapon` profile kind (schema, `profile_schemas()` for dot-core's `profile_check` and dot-ci `profiles: true` (API 7), `flat`, `apply_common`, `menu_entries`, `upgrade_set`, `apply_upgrades`; and, for a pack that builds its defs in code, the overlay (API 8): `overlay_set`, `tune` (lays the profiles over the built defs, only the keys a file sets, `DotProfile.file_keys`), `flat_of`, `to_yaml`, `profile_path`, `upgraded`); a pack keeps its own keys under `extra:` (API 5); `core/dot_weapon_profile_group.gd` `DotWeaponProfileGroup`: all packs' sets behind one `weapon` kind and one runtime layer, so a runtime edit reaches every pack (API 6) |
 | `core/dot_weapon_carry.gd` | `DotWeaponCarry` (API 10): one shared object per game, off by default: weight limit, multiplier, named modifiers (`set_modifier`), backpack tiers, slot capacity (several weapons per slot, `arsenal.cycle_slot`), over-limit SLOW or DROP; `DotWeaponDef.weight` is the per-weapon weight |
-| `input/dot_weapon_wheel.gd` | `DotWeaponWheel` (API 19): previous/next weapon from dot-menu's `dot_menu_weapon_*` actions or pad shoulders over a `ring_provider` Callable (`from_arsenal` for slots, any id list for tools), `current_provider`, `blocked`, `chosen` signal. A game never writes its own `_cycled_slot` |
+| `input/dot_weapon_wheel.gd` | `DotWeaponWheel` (API 19): previous/next weapon from GameSpice Menu's `dot_menu_weapon_*` actions or pad shoulders over a `ring_provider` Callable (`from_arsenal` for slots, any id list for tools), `current_provider`, `blocked`, `chosen` signal. A game never writes its own `_cycled_slot` |
 | `net/dot_weapon_net_sync.gd` | `DotWeaponNetSync`: slot, magazine, reserve specs (ammunition owner-only) |
-| `spawner/` | [docs/spawners.md](docs/spawners.md): `DotWeaponSpawner` (server: sites, seeded draws, timers, caps), `DotWeaponSpawnView` (client), `DotWeaponSpawnPool`, `DotWeaponSpawnSite`, `DotWeaponSpawnPoint` (marker), `DotWeaponSpawnerConfig` (layered `spawner.yml`, `MAP_KEYS` for dot-map); suite `examples/spawner_selftest.tscn` (API 9) |
+| `spawner/` | [docs/spawners.md](docs/spawners.md): `DotWeaponSpawner` (server: sites, seeded draws, timers, caps), `DotWeaponSpawnView` (client), `DotWeaponSpawnPool`, `DotWeaponSpawnSite`, `DotWeaponSpawnPoint` (marker), `DotWeaponSpawnerConfig` (layered `spawner.yml`, `MAP_KEYS` for GameSpice Map); suite `examples/spawner_selftest.tscn` (API 9) |
 | `core/dot_weapon_ammo_type.gd`, `dot_weapon_ammo_types.gd`, `dot_weapon_hitzones.gd` | ammo types as `ammo` profiles and hit-zone armour for simulated bullets (API 13); optional on `DotWeaponBulletBridge`, inert unless `sv_ballistics` is on; [design](docs/design.md#ballistics) |
 | `core/dot_weapon_ammo_type.gd` (penetration fields), `arsenal.round_for` | an ammo profile builds a `DotPenetration` that the hitscan behaviour puts on the shot: per-material resistance, depth, body cost per hit group; `guns` lists the weapons a profile covers, `default` is the fallback; `ricochet_materials`/`ricochet_angle`/`ricochet_keep` feed `sv_ricochet` (needs `penetration` above 0); dot-combat does the tracing (`sv_penetration*`) |
 | `view/dot_weapon_iron_sight.gd` | API 26, preloaded by path (no `class_name`): a gun mesh's sight line (`measure`, `from_marks`, `span`/`spans`) and the iron sight built on it (`build`); the one copy zee-dot-weapons and fc-weapons share |
@@ -41,7 +41,7 @@ Also requires **dot-profile** (`DotProfileSet`, `DotProfile`, `DotProfileRuntime
 | `math/dot_weapon_recoil.gd` | `DotWeaponRecoil` |
 | `math/dot_weapon_spread_rules.gd` | `DotWeaponSpreadRules`: movement-dependent spread as `sv_spread_*` cvars (bind_cvars / follow_cvars), off by default; multiplies the gun's own spread; `arsenal.spread_rules` set on both sides, `arsenal.spread_now()` is the cone a crosshair draws (the shot's own); `DotWeaponCommand.BUTTON_AIM` is the aim input; `sv_spread_mult_sprint` widens while `ctx.sprinting`, and `ctx.sprint_blocks_aim` (the controller's `sv_sprint_noaim`, via `motion()`) drops aim and reload |
 | `math/dot_weapon_recoil_rules.gd` | `DotWeaponRecoilRules`: per-weapon recoil pattern as `sv_recoil_*` cvars (scale, vertical, horizontal, recovery, punch/bullet split, build, reset, aim/crouch/move/air), off by default; the kick is a pure function of the shot's index in a burst and a seed (`DotWeaponBallistics.recoil_seed`/`recoil_build`/`recoil_build_max`/`recoil_recovery`), so server bullet and client view agree; `arsenal.recoil_rules` on both sides; the outcome carries `recoil`, `recoil_recovery`, `recoil_signed` |
-| `bridge/` | `DotWeaponLoadoutBridge` (dot-loadout to arsenal), `DotWeaponInventoryBridge` (bag to reserve), `DotWeaponPlayerBridge` (player to context, view-model mount), `DotWeaponMuzzle` (`extra.muzzle_flash` and dot-fx's flash, by path; [design](docs/design.md#muzzle-flash)) |
+| `bridge/` | `DotWeaponLoadoutBridge` (GameSpice Loadout to arsenal), `DotWeaponInventoryBridge` (bag to reserve), `DotWeaponPlayerBridge` (player to context, view-model mount), `DotWeaponMuzzle` (`extra.muzzle_flash` and GameSpice FX's flash, by path; [design](docs/design.md#muzzle-flash)) |
 | `drops/` | `DotWeaponDrops` (server: thrown and death-dropped weapons as physics bodies, oldest-first cap, timed expiry, `take_for` into an empty slot; `check_support` every 0.5 s wakes a resting drop whose support (a prop, a mover, a body) went away; API 39: its randomness (roll, spin, blast tumble, random eviction) is its own `rng`, never the global stream: `seed_rng(match_seed)` makes a sim repeat, unseeded it is randomised per layer; client: `mirror_*` copies) and `DotWeaponDropKey` (API 20: the drop key; `sv_weapon_drop_key_hold` seconds, default 0 = throws on the press, above 0 a tap throws nothing and the throw comes after the hold; `client_progress` for a ring) and `DotWeaponDropRules` (API 40: `settle_max_sec` (sv_weapon_drop_settle_max, default 4.0, 0 never forces a rest) and `refall_max` (sv_weapon_drop_refall_max, default 4, 0 unlimited); out-of-range is refused or reported by `problems()`, never clamped; `sv_weapon_drop*` cvars plus `mp_allow_pickup` and `mp_pickup_team_only` (drops carry the dropper's team via `team_of`; a slot already holding another weapon swaps it out), `resolve(class_def)` for per-class `drop_*` overrides, `follow_cvars`); suite `examples/drop_selftest.tscn` |
 | `examples/weapon_selftest.tscn` | the suite; `fixtures/lightning_rod.gd` is the outside weapon it proves the extension point with |
 
@@ -63,8 +63,8 @@ The family's two steps ([family CLAUDE.md](../../CLAUDE.md#validating-anything))
 - Client and server arsenals must share `tick_rate`; deadlines are absolute ticks in the snapshot. [design](docs/design.md#ticks-never-seconds)
 - In `_try_use`, ask whether the weapon can pay before cancelling a reload. [design](docs/design.md#the-order-in-_try_use-is-load-bearing)
 - `select()` refuses the slot a switch is already heading to; a game may send its slot every tick. [design](docs/design.md#select-refuses-the-slot-a-switch-is-already-heading-to)
-- `DotSpread` stays in dot-combat; behaviours set `DotShot.spread`. [design](docs/design.md#spread-lives-in-dot-combat-not-here)
-- Never name a class from dot-net, dot-loadout, dot-inventory or dot-player: duck-type it (a writer is `Variant`), or the script fails to parse where that addon is absent. [design](docs/design.md#optional-neighbours-are-duck-typed)
+- `DotSpread` stays in GameSpice Combat; behaviours set `DotShot.spread`. [design](docs/design.md#spread-lives-in-dot-combat-not-here)
+- Never name a class from GameSpice Net, GameSpice Loadout, GameSpice Inventory or GameSpice Player: duck-type it (a writer is `Variant`), or the script fails to parse where that addon is absent. [design](docs/design.md#optional-neighbours-are-duck-typed)
 - `DotWeaponCatalogue.ids()` and `DotWeaponAmmo.pools()` are in text order: sort StringNames with `String(a) < String(b)`, never `sort()` (interning order, differs per process). The suite's id-order section is armed against it. [gdscript-hazards](../../docs/gdscript-hazards.md)
 - Attachments apply to a deep copy of the definition, never the catalogue's row; both machines must share the attachment catalogue (the wire carries indices into it). [design](docs/design.md#attachments)
 - The suite's extension-point section (`fixtures/lightning_rod.gd`) must keep passing. [design](docs/design.md#the-extension-point-is-tested)

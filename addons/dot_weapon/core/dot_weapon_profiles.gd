@@ -48,7 +48,7 @@ static func schema() -> Array:
 	]
 
 
-## Kind to schema for tools that validate profiles without a game (dot-core profile_check).
+## Kind to schema for tools that validate profiles without a game (GameSpice Core profile_check).
 static func profile_schemas() -> Dictionary:
 	return {"weapon": {"schema": schema(), "children": {"upgrades": upgrade_schema()}}}
 

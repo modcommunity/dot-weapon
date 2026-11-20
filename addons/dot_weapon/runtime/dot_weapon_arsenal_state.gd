@@ -115,7 +115,7 @@ var ammo_types: DotWeaponAmmoTypes = null
 @export var disabled: bool = false
 
 ## True on the machine that decides; handed to every [DotWeaponContext]. A behaviour applies nothing when false
-## and dot-combat resolves no damage; a client still runs everything, for prediction.
+## and GameSpice Combat resolves no damage; a client still runs everything, for prediction.
 @export var authority: bool = false
 
 var _slots: Dictionary = {}          ## int -> DotWeaponSlot (the one in hand of that slot)

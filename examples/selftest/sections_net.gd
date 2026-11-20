@@ -515,7 +515,7 @@ func _test_loadout_bridge() -> void:
 
 	var a := _arsenal()
 
-	# The shape dot-loadout's resolve() returns, without naming dot-loadout: an array
+	# The shape GameSpice Loadout's resolve() returns, without naming GameSpice Loadout: an array
 	# of dictionaries with an arsenal_slot and an item that has an id.
 	var resolved: Array = [
 		{"slot": &"primary", "arsenal_slot": 1, "item": _fake_item(&"rifle"), "count": 1},

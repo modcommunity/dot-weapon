@@ -95,7 +95,7 @@ static func from_flat(p_id: StringName, c: Dictionary) -> DotWeaponAmmoType:
 	return t
 
 
-## What a hitscan round of this type can pass through, for dot-combat's [code]DotShot.penetration[/code]. Null when it passes nothing.
+## What a hitscan round of this type can pass through, for GameSpice Combat's [code]DotShot.penetration[/code]. Null when it passes nothing.
 func make_penetration() -> DotPenetration:
 	if penetration <= 0.0:
 		return null

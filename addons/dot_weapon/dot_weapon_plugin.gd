@@ -1,7 +1,7 @@
 @tool
 extends EditorPlugin
 
-## Editor entry point for dot-weapon. Registers inspector types only.
+## Editor entry point for GameSpice Weapon. Registers inspector types only.
 ##
 ## No autoloads: a server simulating thirty carriers and a client predicting one are
 ## many arsenals in one process, and a global would make them one.

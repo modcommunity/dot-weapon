@@ -5,7 +5,7 @@ extends "res://addons/dot_weapon/behaviour/dot_weapon_behaviour.gd"
 ## [b]It exists to prove the extension point.[/b] It is not a gun, a bow, a melee
 ## weapon, a beam or a thrown charge; it chains to several targets at once, it costs
 ## more ammunition the more it chains, it refuses to fire indoors, and it keeps its own
-## cooldown. None of those ideas appear anywhere in dot-weapon, and adding it required
+## cooldown. None of those ideas appear anywhere in GameSpice Weapon, and adding it required
 ## editing no file in the addon: it extends the base **by path**, reads its tuning from
 ## [member DotWeaponDef.params], and returns an ordinary [DotWeaponOutcome].
 ##

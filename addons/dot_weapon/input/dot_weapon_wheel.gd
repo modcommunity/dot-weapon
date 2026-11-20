@@ -8,7 +8,7 @@ const CHANNEL := "weapon.wheel"
 ## Emitted with the ring entry to switch to (a slot number for an arsenal, an id for a tool ring).
 signal chosen(target: Variant)
 
-## InputMap actions; the defaults are dot-menu's rebindable rows, named by string so nothing is required.
+## InputMap actions; the defaults are GameSpice Menu's rebindable rows, named by string so nothing is required.
 @export var next_action: StringName = &"dot_menu_weapon_next"
 @export var previous_action: StringName = &"dot_menu_weapon_previous"
 ## Raw pad buttons that also step (-1 turns one off). Skipped when the action is bound to them already.

@@ -1,4 +1,4 @@
-# dot-weapon design
+# GameSpice Weapon design
 
 Why the addon is shaped the way it is. The one-line rules are in [CLAUDE.md](../CLAUDE.md).
 
@@ -22,7 +22,7 @@ Typed tuning is still available without a fat resource: `DotWeaponTuning` is a r
 | --- | --- |
 | `DotWeaponContext` | What a behaviour is told about one use, and nothing it could cheat with. An origin and a direction, not a camera. A tick, not a clock. An entity id, not a node. |
 | `DotWeaponBehaviour` | What a use does. Overridable hooks (`_use`, `_release`, `_tick`, `_can_use`, `_deploy`, `_holster`, `_reloaded`, `_setup`), each defaulting to nothing, so a behaviour that only shoots overrides exactly one. |
-| `DotWeaponOutcome` | What the use produced. `DotShot`s for dot-combat to resolve, `DotWeaponSpawn`s for the game to put in the world, and free-form events for anything else. |
+| `DotWeaponOutcome` | What the use produced. `DotShot`s for GameSpice Combat to resolve, `DotWeaponSpawn`s for the game to put in the world, and free-form events for anything else. |
 
 ## Four rules for a behaviour, and they all break quietly
 
@@ -57,9 +57,9 @@ Decisions, each with the alternative that was wrong:
 
 `DotWeaponCommand.slot` says "zero means no change", and a networked game naturally carries the slot it wants on every tick anyway, because that is what survives a lost packet. During a switch the old slot is still current, so a `select()` that only refused the current slot restarted the holster on every repeat and the switch never finished. See [history](history.md#a-slot-asked-for-every-tick-never-arrived).
 
-## Spread lives in dot-combat, not here
+## Spread lives in GameSpice Combat, not here
 
-Behaviours set `DotShot.spread`; dot-combat's `DotShot.scatter()` turns it into pellet directions with `DotSpread`. Moving `DotSpread` alongside the weapons would have put the same integer hash in two addons, which is the duplication this family guards hardest against. Scatter is a property of a shot, and a shot is dot-combat's.
+Behaviours set `DotShot.spread`; GameSpice Combat's `DotShot.scatter()` turns it into pellet directions with `DotSpread`. Moving `DotSpread` alongside the weapons would have put the same integer hash in two addons, which is the duplication this family guards hardest against. Scatter is a property of a shot, and a shot is GameSpice Combat's.
 
 `DotWeaponRecoil` does live here, because recoil is weapon feel rather than hit resolution. `kick()` takes floats rather than a weapon, which is what lets a behaviour compute a kick from the charge it was held at.
 
@@ -73,7 +73,7 @@ Everything is in `state` and a function of the context, so the predicting client
 
 ## `DotShot` describes itself
 
-The split from dot-combat was possible because `DotShot` stopped pointing at a weapon. The resolver used to read `shot.weapon.damage`, `shot.weapon.max_range` and `shot.weapon.delivery`, which made "what dot-combat can resolve" the same question as "what that one resource can describe". It now carries the numbers the resolver needs, so a trap, a turret or an environmental hazard can produce one with no weapon anywhere near it.
+The split from GameSpice Combat was possible because `DotShot` stopped pointing at a weapon. The resolver used to read `shot.weapon.damage`, `shot.weapon.max_range` and `shot.weapon.delivery`, which made "what GameSpice Combat can resolve" the same question as "what that one resource can describe". It now carries the numbers the resolver needs, so a trap, a turret or an environmental hazard can produce one with no weapon anywhere near it.
 
 `DotCombatNetSync` carries health; `DotWeaponNetSync` carries the slot, magazine and reserve. A game using both concatenates the two spec lists. Ammunition is owner-only, because exact counts are information an opponent should not have.
 
@@ -81,7 +81,7 @@ The split from dot-combat was possible because `DotShot` stopped pointing at a w
 
 dot-net, dot-loadout, dot-inventory and dot-player are not dependencies, and no script here names one of their classes: a script that mentions a `class_name` the project does not have fails to parse and takes every script referencing it down with it. So `DotWeaponCommand.write()` takes its writer as `Variant`, `DotWeaponNetSync` only describes specs and leaves the bridge to the host game, and the three bridges are duck-typed:
 
-- `DotWeaponLoadoutBridge` fills an arsenal from a resolved dot-loadout (`[slot, item]` pairs); it is the item-to-weapon table every game that adopted both had written by hand.
+- `DotWeaponLoadoutBridge` fills an arsenal from a resolved GameSpice Loadout (`[slot, item]` pairs); it is the item-to-weapon table every game that adopted both had written by hand.
 - `DotWeaponInventoryBridge` keeps reserve ammunition and a bag agreeing. The bag is the truth and the arsenal is a view of it; the other direction creates ammunition.
 - `DotWeaponPlayerBridge` fills a `DotWeaponContext` from a player (eye origin, camera direction, stable entity number, a view-model mount).
 
@@ -91,7 +91,7 @@ dot-net, dot-loadout, dot-inventory and dot-player are not dependencies, and no 
 
 ## Attachments
 
-A scope, a suppressor or a longer magazine is logic every game needs (which mount, which gun, what it changes, what a watcher must see), so it lives here and not in a weapons pack (which would be copied per pack) or in dot-loadout (which says what a player brought, not how a weapon's numbers change). A pack supplies the attachment rows and the models for the sockets named by each mount.
+A scope, a suppressor or a longer magazine is logic every game needs (which mount, which gun, what it changes, what a watcher must see), so it lives here and not in a weapons pack (which would be copied per pack) or in GameSpice Loadout (which says what a player brought, not how a weapon's numbers change). A pack supplies the attachment rows and the models for the sockets named by each mount.
 
 A `DotWeaponDef` lists its `mounts`; a `DotWeaponAttachment` names one mount, which weapons or tags it fits, and numbers to scale and add on the definition or its tuning (an unknown field is an error, not a silent skip). A `DotWeaponFitting` is ids only (mount to attachment id), so a content-less server validates, stores and replicates it against its `DotWeaponAttachments` catalogue.
 
@@ -109,7 +109,7 @@ A `DotWeaponDef` lists its `mounts`; a `DotWeaponAttachment` names one mount, wh
 
 ## Muzzle flash
 
-A profile may say `extra: {muzzle_flash: big|medium|small|very_small|none}` (it lands in `DotWeaponDef.params`; `none` is also what a suppressed weapon gets). `DotWeaponMuzzle.attach(parent, category, def, first_person)` builds dot-fx's `DotMuzzleFlash` under a muzzle point and `fire()` plays it per shot; with no dot-fx, no display or size none it returns null. The view-model and world-model muzzles live in zee-dot-weapons (`ZeeShotFx`), which calls this.
+A profile may say `extra: {muzzle_flash: big|medium|small|very_small|none}` (it lands in `DotWeaponDef.params`; `none` is also what a suppressed weapon gets). `DotWeaponMuzzle.attach(parent, category, def, first_person)` builds GameSpice FX's `DotMuzzleFlash` under a muzzle point and `fire()` plays it per shot; with no GameSpice FX, no display or size none it returns null. The view-model and world-model muzzles live in zee-dot-weapons (`ZeeShotFx`), which calls this.
 
 ## Ballistics
 
@@ -117,7 +117,7 @@ A profile may say `extra: {muzzle_flash: big|medium|small|very_small|none}` (it 
 
 `DotWeaponBallisticsRules` (`sv_ballistics`, off by default, plus `_velocity`, `_drop`, `_drag`, `_reach`, `_max_bullets`) is the global switch; it extends `DotWeaponCvarRules`, the shared cvar plumbing (`DotWeaponRecoilRules` still carries its own copy). `DotWeaponBullets` (runtime/) holds every bullet in packed arrays in one node: `spawn`, `step(tick)` from the server tick, `cast_fn`, and dot-combat-style `rewind_fn`/`restore_fn` driven by each bullet's `lag_ticks`; it emits `hit`, `tracer`, `expired`. Nothing spawns bullets from the behaviours yet.
 
-`DotWeaponBulletBridge` (bridge/) is the drop-in for `combat.resolve_shot(shot, view_tick)`: `bridge.resolve_shot(shot, tuning, view_tick)`. With `arsenal.ballistics_rules` off it is exactly the old call; on, the hitscan behaviour has set `shot.deferred`, and the bridge flies one bullet per pellet using dot-combat's own `trace`, `rewind_fn`/`restore_fn` and `apply_damage`. Call `bridge.tick(tick)` each server tick. `DotWeaponTracers` draws the `tracer` signal as ribbons in one mesh; `tools/screenshot.sh out.png` renders `examples/tracer_demo`. Not yet wired in any game's resolve path.
+`DotWeaponBulletBridge` (bridge/) is the drop-in for `combat.resolve_shot(shot, view_tick)`: `bridge.resolve_shot(shot, tuning, view_tick)`. With `arsenal.ballistics_rules` off it is exactly the old call; on, the hitscan behaviour has set `shot.deferred`, and the bridge flies one bullet per pellet using GameSpice Combat's own `trace`, `rewind_fn`/`restore_fn` and `apply_damage`. Call `bridge.tick(tick)` each server tick. `DotWeaponTracers` draws the `tracer` signal as ribbons in one mesh; `tools/screenshot.sh out.png` renders `examples/tracer_demo`. Not yet wired in any game's resolve path.
 
 `DotWeaponAmmoType`/`DotWeaponAmmoTypes` (core/, API 13) are rounds as `ammo` profiles (`name`, `damage`, `velocity`, `drag`, `armour_pierce`, all multipliers except pierce, a 0..1 share of armour ignored); `arsenal.load_ammo(weapon_id, ammo_id)` selects the loaded round (server side, not in snapshots), the hitscan behaviour stamps it on the deferred shot as meta `ammo`, and the bridge (`bridge.ammo_types`) flies a cached copy of the tuning with the velocity and drag multipliers and scales damage. `DotWeaponHitzones` (`bridge.hitzones`) is armour per `DotHitGroup` name (`{head: 0.5}` halves head damage), scaled by an optional `presence_fn(entity)` and by the round's `armour_pierce`; dot-combat's group multipliers still apply in `apply_damage`. Everything is null or unset by default and only reached when `sv_ballistics` is on, so an unset game and every existing pack behave identically.
 

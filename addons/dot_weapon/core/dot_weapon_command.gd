@@ -3,7 +3,7 @@ extends RefCounted
 
 ## What a player asked their weapon to do on one tick.
 ##
-## The weapon half of dot-player-controller's [code]DotFpsCommand[/code], and separate
+## The weapon half of GameSpice Player Controller's [code]DotFpsCommand[/code], and separate
 ## from it for the same reason movement is separate from input sampling: the
 ## simulation must be a pure function of these, so that a client predicting a shot and
 ## a server re-running it reach the same answer. Nothing below reads a device, a
@@ -31,7 +31,7 @@ const BUTTON_LAST := 1 << 6
 const BUTTON_DROP := 1 << 7
 
 ## Free for a game's own actions. Reserved here so a game adding one does not collide
-## with a button dot-weapon adds later.
+## with a button GameSpice Weapon adds later.
 const BUTTON_USER_0 := 1 << 8
 
 ## Aim down sights: [constant BUTTON_USER_0], which spread rules read.
@@ -138,8 +138,8 @@ func sanitise(max_slots: int = 16, pitch_limit: float = 89.0) -> void:
 
 ## Writes to a [code]DotNetWriter[/code].
 ##
-## [param writer] is [Variant] so this file never mentions a dot-net class name — a
-## script that does fails to parse in a project without dot-net, and takes every
+## [param writer] is [Variant] so this file never mentions a GameSpice Net class name — a
+## script that does fails to parse in a project without GameSpice Net, and takes every
 ## script that references it down with it. See this project's CLAUDE.md.
 func write(writer: Variant) -> void:
 	writer.write_uint(slot, 5)

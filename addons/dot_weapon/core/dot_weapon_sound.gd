@@ -1,9 +1,9 @@
 class_name DotWeaponSound
 extends RefCounted
 
-## The family's stock weapon sounds, read by path from dot-audio's [code]stock/weapons/[/code], null when not linked.
-## By path, not by [code]DotAudioStock[/code], so no pack gains a dependency on dot-audio; a pack falls back to its own
-## stand-in when [method pick] is null. Names are the files' (dot-audio docs/weapons.md).
+## The family's stock weapon sounds, read by path from GameSpice Audio's [code]stock/weapons/[/code], null when not linked.
+## By path, not by [code]DotAudioStock[/code], so no pack gains a dependency on GameSpice Audio; a pack falls back to its own
+## stand-in when [method pick] is null. Names are the files' (GameSpice Audio docs/weapons.md).
 
 const DIR := "res://addons/dot_audio/stock/weapons/"
 
@@ -46,7 +46,7 @@ static var keep_streams := true
 static var _streams: Dictionary = {}
 
 
-## How many variant files [param sound] has (0: dot-audio is not linked or has no such sound).
+## How many variant files [param sound] has (0: GameSpice Audio is not linked or has no such sound).
 static func count(sound: StringName) -> int:
 	if _counts.has(sound):
 		return _counts[sound]
@@ -121,7 +121,7 @@ static func reload_name(sound_class: StringName, stage: StringName) -> StringNam
 	return own if RELOAD_CLASS.has(sound_class) and count(own) > 0 else StringName("reload_" + String(stage))
 
 
-## One variant of [param sound_class]'s reload [param stage], or null when dot-audio is not linked.
+## One variant of [param sound_class]'s reload [param stage], or null when GameSpice Audio is not linked.
 static func pick_reload(sound_class: StringName, stage: StringName = &"out", roll: int = 0) -> AudioStream:
 	return pick(reload_name(sound_class, stage), roll)
 
@@ -149,7 +149,7 @@ static var tail_picker: Callable = Callable()
 
 
 ## The reverberant tail to play [constant TAIL_DELAY] after a report, or null (outdoors, or no
-## recording). [param indoors] comes from the game (dot-audio's [code]DotAmbienceRoof[/code]).
+## recording). [param indoors] comes from the game (GameSpice Audio's [code]DotAmbienceRoof[/code]).
 static func pick_tail(sound_class: StringName, indoors: bool, roll: int = 0) -> AudioStream:
 	if tail_picker.is_valid():
 		return tail_picker.call(sound_class, indoors, roll) as AudioStream
@@ -158,7 +158,7 @@ static func pick_tail(sound_class: StringName, indoors: bool, roll: int = 0) -> 
 
 ## Problems with the stock as a game would hear it, empty when sound: every [constant FIRE] class must resolve
 ## a stream, and with [param measure] and ffmpeg each variant's peak stays within -40..-0.5 dBFS.
-## A game without dot-audio linked reports one problem.
+## A game without GameSpice Audio linked reports one problem.
 static func check_stock(measure: bool = true) -> PackedStringArray:
 	var out := PackedStringArray()
 	if count(&"light_fire") == 0:
@@ -206,7 +206,7 @@ const RELOADED := [&"light", &"magnum", &"smg", &"rifle", &"heavy", &"sniper", &
 
 
 ## Problems with a pack's weapon -> sound class map ([param classes], id -> class): each id's class must be known, have fire
-## variants inside [constant BOUNDS], and a gun class needs a reload and a dry click. Empty when sound or dot-audio is not linked.
+## variants inside [constant BOUNDS], and a gun class needs a reload and a dry click. Empty when sound or GameSpice Audio is not linked.
 static func check_classes(classes: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	if count(&"light_fire") == 0:

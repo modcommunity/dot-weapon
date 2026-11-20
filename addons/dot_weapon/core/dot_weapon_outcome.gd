@@ -4,7 +4,7 @@ extends RefCounted
 ## What one use produced, before anything has been traced, spawned or drawn.
 ##
 ## [b]A behaviour returns one of these and applies nothing itself.[/b] It is the same
-## invariant dot-combat draws between an arsenal and a manager, moved up one level: the
+## invariant GameSpice Combat draws between an arsenal and a manager, moved up one level: the
 ## thing that decides a use happened runs on the owning client and on the server, and
 ## the thing that decides what it hit runs only where the authority is. Collapsing them
 ## is the obvious simplification and it is a client that decides who dies.
@@ -35,7 +35,7 @@ var used: bool = false
 ## Why it did not happen, for a console and a bug report. Never shown to a player raw.
 var refusal: String = ""
 
-## Things for dot-combat to resolve now, against a world rewound to this tick.
+## Things for GameSpice Combat to resolve now, against a world rewound to this tick.
 var shots: Array[DotShot] = []
 
 ## Things for the game to put into the world, which will hit something later.
@@ -68,7 +68,7 @@ var cooldown_ticks: int = -1
 ##
 ## [b]A value, not an action.[/b] It is computed here and applied by whoever owns the
 ## camera, which is what lets one behaviour serve a first-person rig, a third-person
-## one, a bot with no camera at all and a headless suite. dot-fx's camera shake is the
+## one, a bot with no camera at all and a headless suite. GameSpice FX's camera shake is the
 ## same shape for the same reason.
 var recoil: Vector2 = Vector2.ZERO
 

@@ -5,9 +5,9 @@ What a player holds and uses: a catalogue of weapon definitions that each name a
 ## Install
 
 1. Get [Godot 4.7](https://godotengine.org/download).
-2. Either use [dot-bootstrap](https://github.com/gamespice-platform/bootstrap), which clones every project and links the addons, or copy `addons/dot_weapon/`, dot-core's `addons/dot_core/` and [dot-combat](https://github.com/gamespice-platform/combat)'s `addons/dot_combat/` into your project and enable dot-weapon in *Project > Project Settings > Plugins*.
+2. Either use [GameSpice Bootstrap](https://github.com/gamespice-platform/bootstrap), which clones every project and links the addons, or copy `addons/dot_weapon/`, dot-core's `addons/dot_core/` and [GameSpice Combat](https://github.com/gamespice-platform/combat)'s `addons/dot_combat/` into your project and enable dot-weapon in *Project > Project Settings > Plugins*.
 
-It needs [dot-core](https://github.com/gamespice-platform/core) and dot-combat. [dot-loadout](https://github.com/gamespice-platform/loadout) and [dot-inventory](https://github.com/gamespice-platform/inventory) are optional.
+It needs [GameSpice Core](https://github.com/gamespice-platform/core) and GameSpice Combat. [GameSpice Loadout](https://github.com/gamespice-platform/loadout) and [GameSpice Inventory](https://github.com/gamespice-platform/inventory) are optional.
 
 ## Use
 
@@ -66,7 +66,7 @@ Durations are counted in ticks. A definition that sets `authored_tick_rate` is s
 
 ## Design rules
 
-- **The script is a path, not a `class_name`.** A dot-cloud pack mounted at runtime does not register its `class_name` globals, so naming by path is what lets downloaded content bring its own weapons.
+- **The script is a path, not a `class_name`.** A GameSpice Cloud pack mounted at runtime does not register its `class_name` globals, so naming by path is what lets downloaded content bring its own weapons.
 - **A behaviour decides that a use happened, never what it hit.** It returns a `DotWeaponOutcome`; dot-combat resolves shots against the world at the tick the trigger was pulled, so a client can predict and the server decide.
 - **Behaviours are pure functions of the context**: an origin and direction, a tick, an entity id. Scatter comes from a hash of shooter, tick, use index and pellet index rather than a random stream, so a predicted use matches the server's.
 - **Ammunition is pooled by name.** Weapons with the same ammo type share a reserve. A pickup returns how many rounds fitted.
@@ -76,7 +76,7 @@ Durations are counted in ticks. A definition that sets `authored_tick_rate` is s
 | Bridge | What it does |
 | --- | --- |
 | `DotWeaponPlayerBridge` | Builds a context from a dot-player: origin at the eye, direction along the view, a stable entity number, view model on the weapon mount, an arsenal from a class definition. |
-| `DotWeaponLoadoutBridge` | Fills an arsenal from what dot-loadout resolved. |
+| `DotWeaponLoadoutBridge` | Fills an arsenal from what GameSpice Loadout resolved. |
 | `DotWeaponInventoryBridge` | Keeps reserve ammunition matching the bag, which is the truth. |
 
 All are duck-typed; none of those addons is imported.

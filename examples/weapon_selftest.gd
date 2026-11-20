@@ -1,6 +1,6 @@
 extends "selftest/sections_native.gd"
 
-## dot-weapon's self-test. Headless, no network, no scene but this one.
+## GameSpice Weapon's self-test. Headless, no network, no scene but this one.
 
 const CHECKS := 833
 

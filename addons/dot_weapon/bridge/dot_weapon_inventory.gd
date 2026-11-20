@@ -4,7 +4,7 @@ extends RefCounted
 ## Keeps an arsenal's reserve ammunition and a bag's contents agreeing with each other.
 ##
 ## [b]Duck-typed throughout, for the reason [DotWeaponLoadoutBridge] gives[/b]:
-## dot-inventory is not a dependency and is not named here.
+## GameSpice Inventory is not a dependency and is not named here.
 ##
 ## [b]The bag is the truth and the arsenal is a view of it.[/b] The opposite direction
 ## is the one that creates ammunition: a player who drops a magazine, reloads, and picks
@@ -51,7 +51,7 @@ static func load_ammo(
 ## What the bag should now contain, given what the arsenal has spent.
 ##
 ## Returns a dictionary of pool name to the count the bag should hold, for a caller to
-## apply through dot-inventory's own operations — which is the only thing allowed to
+## apply through GameSpice Inventory's own operations — which is the only thing allowed to
 ## change a container, because it is the thing that validates a change.
 static func ammo_counts(arsenal: DotWeaponArsenal) -> Dictionary:
 	if arsenal == null:

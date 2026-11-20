@@ -11,10 +11,10 @@ extends DotWeaponTuning
 
 @export_group("Damage")
 
-## Damage one pellet does at full charge, before any rule dot-combat applies.
+## Damage one pellet does at full charge, before any rule GameSpice Combat applies.
 @export_range(0.0, 10000.0, 0.5, "or_greater") var damage: float = 20.0
 
-## What kind of damage. Null lets dot-combat's default stand.
+## What kind of damage. Null lets GameSpice Combat's default stand.
 @export var damage_type: DotDamageType = null
 
 ## Damage at zero charge, as a fraction of [member damage].
@@ -35,7 +35,7 @@ extends DotWeaponTuning
 ## Places the pellets on a ring rather than by hash, so the pattern is learnable.
 @export var fixed_pattern: bool = false
 
-## Counts edits to the accuracy fields below (the ones a hitscan cone reads), so a holder of a copy of them (dot-sim's
+## Counts edits to the accuracy fields below (the ones a hitscan cone reads), so a holder of a copy of them (GameSpice Sim's
 ## native spread tick, see [DotWeaponHitscan]) refreshes it on a change without comparing every field each tick. Not
 ## saved; only a change of it means anything. One element, not an int, so the numeric field walks (stat deltas, the
 ## profile overlay) never see it as a tuning number.

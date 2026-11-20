@@ -1,7 +1,7 @@
 class_name DotWeaponHitzones
 extends RefCounted
 
-## Armour per hit zone ([DotHitGroup] name), applied by [DotWeaponBulletBridge]; dot-combat's group multipliers still apply.
+## Armour per hit zone ([DotHitGroup] name), applied by [DotWeaponBulletBridge]; GameSpice Combat's group multipliers still apply.
 ## A helmet is `{"head": 0.5}`. [member presence_fn] (`func(entity) -> float`, 0..1) says how much the victim wears;
 ## unset means all of it. Unlisted zones carry no armour.
 

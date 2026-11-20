@@ -17,11 +17,11 @@ extends Resource
 ## means editing the addon, and a game that has to edit the addon to add a weapon has a
 ## fork rather than a dependency. Here a bow is an entry in a table.
 ##
-## [b]The behaviour is a path, never a `class_name`.[/b] A game delivered as a dot-cloud
+## [b]The behaviour is a path, never a `class_name`.[/b] A game delivered as a GameSpice Cloud
 ## content pack is mounted at runtime and [b]a mounted pack's `class_name` globals are
 ## not registered in the host[/b], so a weapon named by class could only ever ship
-## inside the build. This is the same rule dot-props names a prop's script by, and the
-## same reason dot-fx's catalogue holds a `scene_path` rather than a [PackedScene].
+## inside the build. This is the same rule GameSpice Props names a prop's script by, and the
+## same reason GameSpice FX's catalogue holds a `scene_path` rather than a [PackedScene].
 ##
 ## [b]It is a document, so a server can check the whole table at boot[/b], headless,
 ## with none of the content installed, which is the only moment anybody is watching.
