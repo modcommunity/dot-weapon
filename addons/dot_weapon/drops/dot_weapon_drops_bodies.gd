@@ -150,18 +150,31 @@ func _laid_flat(e: Dictionary, b: Basis) -> Basis:
 	return (Basis(turn.normalized(), long_world.signed_angle_to(level, turn.normalized())) * b.orthonormalized())
 
 
+## The box is fixed once built, so both reads are cached on the body.
 func _half_extents(body: RigidBody3D) -> Vector3:
+	var cached: Variant = body.get_meta(&"half_extents", null)
+	if cached != null:
+		return cached
+	var half := Vector3(0.06, 0.07, 0.35)
 	for c in body.get_children():
 		if c is CollisionShape3D and (c as CollisionShape3D).shape is BoxShape3D:
-			return ((c as CollisionShape3D).shape as BoxShape3D).size * 0.5
-	return Vector3(0.06, 0.07, 0.35)
+			half = ((c as CollisionShape3D).shape as BoxShape3D).size * 0.5
+			break
+	body.set_meta(&"half_extents", half)
+	return half
 
 
 func _centre(body: RigidBody3D) -> Vector3:
+	var cached: Variant = body.get_meta(&"shape_centre", null)
+	if cached != null:
+		return cached
+	var centre := Vector3.ZERO
 	for c in body.get_children():
 		if c is CollisionShape3D:
-			return (c as CollisionShape3D).position
-	return Vector3.ZERO
+			centre = (c as CollisionShape3D).position
+			break
+	body.set_meta(&"shape_centre", centre)
+	return centre
 
 
 ## Builds the body, model and box for [param weapon] at [param at] and adds it to the tree. Returns [body, size].
